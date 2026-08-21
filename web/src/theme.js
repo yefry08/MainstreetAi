@@ -15,7 +15,7 @@ export const BIKES = {
 }
 
 // Kept in sync with design/tokens.css by hand — these two are needed as JS
-// values for inline styles and deck.gl colour arrays.
+// values for inline styles.
 //
 // The semantic pairing is the point: the AI twin is warm, the baseline twin is
 // drained. The old amber baseline was replaced because it was indistinguishable
