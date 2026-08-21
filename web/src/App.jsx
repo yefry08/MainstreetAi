@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import MapView from './MapView'
+import Scene from './scene/Scene'
+import NavControls, { ViewPresets } from './ui/NavControls'
 import Dashboard from './Dashboard'
 import Controls from './Controls'
 import Inspector from './Inspector'
@@ -13,6 +14,10 @@ export default function App() {
   const [toggles, setToggles] = useState({
     vehicles: true, roads: true, signals: true, bike: true,
   })
+  const [map, setMap] = useState(null)
+  const [view, setView] = useState('eixample')
+
+  const onMapReady = useCallback((m) => setMap(m), [])
 
   useEffect(() => {
     fetch('/api/meta').then((r) => r.json()).then(setMeta).catch(() => {})
@@ -32,7 +37,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <MapView frameRef={frameRef} onPickSignal={onPickSignal} layerToggles={toggles} />
+      <Scene frameRef={frameRef} onMapReady={onMapReady} layerToggles={toggles} />
 
       <header className="topbar">
         <div className="brand">
@@ -68,6 +73,9 @@ export default function App() {
         <Controls header={header} toggles={toggles} setToggles={setToggles} />
         <Inspector signal={signal} header={header} onClose={closeInspector} />
       </div>
+
+      <NavControls map={map} />
+      <ViewPresets map={map} active={view} onPick={setView} />
 
       <EventTicker events={header?.events} />
       <ErrorBanner errors={header?.errors} status={status} />

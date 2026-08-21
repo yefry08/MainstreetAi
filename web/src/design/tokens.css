@@ -1,0 +1,151 @@
+/* =========================================================================
+   MainstreetAi — design tokens
+   =========================================================================
+
+   The organising idea, and the reason this isn't a generic dark dashboard:
+
+     The baseline twin is INERT. The AI twin is WARM.
+
+   Colour carries the argument. Today's fixed-time signals are rendered in a
+   desaturated slate that reads as lifeless; the AI is terracotta. You should be
+   able to tell which twin you're looking at from across a room, with the labels
+   covered.
+
+   Two rules that keep the system honest:
+
+   1. Terracotta appears ONLY in UI chrome. Signal reds/ambers appear ONLY on
+      3D map objects. #D97757 sits uncomfortably close to a traffic amber, and
+      the one thing a traffic demo must never do is make the viewer unsure
+      whether a colour means "UI accent" or "the light is amber". The two
+      palettes never meet in the same layer.
+
+   2. The map stays visually grounded — real asphalt and building tones. The
+      glass UI is legible *because* it floats over something realistic. If the
+      map went neon the glass would stop reading as glass.
+   ========================================================================= */
+
+:root {
+  /* ---- brand: the AI twin ---------------------------------------------- */
+  --terracotta-300: #e89b80;
+  --terracotta-400: #e08a6b;
+  --terracotta-500: #d97757;   /* primary accent */
+  --terracotta-600: #c26343;
+  --terracotta-700: #a8512f;
+  --terracotta-glow: rgba(217, 119, 87, 0.32);
+
+  /* ---- the baseline twin: deliberately drained of life ------------------ */
+  --slate-300: #a8b0be;
+  --slate-400: #8a94a6;        /* baseline accent */
+  --slate-600: #5a6273;
+
+  /* ---- ink: warm greys, never pure white -------------------------------
+     Pure #FFF against terracotta reads clinical and slightly blue. Every
+     text tone here carries a little of the accent's warmth. */
+  --ink-100: #f2eee9;
+  --ink-200: #ded9d3;
+  --ink-300: #c9c4bd;
+  --ink-400: #a6a29c;
+  --ink-500: #837f7a;
+  --ink-600: #6e6a66;
+
+  /* ---- glass --------------------------------------------------------- */
+  --glass-fill: rgba(16, 18, 22, 0.55);
+  --glass-fill-strong: rgba(16, 18, 22, 0.74);
+  --glass-fill-raised: rgba(38, 42, 50, 0.5);
+  --glass-edge: rgba(255, 255, 255, 0.12);
+  --glass-edge-strong: rgba(255, 255, 255, 0.2);
+  --glass-highlight: rgba(255, 255, 255, 0.28);
+  --glass-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --glass-blur: 20px;
+
+  /* ---- functional signal colours — MAP OBJECTS ONLY -------------------- */
+  --signal-green: #4ade80;
+  --signal-amber: #fbbf24;
+  --signal-red: #f05252;
+
+  /* ---- mode colours for vehicles -------------------------------------- */
+  --mode-car: #b9c2d0;
+  --mode-bus: #f59e42;
+  --mode-bike: #38d6f5;
+  --mode-stopped: #f05252;
+
+  /* ---- geometry -------------------------------------------------------- */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-pill: 999px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* ---- motion ----------------------------------------------------------
+     Motion budget goes almost entirely to the camera and the vehicles. UI
+     chrome moves only to explain itself appearing or disappearing. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --t-fast: 140ms;
+  --t-med: 260ms;
+  --t-slow: 420ms;
+
+  /* ---- type -----------------------------------------------------------
+     Inter Tight for everything the user reads as language.
+     IBM Plex Mono for LIVE NUMBERS ONLY — the rule is the design. Mono means
+     "this value is changing right now", so the eye learns to find telemetry
+     without hunting for labels. A static number (a count, a date) stays in
+     Inter Tight. */
+  --font-ui: 'Inter Tight', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+             Roboto, sans-serif;
+  --font-num: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas,
+              monospace;
+}
+
+/* =========================================================================
+   Glass primitive
+   ========================================================================= */
+
+.glass {
+  background: var(--glass-fill);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-lg);
+  box-shadow: var(--glass-shadow);
+  position: relative;
+}
+
+/* The inner top highlight is what separates real glass from a translucent
+   box: it mimics light catching the top bevel of a physical panel. Without
+   it, backdrop-blur alone just looks like reduced opacity. */
+.glass::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--glass-highlight) 22%,
+    var(--glass-highlight) 78%,
+    transparent
+  );
+  pointer-events: none;
+}
+
+.glass-raised {
+  background: var(--glass-fill-raised);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-md);
+}
+
+/* Numerals that change. See the type note above. */
+.num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  letter-spacing: -0.02em;
+}

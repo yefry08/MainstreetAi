@@ -14,8 +14,14 @@ export const BIKES = {
   stopped: [90, 160, 200],
 }
 
-export const AI_COLOR = '#2ee6a8'
-export const BASE_COLOR = '#ffb020'
+// Kept in sync with design/tokens.css by hand — these two are needed as JS
+// values for inline styles and deck.gl colour arrays.
+//
+// The semantic pairing is the point: the AI twin is warm, the baseline twin is
+// drained. The old amber baseline was replaced because it was indistinguishable
+// from a signal amber on the map.
+export const AI_COLOR = '#d97757'    // --terracotta-500
+export const BASE_COLOR = '#8a94a6'  // --slate-400
 
 /**
  * Congestion ramp, keyed on (mean speed / speed limit) * 255.
