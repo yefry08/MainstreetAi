@@ -54,13 +54,18 @@ body,
   opacity: 0;
   transition: opacity var(--t-med) var(--ease-out);
   background:
-    /* the city's own glow thrown back off the sky — kept faint enough to be
-       weather rather than accent */
+    /* The city's own glow thrown back off the sky — faint enough to be weather
+       rather than accent.
+       The warm band must PEAK before the element's bottom edge and fade out to
+       transparent at 100%. Peaking at 100% put a hard warm line straight across
+       the middle of the city, which read as a rendering seam. */
     linear-gradient(
       180deg,
-      transparent 58%,
-      rgba(196, 122, 88, 0.07) 84%,
-      rgba(217, 139, 96, 0.11) 100%
+      transparent 48%,
+      rgba(196, 122, 88, 0.06) 76%,
+      rgba(217, 139, 96, 0.1) 90%,
+      rgba(217, 139, 96, 0.03) 97%,
+      transparent 100%
     ),
     /* deep sky above it */
     linear-gradient(

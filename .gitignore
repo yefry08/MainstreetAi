@@ -20,3 +20,6 @@ web/dist/
 __pycache__/
 *.pyc
 .vite/
+
+# Building footprints (regenerate with sim/fetch_buildings.py)
+web/public/data/buildings.geojson
