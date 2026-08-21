@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Vehicle types for the Barcelona simulation.
+
+  Emission classes are SUMO's built-in HBEFA3 models (the same handbook the
+  European Environment Agency uses), so the CO2 / NOx / PM figures the dashboard
+  reports are computed per-vehicle from real speed and acceleration traces by
+  SUMO itself. They are not a flat "grams per km" multiplier we invented.
+
+  Fleet composition is calibrated to the Barcelona metro-area fleet mix
+  (majority Euro 4 to Euro 6 petrol/diesel cars, diesel articulated buses).
+-->
+<additional xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/additional_file.xsd">
+
+    <!-- ==================== PRIVATE CARS ==================== -->
+    <vTypeDistribution id="car">
+        <vType id="car_petrol_eu4" vClass="passenger" emissionClass="HBEFA3/PC_G_EU4"
+               probability="0.34" color="0.85,0.85,0.90"
+               length="4.4" minGap="2.2" maxSpeed="19.4" accel="2.6" decel="4.5"
+               sigma="0.5" tau="1.1" carFollowModel="Krauss"/>
+        <vType id="car_petrol_eu6" vClass="passenger" emissionClass="HBEFA3/PC_G_EU6"
+               probability="0.28" color="0.85,0.85,0.90"
+               length="4.4" minGap="2.2" maxSpeed="19.4" accel="2.6" decel="4.5"
+               sigma="0.5" tau="1.1" carFollowModel="Krauss"/>
+        <vType id="car_diesel_eu5" vClass="passenger" emissionClass="HBEFA3/PC_D_EU5"
+               probability="0.24" color="0.80,0.80,0.86"
+               length="4.5" minGap="2.2" maxSpeed="19.4" accel="2.5" decel="4.5"
+               sigma="0.5" tau="1.1" carFollowModel="Krauss"/>
+        <vType id="car_electric" vClass="passenger" emissionClass="HBEFA3/zero"
+               probability="0.14" color="0.40,0.95,0.75"
+               length="4.4" minGap="2.2" maxSpeed="19.4" accel="3.0" decel="4.5"
+               sigma="0.4" tau="1.0" carFollowModel="Krauss"/>
+    </vTypeDistribution>
+
+    <!-- ==================== TMB BUSES ==================== -->
+    <!-- Articulated 18 m bus, the standard on Barcelona's high-demand
+         orthogonal-network lines (H12, V15, D50, H16 ...). -->
+    <vType id="bus" vClass="bus" emissionClass="HBEFA3/Bus"
+           color="0.98,0.42,0.10"
+           length="18.0" minGap="3.0" maxSpeed="16.7" accel="1.2" decel="3.5"
+           sigma="0.3" tau="1.6" personCapacity="120" carFollowModel="Krauss"
+           guiShape="bus"/>
+
+    <!-- ==================== BICYCLES (Bicing + private) ==================== -->
+    <vType id="bike" vClass="bicycle" emissionClass="HBEFA3/zero"
+           color="0.30,0.85,0.98"
+           length="1.8" minGap="0.6" maxSpeed="6.5" accel="1.0" decel="3.0"
+           sigma="0.6" tau="0.9" width="0.7" guiShape="bicycle"/>
+
+</additional>

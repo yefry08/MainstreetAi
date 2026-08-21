@@ -1,0 +1,22 @@
+# Generated simulation data. All of it is reproducible with:
+#   python sim/fetch_osm.py && python sim/build_net.py &&
+#   python sim/build_demand.py && python sim/export_geo.py
+sim/net/*.osm.xml
+sim/net/*.net.xml
+sim/net/*.rou.xml
+sim/net/*.trips.xml
+sim/net/*.rou.alt.xml
+
+# Exported map data (regenerate with sim/export_geo.py)
+web/public/data/roads.geojson
+web/public/data/signals.geojson
+
+# Real Open Data BCN layers (regenerate with sim/fetch_bcn_opendata.py)
+web/public/data/bike_lanes.geojson
+web/public/data/bicing.geojson
+
+node_modules/
+web/dist/
+__pycache__/
+*.pyc
+.vite/
