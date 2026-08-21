@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
-import { addBuildings } from './buildings'
+import { addBuildings, growBuildings } from './buildings'
+import { pruneUnusableSources } from './pruneStyle'
 import { INITIAL } from './cameraPresets'
 import { createThreeLayer } from './three/ThreeLayer'
 import { createNetwork } from './three/network'
@@ -27,6 +28,7 @@ export default function Scene({ frameRef, onMapReady, layerToggles }) {
   const togglesRef = useRef(layerToggles)
   togglesRef.current = layerToggles
   const lastSimTime = useRef(-1)
+  const grownRef = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -99,7 +101,20 @@ export default function Scene({ frameRef, onMapReady, layerToggles }) {
       // can simply never fire — and the whole 3D layer would be silently
       // missing with no error anywhere to explain it.
       map.on('style.load', () => {
+        // Only play the intro once. `style.load` fires again on the fallback
+        // basemap swap, and re-sinking the city into the ground mid-demo
+        // because a tile server hiccuped would look like a bug.
+        // Drop basemap sources that can never render at our zooms. Their real
+        // cost is that an unsettled source pins Style.loaded() to false
+        // forever, which breaks map.on('load') and setPaintProperty.
+        pruneUnusableSources(map)
+
+        const firstTime = !grownRef.current
         addBuildings(map)
+        if (firstTime) {
+          grownRef.current = true
+          growBuildings(map, { duration: 1900 })
+        }
 
         if (!threeRef.current) {
           const layer = createThreeLayer({
@@ -133,6 +148,8 @@ export default function Scene({ frameRef, onMapReady, layerToggles }) {
           lastSimTime.current = -1
           return pump()
         },
+        /** Replay the city-rise intro — useful to open a pitch on. */
+        replayGrowth: (duration = 1900) => growBuildings(map, { duration }),
         stats: () => ({
           styleLoaded: map.isStyleLoaded(),
           buildings: !!map.getLayer('mst-buildings'),
