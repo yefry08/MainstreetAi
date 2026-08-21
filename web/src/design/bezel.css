@@ -1,0 +1,413 @@
+/* =========================================================================
+   The bezel — app shell
+   =========================================================================
+
+   Readouts frame the viewport like an instrument surround. The CENTRE STAYS
+   EMPTY: no floating panels, nothing over the city. The map is the instrument;
+   this is the frame around it.
+   ========================================================================= */
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: var(--nit-950);
+  color: var(--ink-50);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+.scene {
+  position: absolute;
+  inset: 0;
+}
+
+.masthead,
+.camera-stack,
+.bezel {
+  position: absolute;
+  z-index: 5;
+}
+
+/* =========================================================================
+   Atmosphere — horizon haze, sits above the canvas but below all chrome
+   ========================================================================= */
+
+.atmosphere {
+  position: absolute;
+  inset: 0 0 38% 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--t-med) var(--ease-out);
+  background:
+    /* the city's own glow thrown back off the sky — kept faint enough to be
+       weather rather than accent */
+    linear-gradient(
+      180deg,
+      transparent 58%,
+      rgba(196, 122, 88, 0.07) 84%,
+      rgba(217, 139, 96, 0.11) 100%
+    ),
+    /* deep sky above it */
+    linear-gradient(
+      180deg,
+      var(--nit-950) 0%,
+      rgba(7, 9, 16, 0.92) 26%,
+      rgba(9, 12, 20, 0.55) 58%,
+      transparent 100%
+    );
+}
+
+/* =========================================================================
+   Masthead — a hairline, not a header bar
+   ========================================================================= */
+
+.masthead {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--hairline);
+  /* A scrim rather than a panel: the city has to keep running underneath. */
+  background: linear-gradient(180deg, rgba(7, 9, 16, 0.9), rgba(7, 9, 16, 0));
+  pointer-events: none;
+}
+
+.wordmark {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.wordmark-mark {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--terracota-500);
+  box-shadow: 0 0 12px var(--terracota-glow);
+}
+
+.wordmark-name {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.masthead-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.masthead-tag {
+  font-family: var(--font-data);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+}
+
+.masthead-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ink-700);
+  transition: background var(--t-med) var(--ease-out);
+}
+
+.masthead-dot.ready {
+  background: var(--terracota-500);
+  box-shadow: 0 0 8px var(--terracota-glow);
+}
+
+/* Offline stays deliberately quiet. The text label carries the message; an
+   alarm colour here would be the only red on screen and would read as a
+   signal state, which is reserved for map objects. */
+.masthead-dot.offline {
+  background: transparent;
+  border: 1px solid var(--ink-700);
+}
+
+/* =========================================================================
+   Camera controls — right edge, vertically centred on the viewport
+   ========================================================================= */
+
+.camera-stack {
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ctrl-group {
+  display: flex;
+  flex-direction: column;
+  padding: 3px;
+  border-radius: var(--r-md);
+}
+
+.ctrl {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--r-sm);
+  color: var(--ink-300);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease-out),
+    color var(--t-fast) var(--ease-out);
+}
+
+.ctrl:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink-50);
+}
+
+.ctrl:active {
+  background: rgba(255, 255, 255, 0.13);
+}
+
+/* Terracotta marks state, never decoration. */
+.ctrl.on {
+  background: var(--terracota-500);
+  color: #180d08;
+}
+
+.ctrl-text {
+  font-family: var(--font-data);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.ctrl-sep {
+  height: 1px;
+  margin: 1px 5px;
+  background: var(--glass-edge);
+}
+
+.ctrl svg {
+  transition: transform var(--t-fast) linear;
+}
+
+/* =========================================================================
+   Bezel — bottom instrument surround
+   ========================================================================= */
+
+.bezel {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0 16px 12px;
+  background: linear-gradient(0deg, rgba(7, 9, 16, 0.94) 46%, rgba(7, 9, 16, 0));
+  pointer-events: none;
+}
+
+/* ---- the bearing tape ---- */
+
+.tape {
+  position: relative;
+  height: 26px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.tape-strip {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  /* No transition: the tape must track the camera exactly. Easing it would
+     make the map and its own instrument disagree during a drag. */
+  will-change: transform;
+}
+
+.tick {
+  position: absolute;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translateX(-50%);
+}
+
+.tick i {
+  display: block;
+  width: 1px;
+  height: 5px;
+  background: var(--ink-700);
+}
+
+.tick.major i {
+  height: 8px;
+  background: var(--ink-500);
+}
+
+.tick.cardinal i {
+  height: 11px;
+  background: var(--ink-300);
+}
+
+.tick span {
+  margin-top: 3px;
+  font-family: var(--font-data);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--ink-500);
+}
+
+.tick.cardinal span {
+  color: var(--ink-50);
+  font-weight: 600;
+}
+
+/* The fixed index the tape runs beneath — the one terracotta mark. */
+.tape-index {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 1px;
+  height: 16px;
+  transform: translateX(-50%);
+  background: var(--terracota-500);
+  box-shadow: 0 0 10px var(--terracota-glow);
+}
+
+.tape-index::after {
+  content: '';
+  position: absolute;
+  top: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+  border-bottom: 4px solid var(--terracota-500);
+}
+
+/* Ticks dissolve at the edges instead of being chopped off. */
+.tape-fade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 110px;
+  pointer-events: none;
+}
+
+.tape-fade-l {
+  left: 0;
+  background: linear-gradient(90deg, var(--nit-950), transparent);
+}
+
+.tape-fade-r {
+  right: 0;
+  background: linear-gradient(270deg, var(--nit-950), transparent);
+}
+
+/* ---- the readout row ---- */
+
+.readouts {
+  display: flex;
+  align-items: flex-end;
+  gap: 22px;
+}
+
+.readout {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 62px;
+}
+
+.readout.wide {
+  min-width: 108px;
+}
+
+.readout .value {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.readout-rule {
+  width: 1px;
+  height: 26px;
+  background: var(--hairline);
+  margin: 0 2px;
+}
+
+/* ---- hint, bottom right of the bezel ---- */
+
+.bezel-hint {
+  margin-left: auto;
+  font-family: var(--font-data);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-700);
+  text-align: right;
+  line-height: 1.7;
+  pointer-events: none;
+}
+
+.bezel-hint b {
+  color: var(--ink-500);
+  font-weight: 500;
+}
+
+/* =========================================================================
+   MapLibre chrome
+   ========================================================================= */
+
+.maplibregl-ctrl-attrib {
+  font-family: var(--font-data) !important;
+  font-size: 9px !important;
+  background: rgba(7, 9, 16, 0.72) !important;
+  backdrop-filter: blur(8px);
+}
+
+.maplibregl-ctrl-attrib a {
+  color: var(--ink-700) !important;
+}
+
+.maplibregl-ctrl-bottom-right {
+  bottom: 78px !important;
+}
+
+.maplibregl-canvas:focus {
+  outline: none;
+}
+
+@media (max-width: 900px) {
+  .bezel-hint,
+  .readout-rule {
+    display: none;
+  }
+  .readouts {
+    gap: 14px;
+  }
+}

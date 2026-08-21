@@ -2,10 +2,7 @@ import { useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
 import { addBuildings, growBuildings } from './buildings'
 import { pruneUnusableSources } from './pruneStyle'
-import { INITIAL } from './cameraPresets'
-import { createThreeLayer } from './three/ThreeLayer'
-import { createNetwork } from './three/network'
-import { verifyProjection } from './three/geo'
+import { HOME } from '../ui/CameraControls'
 
 // Free, key-less vector tiles serving the OpenMapTiles schema, which carries
 // per-building `render_height` — that is what lets us extrude real Barcelona
@@ -15,200 +12,148 @@ const STYLES = [
   'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
 ]
 
-// Scene origin, near the middle of the simulated extract. Everything three.js
-// draws is expressed in metres from here — see three/geo.js for why.
-const ORIGIN = [2.1662, 41.3925]
-
-export default function Scene({ frameRef, onMapReady, layerToggles }) {
+/**
+ * The empty 3D city.
+ *
+ * Deliberately just the basemap, the extruded buildings and a free camera —
+ * no traffic, no overlay, no data connection. This pass is about how the city
+ * looks and how it feels to move through it.
+ */
+export default function Scene({ onMapReady, onBasemapStatus }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
-  const threeRef = useRef(null)
-  const netRef = useRef(null)
-  const dataRef = useRef({ roads: null, signals: null, bikeLanes: null })
-  const togglesRef = useRef(layerToggles)
-  togglesRef.current = layerToggles
-  const lastSimTime = useRef(-1)
   const grownRef = useRef(false)
 
   useEffect(() => {
-    let cancelled = false
-    let raf
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: STYLES[0],
+      center: HOME.center,
+      zoom: HOME.zoom,
+      pitch: HOME.pitch,
+      bearing: HOME.bearing,
+      antialias: true,
 
-    const boot = async () => {
-      const [roads, signals, bikeLanes] = await Promise.all([
-        fetch('/data/roads.geojson').then((r) => r.json()),
-        fetch('/data/signals.geojson').then((r) => r.json()),
-        fetch('/data/bike_lanes.geojson')
-          .then((r) => (r.ok ? r.json() : null))
-          .catch(() => null),
-      ])
-      if (cancelled) return
+      // --- free navigation ---
+      maxPitch: 85, // MapLibre's ceiling; effectively street level
+      minZoom: 10,
+      maxZoom: 19,
+      dragRotate: true,
+      pitchWithRotate: true,
+      touchPitch: true,
+      keyboard: true,
+      attributionControl: { compact: true },
+    })
+    mapRef.current = map
 
-      dataRef.current.roads = roads.features.map((f) => ({
-        path: f.geometry.coordinates,
-        w: f.properties.w,
-        tier: f.properties.tier,
-        name: f.properties.name,
-      }))
-      dataRef.current.signals = signals.features.map((f) => ({
-        pos: f.geometry.coordinates,
-        id: f.properties.id,
-        label: f.properties.label,
-        links: f.properties.links,
-        phases: f.properties.phases,
-        corridor: f.properties.corridor,
-      }))
-      dataRef.current.bikeLanes =
-        bikeLanes?.features?.map((f) => ({
-          path: f.geometry.coordinates,
-          name: f.properties.name,
-        })) || null
+    // A slower zoom rate than the default. At the default, one notch of a
+    // trackpad crosses several zoom levels and you lose the city entirely —
+    // which matters more here than usual because there are no landmarks to
+    // re-orient against on a dark basemap.
+    map.scrollZoom.setZoomRate(1 / 180)
+    map.dragRotate.enable()
+    map.touchZoomRotate.enableRotation()
 
-      const map = new maplibregl.Map({
-        container: containerRef.current,
-        style: STYLES[0],
-        center: INITIAL.center,
-        zoom: INITIAL.zoom,
-        pitch: INITIAL.pitch,
-        bearing: INITIAL.bearing,
-        antialias: true,
+    // ---- basemap health -------------------------------------------------
+    // A missing basemap is otherwise silent: the style parses, 48 layers get
+    // painted, and you are left staring at a black rectangle wondering whether
+    // the app is broken. It is worth knowing the difference between "no tiles"
+    // and "no code".
+    //
+    // The first cut only swapped styles on `status >= 400`, which never fires
+    // for the failure that actually happens in the field: a tile request that
+    // times out has no HTTP status at all.
+    let styleIdx = 0
+    let tileErrors = 0
 
-        // --- free navigation ---
-        maxPitch: 85, // MapLibre's ceiling; effectively street level
-        minZoom: 10,
-        maxZoom: 19,
-        dragRotate: true,
-        pitchWithRotate: true,
-        touchPitch: true,
-        keyboard: true,
-        attributionControl: { compact: true },
-      })
-      mapRef.current = map
-      map.scrollZoom.setZoomRate(1 / 180)
-      map.dragRotate.enable()
-      map.touchZoomRotate.enableRotation()
+    map.on('error', (e) => {
+      const isTileFailure = Boolean(e?.sourceId)
+      const status = e?.error?.status
 
-      let styleIdx = 0
-      map.on('error', (e) => {
-        if (styleIdx === 0 && e?.error?.status >= 400) {
+      if (isTileFailure || status >= 400) {
+        tileErrors++
+        // A few failures could be one bad tile. A run of them is a dead CDN.
+        if (tileErrors === 4 && styleIdx === 0) {
           styleIdx = 1
+          onBasemapStatus?.('fallback')
           map.setStyle(STYLES[1])
+          return
         }
-      })
-
-      // Attach on 'style.load', NOT 'load'. These basemaps carry a low-zoom
-      // Natural Earth raster that never reports ready at city zoom, so 'load'
-      // can simply never fire — and the whole 3D layer would be silently
-      // missing with no error anywhere to explain it.
-      map.on('style.load', () => {
-        // Only play the intro once. `style.load` fires again on the fallback
-        // basemap swap, and re-sinking the city into the ground mid-demo
-        // because a tile server hiccuped would look like a bug.
-        // Drop basemap sources that can never render at our zooms. Their real
-        // cost is that an unsettled source pins Style.loaded() to false
-        // forever, which breaks map.on('load') and setPaintProperty.
-        pruneUnusableSources(map)
-
-        const firstTime = !grownRef.current
-        addBuildings(map)
-        if (firstTime) {
-          grownRef.current = true
-          growBuildings(map, { duration: 1900 })
-        }
-
-        if (!threeRef.current) {
-          const layer = createThreeLayer({
-            origin: ORIGIN,
-            onInit: ({ scene, proj }) => {
-              netRef.current = createNetwork({
-                scene,
-                proj,
-                roads: dataRef.current.roads,
-                bikeLanes: dataRef.current.bikeLanes,
-              })
-            },
-          })
-          threeRef.current = layer
-          map.addLayer(layer)
-          cancelAnimationFrame(raf)
-          raf = requestAnimationFrame(tick)
-        }
-        onMapReady?.(map)
-      })
-
-      window.__mst = {
-        map,
-        get three() {
-          return threeRef.current
-        },
-        get network() {
-          return netRef.current
-        },
-        forceTick: () => {
-          lastSimTime.current = -1
-          return pump()
-        },
-        /** Replay the city-rise intro — useful to open a pitch on. */
-        replayGrowth: (duration = 1900) => growBuildings(map, { duration }),
-        stats: () => ({
-          styleLoaded: map.isStyleLoaded(),
-          buildings: !!map.getLayer('mst-buildings'),
-          threeLayer: !!map.getLayer('mst-three'),
-          camera: {
-            center: map.getCenter().toArray().map((n) => +n.toFixed(5)),
-            zoom: +map.getZoom().toFixed(2),
-            pitch: +map.getPitch().toFixed(1),
-            bearing: +map.getBearing().toFixed(1),
-          },
-          sceneChildren:
-            threeRef.current?.scene?.children?.map((c) => c.name || c.type) ?? null,
-          network: netRef.current?.stats?.() ?? null,
-          frame: frameRef?.current?.header?.clock,
-          // Cross-check our hand-rolled projection against MapLibre's own.
-          projection: verifyProjection(maplibregl, [
-            [2.1662, 41.3925],
-            [2.1228, 41.3809],
-            [2.1866, 41.4038],
-            [2.1744, 41.4036],
-          ]),
-        }),
+        if (tileErrors >= 10) onBasemapStatus?.('offline')
       }
+    })
+
+    // A tile request that hangs never fires an error, so error counting alone
+    // leaves the status pinned at "loading" indefinitely. Indefinite loading is
+    // the least useful thing an instrument can say. If nothing has arrived by
+    // the time this fires, the basemap is not coming.
+    let everLoaded = false
+    const watchdog = setTimeout(() => {
+      if (!everLoaded) onBasemapStatus?.('offline')
+    }, 15000)
+
+    map.on('sourcedata', (e) => {
+      if (e?.isSourceLoaded && e?.sourceId) {
+        everLoaded = true
+        tileErrors = 0
+        clearTimeout(watchdog)
+        onBasemapStatus?.('ready')
+      }
+    })
+
+    // Attach on 'style.load', NOT 'load'. These basemaps ship a low-zoom
+    // raster source that never reports ready, so `load` can simply never fire
+    // and anything hung off it would silently never run.
+    map.on('style.load', () => {
+      pruneUnusableSources(map)
+      addBuildings(map)
+
+      // Raise the city once, on first load. Not on the fallback style swap —
+      // re-sinking the skyline mid-demo because a tile host hiccuped would
+      // look like a fault.
+      if (!grownRef.current) {
+        grownRef.current = true
+        growBuildings(map, { duration: 1900 })
+      }
+      onMapReady?.(map)
+    })
+
+    // Debug handle. requestAnimationFrame is throttled to zero in a
+    // backgrounded or non-compositing tab, which stalls every animation; this
+    // makes camera state inspectable regardless.
+    window.__mst = {
+      map,
+      stats: () => ({
+        styleLoaded: map.isStyleLoaded(),
+        buildings: !!map.getLayer('mst-buildings'),
+        sources: Object.keys(map.getStyle()?.sources ?? {}),
+        camera: {
+          center: map.getCenter().toArray().map((n) => +n.toFixed(5)),
+          zoom: +map.getZoom().toFixed(2),
+          pitch: +map.getPitch().toFixed(1),
+          bearing: +map.getBearing().toFixed(1),
+        },
+        limits: {
+          maxPitch: map.transform.maxPitch,
+          minZoom: map.getMinZoom(),
+          maxZoom: map.getMaxZoom(),
+        },
+        handlers: {
+          dragPan: map.dragPan.isEnabled(),
+          dragRotate: map.dragRotate.isEnabled(),
+          scrollZoom: map.scrollZoom.isEnabled(),
+          keyboard: map.keyboard.isEnabled(),
+          touchPitch: map.touchPitch.isEnabled(),
+        },
+      }),
     }
 
-    /** Push new simulation state into the scene. Returns what it changed. */
-    const pump = () => {
-      const net = netRef.current
-      const layer = threeRef.current
-      if (!net || !layer) return null
-
-      const t = togglesRef.current
-      net.setVisible({ roads: t.roads, bike: t.bike })
-
-      const frame = frameRef?.current
-      const simTime = frame?.header?.sim_time ?? -1
-      if (simTime === lastSimTime.current) return { skipped: true }
-      lastSimTime.current = simTime
-
-      const changed = net.updateCongestion(frame?.congestion)
-      // MapLibre repaints on demand, not continuously. Without this the scene
-      // would only update when the user happens to move the camera.
-      layer.redraw()
-      return { simTime, edgesRepainted: changed }
-    }
-
-    const tick = () => {
-      raf = requestAnimationFrame(tick)
-      pump()
-    }
-
-    boot()
     return () => {
-      cancelled = true
-      cancelAnimationFrame(raf)
-      mapRef.current?.remove()
+      clearTimeout(watchdog)
+      map.remove()
       delete window.__mst
     }
-  }, [frameRef, onMapReady])
+  }, [onMapReady, onBasemapStatus])
 
   return <div ref={containerRef} className="scene" />
 }

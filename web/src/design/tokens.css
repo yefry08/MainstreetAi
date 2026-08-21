@@ -1,151 +1,159 @@
 /* =========================================================================
    MainstreetAi — design tokens
+   Barcelona traffic-signal orchestration, seen from a control room at night.
    =========================================================================
 
-   The organising idea, and the reason this isn't a generic dark dashboard:
+   Every colour below is derived from this project's own content — night city,
+   traffic flow, transit priority — rather than from a generic dark theme.
+   Token names are Catalan where the concept is specific to Barcelona.
 
-     The baseline twin is INERT. The AI twin is WARM.
+   Three rules hold the system together:
 
-   Colour carries the argument. Today's fixed-time signals are rendered in a
-   desaturated slate that reads as lifeless; the AI is terracotta. You should be
-   able to tell which twin you're looking at from across a room, with the labels
-   covered.
+   1. `terracota-500` appears ONLY in UI chrome. Signal amber and red appear
+      ONLY on map objects. #D97757 is close enough to a traffic amber that
+      mixing them would leave a viewer unsure whether a colour is an accent or
+      a state.
 
-   Two rules that keep the system honest:
+   2. Free-flowing traffic is COOL and recessive; congestion is warm and loud.
+      On a network of thousands of edges you want to see the problem, not the
+      graph.
 
-   1. Terracotta appears ONLY in UI chrome. Signal reds/ambers appear ONLY on
-      3D map objects. #D97757 sits uncomfortably close to a traffic amber, and
-      the one thing a traffic demo must never do is make the viewer unsure
-      whether a colour means "UI accent" or "the light is amber". The two
-      palettes never meet in the same layer.
-
-   2. The map stays visually grounded — real asphalt and building tones. The
-      glass UI is legible *because* it floats over something realistic. If the
-      map went neon the glass would stop reading as glass.
+   3. Buses are the brightest thing on the street. Transit priority is the
+      argument, so the mode carrying eighty people reads as lit-from-within
+      while the cars around it are a dim grey mass. You should be able to read
+      the thesis off the map with every label covered.
    ========================================================================= */
 
 :root {
-  /* ---- brand: the AI twin ---------------------------------------------- */
-  --terracotta-300: #e89b80;
-  --terracotta-400: #e08a6b;
-  --terracotta-500: #d97757;   /* primary accent */
-  --terracotta-600: #c26343;
-  --terracotta-700: #a8512f;
-  --terracotta-glow: rgba(217, 119, 87, 0.32);
+  /* ---- nit — the city after dark -------------------------------------- */
+  --nit-950: #070910;   /* the void beyond the extract */
+  --nit-900: #0b0e15;   /* page ground */
+  --nit-800: #12161f;   /* asphalt at rest */
+  --nit-700: #1a1f2b;   /* kerb, building footing */
 
-  /* ---- the baseline twin: deliberately drained of life ------------------ */
-  --slate-300: #a8b0be;
-  --slate-400: #8a94a6;        /* baseline accent */
-  --slate-600: #5a6273;
+  /* ---- maó — building stone, lit from above --------------------------- */
+  --mao-900: #1e1712;   /* shadowed ground floors */
+  --mao-800: #2a2019;
+  --mao-700: #38291e;   /* the typical 6-storey Eixample block */
+  --mao-600: #4a3527;   /* upper floors catching light */
+  --mao-500: #5e4433;   /* the few towers */
 
-  /* ---- ink: warm greys, never pure white -------------------------------
-     Pure #FFF against terracotta reads clinical and slightly blue. Every
-     text tone here carries a little of the accent's warmth. */
-  --ink-100: #f2eee9;
-  --ink-200: #ded9d3;
-  --ink-300: #c9c4bd;
-  --ink-400: #a6a29c;
-  --ink-500: #837f7a;
-  --ink-600: #6e6a66;
+  /* ---- terracota — the one accent ------------------------------------- */
+  --terracota-400: #e89b80;
+  --terracota-500: #d97757;
+  --terracota-600: #c2603f;
+  --terracota-glow: rgba(217, 119, 87, 0.35);
 
-  /* ---- glass --------------------------------------------------------- */
-  --glass-fill: rgba(16, 18, 22, 0.55);
-  --glass-fill-strong: rgba(16, 18, 22, 0.74);
-  --glass-fill-raised: rgba(38, 42, 50, 0.5);
-  --glass-edge: rgba(255, 255, 255, 0.12);
-  --glass-edge-strong: rgba(255, 255, 255, 0.2);
-  --glass-highlight: rgba(255, 255, 255, 0.28);
-  --glass-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
-  --glass-blur: 20px;
+  /* ---- flux — the congestion ramp ------------------------------------- */
+  --flux-lliure: #3e6b7c;  /* free flow — cool, recedes */
+  --flux-lleu: #46bf96;
+  --flux-dens: #d9b23f;
+  --flux-greu: #e07a35;
+  --flux-embus: #e0414f;   /* stop-and-go */
 
-  /* ---- functional signal colours — MAP OBJECTS ONLY -------------------- */
-  --signal-green: #4ade80;
-  --signal-amber: #fbbf24;
-  --signal-red: #f05252;
+  /* ---- modes ----------------------------------------------------------- */
+  --cotxe: #7e8ca3;        /* cars — dim steel, deliberately unglamorous */
+  --bus: #ffe3b0;          /* buses — lit from within */
+  --bici: #4fd8e8;
+  --aturat: #e0414f;       /* stopped, any mode */
 
-  /* ---- mode colours for vehicles -------------------------------------- */
-  --mode-car: #b9c2d0;
-  --mode-bus: #f59e42;
-  --mode-bike: #38d6f5;
-  --mode-stopped: #f05252;
+  /* ---- signal state — MAP OBJECTS ONLY --------------------------------- */
+  --senyal-verd: #4ade80;
+  --senyal-ambre: #fbbf24;
+  --senyal-vermell: #f0454f;
 
-  /* ---- geometry -------------------------------------------------------- */
-  --r-sm: 8px;
-  --r-md: 12px;
-  --r-lg: 16px;
-  --r-pill: 999px;
+  /* ---- ink — warm greys, never pure white ------------------------------ */
+  --ink-50: #f5f1ec;
+  --ink-300: #b9b2a9;
+  --ink-500: #7e7871;
+  --ink-700: #4a4640;
 
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
+  /* ---- glass ----------------------------------------------------------- */
+  --glass-fill: rgba(12, 15, 22, 0.58);
+  --glass-edge: rgba(255, 255, 255, 0.1);
+  --glass-lip: rgba(255, 255, 255, 0.26);
+  --glass-blur: 18px;
+  --glass-shadow: 0 14px 44px rgba(0, 0, 0, 0.55);
 
-  /* ---- motion ----------------------------------------------------------
-     Motion budget goes almost entirely to the camera and the vehicles. UI
-     chrome moves only to explain itself appearing or disappearing. */
+  /* ---- geometry --------------------------------------------------------- */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --hairline: rgba(255, 255, 255, 0.08);
+
+  /* ---- motion -----------------------------------------------------------
+     The entire motion budget belongs to the camera. Chrome moves only to
+     explain itself appearing or disappearing; nothing idles or pulses. */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-  --t-fast: 140ms;
+  --t-fast: 130ms;
   --t-med: 260ms;
-  --t-slow: 420ms;
 
-  /* ---- type -----------------------------------------------------------
-     Inter Tight for everything the user reads as language.
-     IBM Plex Mono for LIVE NUMBERS ONLY — the rule is the design. Mono means
-     "this value is changing right now", so the eye learns to find telemetry
-     without hunting for labels. A static number (a count, a date) stays in
-     Inter Tight. */
-  --font-ui: 'Inter Tight', -apple-system, BlinkMacSystemFont, 'Segoe UI',
-             Roboto, sans-serif;
-  --font-num: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas,
-              monospace;
+  /* ---- type -------------------------------------------------------------
+     This is a mono-dominant interface. In a real instrument panel almost
+     everything is monospaced; the proportional face appears only where a
+     human is being addressed rather than informed.
+
+       Archivo         product name, titles, prose
+       JetBrains Mono  every label, value, unit and coordinate
+
+     JetBrains Mono specifically because a readout updating many times a
+     second needs unambiguous 0/O and 1/l, and its figures are tabular by
+     design so nothing shifts as digits change. */
+  --font-ui: 'Archivo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+             sans-serif;
+  --font-data: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas,
+               monospace;
 }
 
 /* =========================================================================
-   Glass primitive
+   Primitives
    ========================================================================= */
+
+/* Micro-label: the uppercase tracked-out caption above every value. This one
+   class is most of what makes the interface read as instrumentation. */
+.label {
+  font-family: var(--font-data);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+  white-space: nowrap;
+}
+
+/* Any number that changes. */
+.value {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  letter-spacing: -0.01em;
+  color: var(--ink-50);
+}
 
 .glass {
   background: var(--glass-fill);
-  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(135%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(135%);
   border: 1px solid var(--glass-edge);
-  border-radius: var(--r-lg);
+  border-radius: var(--r-md);
   box-shadow: var(--glass-shadow);
   position: relative;
 }
 
-/* The inner top highlight is what separates real glass from a translucent
-   box: it mimics light catching the top bevel of a physical panel. Without
-   it, backdrop-blur alone just looks like reduced opacity. */
+/* The top bevel highlight. Without it, backdrop-blur reads as a box someone
+   lowered the opacity on rather than as a pane of glass. */
 .glass::before {
   content: '';
   position: absolute;
   inset: 0 0 auto 0;
   height: 1px;
-  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  border-radius: var(--r-md) var(--r-md) 0 0;
   background: linear-gradient(
     90deg,
     transparent,
-    var(--glass-highlight) 22%,
-    var(--glass-highlight) 78%,
+    var(--glass-lip) 24%,
+    var(--glass-lip) 76%,
     transparent
   );
   pointer-events: none;
-}
-
-.glass-raised {
-  background: var(--glass-fill-raised);
-  border: 1px solid var(--glass-edge);
-  border-radius: var(--r-md);
-}
-
-/* Numerals that change. See the type note above. */
-.num {
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum' 1;
-  letter-spacing: -0.02em;
 }

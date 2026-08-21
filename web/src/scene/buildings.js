@@ -35,16 +35,19 @@ const TALL = 120
 const HEIGHT_EXPR = ['coalesce', ['get', 'render_height'], ['get', 'height'], 10]
 const BASE_EXPR = ['coalesce', ['get', 'render_min_height'], ['get', 'min_height'], 0]
 
-// Sandstone ramp. Deliberately kept below the accent in saturation.
+// The `maó` ramp from tokens.css. Sandstone after dark: genuinely brown, but
+// held well below the terracotta accent in both saturation and lightness so
+// #D97757 stays the most saturated warm thing on screen and keeps reading as
+// "interactive" rather than "scenery".
 const COLOR_EXPR = [
   'interpolate',
   ['linear'],
   HEIGHT_EXPR,
-  0, '#2b211a',    // shadowed ground floors
-  12, '#3d2e23',   // the Eixample's typical 6-storey block
-  30, '#513c2c',
-  60, '#654935',
-  120, '#7a5a41',  // the few towers
+  0, '#1e1712',    // shadowed ground floors
+  12, '#2a2019',
+  30, '#38291e',   // the Eixample's typical 6-storey block
+  60, '#4a3527',   // upper floors catching light
+  120, '#5e4433',  // the few towers
 ]
 
 export function addBuildings(map) {
