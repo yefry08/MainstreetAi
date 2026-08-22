@@ -35,6 +35,7 @@ import time
 from dataclasses import dataclass, field
 
 from .config import RoleConfig, orchestrator_config
+from .providers import complete_json
 
 # Hard bounds. The model proposes; these dispose.
 # min_green's floor is the pedestrian clearance interval — a person already in
@@ -142,6 +143,8 @@ class PolicyDecision:
     latency_ms: float = 0.0
     clamped: list = field(default_factory=list)
     error: str | None = None
+    provider: str | None = None
+    model: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -152,6 +155,8 @@ class PolicyDecision:
             "latency_ms": round(self.latency_ms, 1),
             "clamped": self.clamped,
             "error": self.error,
+            "provider": self.provider,
+            "model": self.model,
         }
 
 
@@ -184,7 +189,6 @@ class Orchestrator:
     def __init__(self, cfg: RoleConfig | None = None, interval_s: float = 60.0):
         self.cfg = cfg or orchestrator_config()
         self.interval_s = interval_s
-        self._client = None
         self._last_at = -1e9
         self.current = PolicyDecision(
             policy=dict(DEFAULT_POLICY),
@@ -197,19 +201,6 @@ class Orchestrator:
     @property
     def available(self) -> bool:
         return self.cfg.enabled
-
-    def _lazy_client(self):
-        if self._client is None:
-            import anthropic
-            self._client = anthropic.Anthropic(
-                api_key=self.cfg.api_key,
-                # The control loop must never stall on a slow API call: the
-                # tactical layer keeps running the previous policy, so a
-                # timeout is a non-event.
-                timeout=20.0,
-                max_retries=1,
-            )
-        return self._client
 
     def due(self, sim_time: float) -> bool:
         return self.available and (sim_time - self._last_at) >= self.interval_s
@@ -228,39 +219,19 @@ class Orchestrator:
         t0 = time.perf_counter()
 
         try:
-            import anthropic
-        except ImportError:
-            self.current = PolicyDecision(
-                policy=dict(DEFAULT_POLICY),
-                rationale="anthropic SDK not installed; running rules-based defaults.",
-                source="fallback",
-                at_sim_time=sim_time,
-                error="anthropic package missing",
-            )
-            return self.current
-
-        try:
-            client = self._lazy_client()
-            response = client.messages.create(
-                model=self.cfg.model,
-                max_tokens=2000,
+            raw, meta = complete_json(
+                self.cfg.provider,
+                self.cfg.api_key,
+                self.cfg.chain,
                 system=SYSTEM_PROMPT,
-                # Strategy over a dozen interacting metrics is exactly the kind
-                # of multi-factor judgement adaptive thinking is for. Effort is
-                # held at medium because this runs on a timer, forever, and the
-                # decision is five bounded numbers rather than a research task.
-                thinking={"type": "adaptive"},
-                output_config={
-                    "effort": "medium",
-                    "format": {"type": "json_schema", "schema": POLICY_SCHEMA},
-                },
-                messages=[{"role": "user", "content": _render_state(sim_time, state, self.current)}],
+                user=_render_state(sim_time, state, self.current),
+                schema=POLICY_SCHEMA,
+                max_tokens=1500,
+                # Short. The control loop must never stall on a slow API call —
+                # the tactical layer keeps executing the previous policy, so a
+                # timeout is a non-event rather than an outage.
+                timeout=25.0,
             )
-
-            text = next((b.text for b in response.content if b.type == "text"), None)
-            if not text:
-                raise ValueError("no text block in response")
-            raw = json.loads(text)
 
             policy, clamped = clamp_policy(raw)
             self.current = PolicyDecision(
@@ -268,8 +239,10 @@ class Orchestrator:
                 rationale=str(raw.get("rationale", "")).strip()[:240],
                 source="ai",
                 at_sim_time=sim_time,
-                latency_ms=(time.perf_counter() - t0) * 1000,
+                latency_ms=meta.get("latency_ms", (time.perf_counter() - t0) * 1000),
                 clamped=clamped,
+                provider=meta.get("provider"),
+                model=meta.get("model"),
             )
 
         except Exception as exc:  # noqa: BLE001 - never let control depend on the network
@@ -281,6 +254,8 @@ class Orchestrator:
                 at_sim_time=sim_time,
                 latency_ms=(time.perf_counter() - t0) * 1000,
                 error=f"{type(exc).__name__}: {exc}"[:200],
+                provider=self.cfg.provider,
+                model=self.cfg.model,
             )
 
         self.history.append(self.current.to_dict())

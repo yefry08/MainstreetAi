@@ -31,6 +31,7 @@ import time
 from dataclasses import dataclass, field
 
 from .config import RoleConfig, emulator_config
+from .providers import complete_json
 
 # Landmarks the model can name. Every one is inside the simulated extract; the
 # model is not permitted to invent coordinates, because a lat/lon it made up
@@ -72,15 +73,19 @@ SCENARIO_SCHEMA = {
                                        "corridor_surge loads a named corridor; "
                                        "rain/clear_weather change driving conditions.",
                     },
+                    # The sentinel is the string "none", not "". Gemini's
+                    # responseSchema rejects an empty string as an enum member
+                    # outright (400), and every provider here has to accept the
+                    # same schema.
                     "anchor": {
                         "type": "string",
-                        "enum": list(ANCHORS.keys()) + [""],
-                        "description": "Required for surge. Empty otherwise.",
+                        "enum": list(ANCHORS.keys()) + ["none"],
+                        "description": "Required for surge. Use \"none\" otherwise.",
                     },
                     "corridor": {
                         "type": "string",
-                        "enum": CORRIDORS + [""],
-                        "description": "Required for corridor_surge. Empty otherwise.",
+                        "enum": CORRIDORS + ["none"],
+                        "description": "Required for corridor_surge. Use \"none\" otherwise.",
                     },
                     "vehicles": {
                         "type": "integer",
@@ -151,6 +156,8 @@ class Scenario:
     latency_ms: float = 0.0
     warnings: list = field(default_factory=list)
     error: str | None = None
+    provider: str | None = None
+    model: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -161,6 +168,8 @@ class Scenario:
             "latency_ms": round(self.latency_ms, 1),
             "warnings": self.warnings,
             "error": self.error,
+            "provider": self.provider,
+            "model": self.model,
         }
 
 
@@ -192,7 +201,7 @@ def sanitise(raw: dict) -> tuple[list, list]:
             clean["over_minutes"] = max(1, min(30, int(ev.get("over_minutes", 10) or 10)))
 
         if kind == "surge":
-            anchor = ev.get("anchor")
+            anchor = (ev.get("anchor") or "").strip()
             if anchor not in ANCHORS:
                 warnings.append(f"surge: unknown anchor {anchor!r}, dropped")
                 continue
@@ -203,7 +212,7 @@ def sanitise(raw: dict) -> tuple[list, list]:
             clean["radius_m"] = max(200, min(1500, int(ev.get("radius_m", 700) or 700)))
 
         if kind == "corridor_surge":
-            corridor = ev.get("corridor")
+            corridor = (ev.get("corridor") or "").strip()
             if corridor not in CORRIDORS:
                 warnings.append(f"corridor_surge: unknown corridor {corridor!r}, dropped")
                 continue
@@ -219,19 +228,10 @@ class Emulator:
 
     def __init__(self, cfg: RoleConfig | None = None):
         self.cfg = cfg or emulator_config()
-        self._client = None
 
     @property
     def available(self) -> bool:
         return self.cfg.enabled
-
-    def _lazy_client(self):
-        if self._client is None:
-            import anthropic
-            self._client = anthropic.Anthropic(
-                api_key=self.cfg.api_key, timeout=60.0, max_retries=1
-            )
-        return self._client
 
     def compose(self, description: str, state: dict | None = None) -> Scenario:
         if not self.available:
@@ -244,7 +244,6 @@ class Emulator:
 
         t0 = time.perf_counter()
         try:
-            client = self._lazy_client()
             context = ""
             if state:
                 m = state.get("metrics", {}) or {}
@@ -256,33 +255,28 @@ class Emulator:
                     "Scale the scenario relative to this."
                 )
 
-            response = client.messages.create(
-                model=self.cfg.model,
-                max_tokens=4000,
+            raw, meta = complete_json(
+                self.cfg.provider,
+                self.cfg.api_key,
+                self.cfg.chain,
                 system=SYSTEM_PROMPT,
-                thinking={"type": "adaptive"},
-                output_config={
-                    "effort": "medium",
-                    "format": {"type": "json_schema", "schema": SCENARIO_SCHEMA},
-                },
-                messages=[{
-                    "role": "user",
-                    "content": f"Scenario to stage:\n{description.strip()}{context}",
-                }],
+                user=f"Scenario to stage:\n{description.strip()}{context}",
+                schema=SCENARIO_SCHEMA,
+                max_tokens=3000,
+                # Longer than the orchestrator's: this is user-initiated and
+                # someone is watching it, so waiting beats failing.
+                timeout=60.0,
             )
-
-            text = next((b.text for b in response.content if b.type == "text"), None)
-            if not text:
-                raise ValueError("no text block in response")
-            raw = json.loads(text)
 
             events, warnings = sanitise(raw)
             return Scenario(
                 title=str(raw.get("title", "Scenario"))[:80],
                 summary=str(raw.get("summary", ""))[:400],
                 events=events,
-                latency_ms=(time.perf_counter() - t0) * 1000,
+                latency_ms=meta.get("latency_ms", (time.perf_counter() - t0) * 1000),
                 warnings=warnings,
+                provider=meta.get("provider"),
+                model=meta.get("model"),
             )
 
         except Exception as exc:  # noqa: BLE001
@@ -292,4 +286,6 @@ class Emulator:
                 source="error",
                 latency_ms=(time.perf_counter() - t0) * 1000,
                 error=f"{type(exc).__name__}: {exc}"[:200],
+                provider=self.cfg.provider,
+                model=self.cfg.model,
             )

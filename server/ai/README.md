@@ -11,9 +11,13 @@ cp .env.example .env      # .env is gitignored
 ```
 
 ```ini
-MAINSTREET_EMULATOR_KEY=sk-ant-...
-MAINSTREET_ORCHESTRATOR_KEY=sk-ant-...
+MAINSTREET_EMULATOR_KEY=AIza...      # or AQ....
+MAINSTREET_ORCHESTRATOR_KEY=nvapi-...
 ```
+
+The **provider is inferred from the key's prefix** — `AIza…`/`AQ.…` → Gemini,
+`nvapi-…` → NVIDIA NIM, `sk-ant-…` → Anthropic. Pasting two keys is normally
+the whole configuration.
 
 Restart `python server/app.py`. Confirm with:
 
@@ -136,19 +140,38 @@ doing.
 
 ---
 
-## Model configuration
+## Providers and models
 
-Both roles default to `claude-opus-5` with adaptive thinking and `medium`
-effort. Effort is held at medium because the orchestrator runs on a timer for
-the life of the session and its output is five bounded numbers, not a research
-task. Override per role if needed:
+| Provider | Structured output | Notes |
+|---|---|---|
+| **gemini** | native `responseSchema` | constrained at decode time, so malformed JSON is not a failure mode |
+| **nvidia** | requested, not enforced | OpenAI-compatible NIM; responses go through a tolerant parser |
+| **anthropic** | `output_config.format` | adaptive thinking, medium effort |
 
-```ini
-MAINSTREET_ORCHESTRATOR_KEY_MODEL=claude-opus-5
-```
+### Model fallback chains
+
+Each role tries an ordered list of models until one answers. **This is not
+defensive over-engineering.** Building it hit all three failure modes inside an
+hour, on live endpoints:
+
+| Failure | Seen as |
+|---|---|
+| model retired | `404 — no longer available to new users` |
+| model at capacity | `503 — experiencing high demand` |
+| model unreachable | connection accepted, never responds |
+
+None of those are things you control on the day. On the very first live
+scenario call the configured model 503'd and the chain fell through to the next
+one, which answered — the demo would simply have died otherwise.
+
+`meta.fell_back_from` records when this happens, so a consistently failing
+primary is visible before a pitch rather than during it.
+
+Defaults are in `config.py`; override with
+`MAINSTREET_<ROLE>_FALLBACKS=a,b,c`.
 
 To keep keys in place but run the deterministic baseline — useful for a
-reproducible A/B — set `MAINSTREET_ORCHESTRATOR_KEY_DISABLED=true`.
+reproducible A/B — set `MAINSTREET_ORCHESTRATOR_DISABLED=true`.
 
 ---
 
