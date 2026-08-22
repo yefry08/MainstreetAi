@@ -21,6 +21,7 @@ counts as measured Barcelona traffic volumes.
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -63,7 +64,123 @@ MODES = {
 }
 
 
-def generate(mode: str, cfg: dict, end: int, seed: int, tag: str = "") -> Path:
+def strip_vtypes(routes: Path) -> int:
+    """
+    Remove vType/vTypeDistribution definitions from a routed file, so that
+    vtypes.add.xml can be the single source of truth.
+
+    Writing FLOWS, duarouter keeps `type="car"` on each flow but never emits the
+    <vTypeDistribution> that gives "car" a meaning, so SUMO refuses to start:
+
+        The vehicle type 'car' for flow 'car0#0' is not known.
+
+    Rebuilding the wrapper and splicing it back in seemed like the obvious fix
+    and is not possible: duarouter writes each vType LAZILY, the first time a
+    flow needs it, so type definitions are interleaved throughout the file.
+    `car_electric` appears after 4,000 flows. There is no offset that is after
+    every type and before every flow, and a distribution placed before one of
+    its members fails with "Unknown vtype ... in distribution".
+
+    So the types are stripped here and loaded from vtypes.add.xml with `-a`
+    instead — which is the canonical SUMO arrangement anyway, and means the
+    fleet definition lives in exactly one file rather than being duplicated
+    into five generated ones.
+    """
+    text = routes.read_text(encoding="utf-8")
+    before = len(text)
+    # Both spellings: self-closing, and with <param> children.
+    text = re.sub(r'[ \t]*<vType\b[^>]*/>\s*\n', '', text)
+    text = re.sub(r'[ \t]*<vType\b.*?</vType>\s*\n', '', text, flags=re.S)
+    text = re.sub(r'[ \t]*<vTypeDistribution\b[^>]*/>\s*\n', '', text)
+    text = re.sub(r'[ \t]*<vTypeDistribution\b.*?</vTypeDistribution>\s*\n', '',
+                  text, flags=re.S)
+    routes.write_text(text, encoding="utf-8")
+    return before - len(text)
+
+
+def normalise_flow_rate(routes: Path, period: float) -> tuple[int, float]:
+    """
+    Force the flows in `routes` to collectively emit one vehicle per `period`.
+
+    randomTrips' own `--flows` accounting cannot be trusted here. Asking for
+    1,600 car flows produced 4,455, each carrying probability="0.42" — a 42%
+    chance of emitting a vehicle every second, per flow. Collectively that is
+    ~1,870 vehicles per second, and the simulation inserted 16,331 vehicles in
+    the first 18 simulated seconds before this was caught.
+
+    The fix is arithmetic rather than trust: the intended network-wide rate is
+    1/period, so each of N flows gets probability (1/period)/N.
+    """
+    text = routes.read_text(encoding="utf-8")
+    n = text.count("<flow ")
+    if not n:
+        return 0, 0.0
+    per_flow = (1.0 / period) / n
+    text = re.sub(r'probability="[\d.eE+-]+"', f'probability="{per_flow:.10f}"', text)
+    routes.write_text(text, encoding="utf-8")
+    return n, per_flow
+
+
+def _unused_repair_type_distribution(routes: Path, vtype: str) -> bool:
+    """Superseded by strip_vtypes; kept only to document why it cannot work."""
+    text = routes.read_text(encoding="utf-8")
+    if f'<vTypeDistribution id="{vtype}"' in text:
+        return False
+    if f'type="{vtype}"' not in text:
+        return False  # flows already reference a concrete type
+
+    # Membership comes from vtypes.add.xml, which is authoritative. An earlier
+    # version guessed it by id prefix and silently dropped `van_diesel` from the
+    # "truck" distribution — 72% of the freight fleet, gone, with no error. Ids
+    # do not have to start with their distribution's name and several here
+    # deliberately don't.
+    source = (HERE / "vtypes.add.xml").read_text(encoding="utf-8")
+    block = re.search(
+        rf'<vTypeDistribution id="{re.escape(vtype)}".*?</vTypeDistribution>',
+        source, re.S,
+    )
+    if not block:
+        return False
+    wanted = re.findall(r'<vType id="([^"]+)"', block.group(0))
+
+    found = dict(re.findall(r'<vType id="([^"]+)"[^>]*?probability="([\d.]+)"', text))
+    members = [(i, found[i]) for i in wanted if i in found]
+    if len(members) != len(wanted):
+        missing = [i for i in wanted if i not in found]
+        print(f"  !! {vtype}: {missing} missing from the routed output")
+    if not members:
+        return False
+
+    ids = " ".join(i for i, _ in members)
+    probs = " ".join(p for _, p in members)
+    element = (
+        f'    <vTypeDistribution id="{vtype}" vTypes="{ids}" '
+        f'probabilities="{probs}"/>\n'
+    )
+
+    # Anchor on the first <flow>, not on the last </vType>.
+    #
+    # SUMO resolves a distribution's members at parse time, so the element must
+    # come after every vType it names. Anchoring on the last closing vType tag
+    # looked right and was not: some of these types are self-closing and some
+    # carry <param> children, so the search landed after the FIRST type and
+    # SUMO rejected the file with "Unknown vtype 'car_petrol_eu6' in
+    # distribution 'car'". duarouter always writes every type before the first
+    # flow, so that boundary is the reliable one.
+    anchor = text.find("<flow ")
+    if anchor < 0:
+        anchor = text.find("<vehicle ")
+    if anchor < 0:
+        return False
+    line_start = text.rfind("\n", 0, anchor) + 1
+    routes.write_text(text[:line_start] + element + text[line_start:], encoding="utf-8")
+    print(f"  .. restored <vTypeDistribution id=\"{vtype}\"> "
+          f"({len(members)} members)")
+    return True
+
+
+def generate(mode: str, cfg: dict, end: int, seed: int, tag: str = "",
+             flows: int = 0) -> Path:
     trips = NET_DIR / f"{mode}{tag}.trips.xml"
     routes = NET_DIR / f"{mode}{tag}.rou.xml"
 
@@ -93,6 +210,22 @@ def generate(mode: str, cfg: dict, end: int, seed: int, tag: str = "") -> Path:
         "--remove-loops",
     ]
 
+    # FLOWS, not individual trips.
+    #
+    # A trip file lists one departure per vehicle, so it covers exactly the
+    # window it was generated for and then stops. Generating individual trips
+    # for a whole day would mean routing ~100,000 vehicles and an 80 MB file
+    # per mode; generating for one hour meant the network quietly DRAINED after
+    # one simulated hour and the city went empty mid-demo, which is exactly the
+    # failure this replaces.
+    #
+    # A flow emits vehicles at a rate over a period, so a few hundred flow
+    # definitions produce continuous traffic for 24 simulated hours out of a
+    # file measured in kilobytes. SUMO's setScale then modulates the insertion
+    # rate hour by hour against the measured demand curve.
+    if flows:
+        cmd += ["--flows", str(flows), "--binomial", "3"]
+
     print(f"\n=== demand: {mode} (period={cfg['period']}s, vclass={cfg['vclass']}) ===")
     env = dict(os.environ)
     env["SUMO_HOME"] = str(TOOLS.parent)
@@ -103,14 +236,29 @@ def generate(mode: str, cfg: dict, end: int, seed: int, tag: str = "") -> Path:
         print("  ! stderr:", (proc.stderr or "")[-2500:], file=sys.stderr)
         sys.exit(f"randomTrips failed for {mode}")
 
-    n = routes.read_text(encoding="utf-8").count("<vehicle ")
-    print(f"  -> {routes.name}: {n} {mode} trips")
+    strip_vtypes(routes)
+    n_flow, per_flow = normalise_flow_rate(routes, cfg["period"])
+
+    text = routes.read_text(encoding="utf-8")
+    n_veh = text.count("<vehicle ")
+    if n_flow:
+        rate = 3600.0 / cfg["period"]
+        print(f"  -> {routes.name}: {n_flow} flows, {rate:.0f} veh/h at peak "
+              f"({routes.stat().st_size / 1e6:.1f} MB)")
+    else:
+        print(f"  -> {routes.name}: {n_veh} trips "
+              f"({routes.stat().st_size / 1e6:.1f} MB)")
     return routes
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--end", type=int, default=3600, help="seconds of demand to generate")
+    # A full simulated day. The demo needs to be able to sit on any hour of any
+    # weekday without the network running dry.
+    ap.add_argument("--end", type=int, default=86400,
+                    help="seconds of demand to generate (default: 24 h)")
+    ap.add_argument("--flows", type=int, default=1,
+                    help="1 = continuous flows (default), 0 = one-off trips")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--tag", default="",
                     help="suffix for an alternate demand set, e.g. --tag _b "
@@ -124,8 +272,15 @@ def main() -> None:
     if not RANDOM_TRIPS.exists():
         sys.exit(f"Missing randomTrips.py at {RANDOM_TRIPS}")
 
-    produced = [generate(m, c, args.end, args.seed + i, args.tag)
-                for i, (m, c) in enumerate(MODES.items())]
+    # Distinct origin-destination pairs per mode. Enough that traffic does not
+    # visibly repeat, few enough that the file stays small.
+    FLOW_COUNT = {"car": 1600, "moto": 900, "bike": 450, "truck": 300, "bus": 240}
+
+    produced = [
+        generate(m, c, args.end, args.seed + i, args.tag,
+                 flows=FLOW_COUNT.get(m, 400) if args.flows else 0)
+        for i, (m, c) in enumerate(MODES.items())
+    ]
     print("\n[ok] route files:")
     for p in produced:
         print("   ", p)

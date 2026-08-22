@@ -38,6 +38,33 @@ const CAPACITY = { car: 4200, bus: 700, bike: 1600, truck: 900, moto: 2600 }
 const STOPPED_MS = 0.6
 
 /**
+ * THE VISIBILITY PROBLEM, and why vehicles are not drawn life-sized.
+ *
+ * At the default camera (zoom 15.1) one pixel is 3.34 metres. A 4.3 m car is
+ * therefore 1.3 pixels long and a 1.95 m motorcycle is 0.58 — smaller than a
+ * pixel, i.e. invisible. Rendered at true scale the city looks completely
+ * empty while several hundred vehicles are in fact being drawn every frame.
+ *
+ * So vehicles are exaggerated as the camera pulls back, on the rule that a car
+ * never renders shorter than MIN_CAR_PX. At street level the factor falls to 1
+ * and everything is true-to-life. This is the same treatment the signal heads
+ * already get, for exactly the same reason.
+ *
+ * Width and height grow more slowly than length (capped by WIDTH_CAP): letting
+ * them scale uniformly turns a car into a square blob wider than the lane it is
+ * in, which reads worse than a slightly elongated one.
+ */
+const MIN_CAR_PX = 7.0
+const CAR_LENGTH_M = 4.3
+const SCALE_CAP = 7.0
+const WIDTH_CAP = 2.4
+
+/** Metres per pixel at a given MapLibre zoom and latitude. */
+function metresPerPixel(zoom, lat) {
+  return (156543.03392 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, zoom)
+}
+
+/**
  * Live traffic as GPU-instanced 3D meshes.
  *
  * One InstancedMesh per vehicle type means the entire fleet costs four draw
@@ -127,6 +154,7 @@ export function createTraffic({ scene, proj }) {
   const pos = new THREE.Vector3()
   const quat = new THREE.Quaternion()
   const scl = new THREE.Vector3(1, 1, 1)
+  let lastScale = 1
   const zAxis = new THREE.Vector3(0, 0, 1)
   const col = new THREE.Color()
 
@@ -172,10 +200,17 @@ export function createTraffic({ scene, proj }) {
      * Rebuild instance transforms for this rendered frame, advancing each
      * vehicle along its heading since the last tick.
      */
-    tick() {
+    tick(zoom = 16, lat = 41.39) {
       // Clamp the extrapolation window. If the socket stalls, vehicles should
       // coast to a stop, not sail across the city.
       const dt = Math.min(0.45, (performance.now() - tickAt) / 1000)
+
+      // Keep vehicles legible as the camera pulls back — see the note above.
+      const mpp = metresPerPixel(zoom, lat)
+      const s = Math.max(1, Math.min(SCALE_CAP, (MIN_CAR_PX * mpp) / CAR_LENGTH_M))
+      const w = Math.min(s, WIDTH_CAP)
+      lastScale = s
+      scl.set(w, s, w)
 
       let nCar = 0
       let nBus = 0
@@ -243,6 +278,7 @@ export function createTraffic({ scene, proj }) {
       trucks: truckMesh.count,
       motos: motoMesh.count,
       drawCalls: meshes.length,
+      scale: +lastScale.toFixed(2),
       capacity: CAPACITY,
     }),
 

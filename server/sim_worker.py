@@ -187,6 +187,11 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
         "sumo",
         "-n", str(NET),
         "-r", routes,
+        # The fleet definition lives here and only here. Route files carry
+        # routes; vtypes.add.xml carries the vTypes and vTypeDistributions they
+        # reference. See sim/build_demand.py:strip_vtypes for why the generated
+        # files must not define types of their own.
+        "-a", str(SIM / "vtypes.add.xml"),
         "--step-length", "1",
         "--seed", str(seed),
         "--ignore-route-errors", "true",

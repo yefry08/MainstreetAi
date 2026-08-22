@@ -224,11 +224,13 @@ export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
             // recomputed for the frame that is about to be drawn rather than
             // one frame late.
             onFrame: () => {
-              trafficRef.current?.tick()
-              signalsRef.current?.update(
-                frameRef?.current?.signals,
-                map.getZoom()
-              )
+              // Zoom drives how much vehicles are exaggerated: at the default
+              // camera a life-sized car is 1.3 px long and the streets look
+              // empty. See three/traffic.js.
+              const zoom = map.getZoom()
+              const lat = map.getCenter().lat
+              trafficRef.current?.tick(zoom, lat)
+              signalsRef.current?.update(frameRef?.current?.signals, zoom)
             },
           })
           threeRef.current = layer
@@ -277,7 +279,7 @@ export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
         const traffic = trafficRef.current
         if (frameRef?.current) traffic?.applyFrame(frameRef.current)
         for (let i = 0; i < times; i++) {
-          traffic?.tick()
+          traffic?.tick(map.getZoom(), map.getCenter().lat)
           signalsRef.current?.update(frameRef?.current?.signals, map.getZoom())
           map.triggerRepaint()
           try {
