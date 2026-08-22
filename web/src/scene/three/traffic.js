@@ -5,25 +5,34 @@ import {
   busWindowGeometry,
   carGeometry,
   glowMaterial,
+  motoGeometry,
+  truckGeometry,
   vehicleMaterial,
 } from './vehicleMeshes'
 
 // From design/tokens.css. Cars are a dim steel mass; buses glow from within,
 // because transit priority is the argument and the mode carrying eighty people
-// should be the brightest thing on the street.
+// should be the brightest thing on the street. Motorcycles get a warm sand
+// tone — they are a third of Barcelona's fleet and need to be distinguishable
+// from cars at a glance without competing with the buses.
 const COLOR = {
   car: 0x7e8ca3,
   bus: 0xffe3b0,
   bike: 0x4fd8e8,
+  truck: 0xb8c0cc,
+  moto: 0xd9c48a,
   stopped: 0xe0414f,
 }
 
+// Fixed wire encoding — the server sends these as numbers.
 const KIND_CAR = 0
 const KIND_BUS = 1
 const KIND_BIKE = 2
+const KIND_TRUCK = 3
+const KIND_MOTO = 4
 
 // Generous headroom; peak observed load is ~2,300 vehicles across all modes.
-const CAPACITY = { car: 4200, bus: 700, bike: 1600 }
+const CAPACITY = { car: 4200, bus: 700, bike: 1600, truck: 900, moto: 2600 }
 
 /** Below this (m/s) a vehicle is queued, and turns red. */
 const STOPPED_MS = 0.6
@@ -59,8 +68,14 @@ export function createTraffic({ scene, proj }) {
   const bikeMesh = new THREE.InstancedMesh(
     bikeGeometry(), vehicleMaterial(COLOR.bike), CAPACITY.bike
   )
+  const truckMesh = new THREE.InstancedMesh(
+    truckGeometry(), vehicleMaterial(COLOR.truck), CAPACITY.truck
+  )
+  const motoMesh = new THREE.InstancedMesh(
+    motoGeometry(), vehicleMaterial(COLOR.moto), CAPACITY.moto
+  )
 
-  const meshes = [carMesh, busMesh, busGlow, bikeMesh]
+  const meshes = [carMesh, busMesh, busGlow, bikeMesh, truckMesh, motoMesh]
   for (const m of meshes) {
     m.count = 0
     // Instances move every frame, so a bounding sphere computed once is wrong
@@ -73,6 +88,8 @@ export function createTraffic({ scene, proj }) {
   carMesh.name = 'cars'
   busMesh.name = 'buses'
   bikeMesh.name = 'bikes'
+  truckMesh.name = 'trucks'
+  motoMesh.name = 'motos'
   busGlow.name = 'bus-glow'
 
   scene.add(group)
@@ -163,6 +180,8 @@ export function createTraffic({ scene, proj }) {
       let nCar = 0
       let nBus = 0
       let nBike = 0
+      let nTruck = 0
+      let nMoto = 0
 
       for (let i = 0; i < count; i++) {
         const adv = spd[i] * dt
@@ -182,6 +201,14 @@ export function createTraffic({ scene, proj }) {
           bikeMesh.setMatrixAt(nBike, mat)
           bikeMesh.setColorAt(nBike, col.setHex(stopped[i] ? COLOR.stopped : COLOR.bike))
           nBike++
+        } else if (kind === KIND_TRUCK) {
+          truckMesh.setMatrixAt(nTruck, mat)
+          truckMesh.setColorAt(nTruck, col.setHex(stopped[i] ? COLOR.stopped : COLOR.truck))
+          nTruck++
+        } else if (kind === KIND_MOTO) {
+          motoMesh.setMatrixAt(nMoto, mat)
+          motoMesh.setColorAt(nMoto, col.setHex(stopped[i] ? COLOR.stopped : COLOR.moto))
+          nMoto++
         } else {
           carMesh.setMatrixAt(nCar, mat)
           carMesh.setColorAt(nCar, col.setHex(stopped[i] ? COLOR.stopped : COLOR.car))
@@ -193,13 +220,15 @@ export function createTraffic({ scene, proj }) {
       busMesh.count = nBus
       busGlow.count = nBus
       bikeMesh.count = nBike
+      truckMesh.count = nTruck
+      motoMesh.count = nMoto
 
       for (const m of meshes) {
         m.instanceMatrix.needsUpdate = true
         if (m.instanceColor) m.instanceColor.needsUpdate = true
       }
 
-      return { cars: nCar, buses: nBus, bikes: nBike }
+      return { cars: nCar, buses: nBus, bikes: nBike, trucks: nTruck, motos: nMoto }
     },
 
     setVisible(on) {
@@ -211,7 +240,9 @@ export function createTraffic({ scene, proj }) {
       cars: carMesh.count,
       buses: busMesh.count,
       bikes: bikeMesh.count,
-      drawCalls: 4,
+      trucks: truckMesh.count,
+      motos: motoMesh.count,
+      drawCalls: meshes.length,
       capacity: CAPACITY,
     }),
 

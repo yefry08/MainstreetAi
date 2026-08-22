@@ -106,15 +106,21 @@ export function useSimSocket() {
   return { frameRef, header, status }
 }
 
-export async function postControl(action, value) {
+/**
+ * `extra` carries fields the action needs beyond a single value — the clock
+ * action, for instance, sends both a day and an hour.
+ */
+export async function postControl(action, value, extra = {}) {
   try {
-    await fetch('/api/control', {
+    const res = await fetch('/api/control', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, value }),
+      body: JSON.stringify({ action, value, ...extra }),
     })
+    return res.ok ? await res.json() : null
   } catch {
     /* server not up; the UI already shows the connection state */
+    return null
   }
 }
 

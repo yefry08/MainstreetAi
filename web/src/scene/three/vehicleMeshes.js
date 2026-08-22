@@ -111,6 +111,35 @@ export function bikeGeometry() {
 }
 
 /**
+ * Delivery van / rigid truck: a tall box body with a shorter, set-forward cab.
+ *
+ * The tall slab-sided silhouette is the whole identification cue. At the zooms
+ * this map is used at you cannot see a windscreen, but you can see that
+ * something is twice as tall as the cars around it and doesn't taper.
+ */
+export function truckGeometry() {
+  return boxes([
+    { size: [2.3, 5.6, 2.5], at: [0, -1.1, 1.45] },  // box body
+    { size: [2.15, 2.3, 1.75], at: [0, 2.85, 1.0] },  // cab
+  ])
+}
+
+/**
+ * Motorcycle: rider mass over a short, narrow chassis.
+ *
+ * Barcelona's most characteristic vehicle, so it needs to be identifiable
+ * rather than just small — the giveaway at distance is being NARROW while
+ * moving as fast as the cars, which is exactly what a scooter filtering
+ * through traffic looks like from above.
+ */
+export function motoGeometry() {
+  return boxes([
+    { size: [0.52, 1.95, 0.5], at: [0, 0, 0.42] },     // chassis
+    { size: [0.5, 0.6, 0.85], at: [0, -0.25, 1.02] },  // rider
+  ])
+}
+
+/**
  * Materials.
  *
  * Flat-ish shading with low roughness variance: these are tiny objects against

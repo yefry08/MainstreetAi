@@ -1,0 +1,395 @@
+/* =========================================================================
+   Floating glass panels — climate, modes, day & peak
+   =========================================================================
+
+   These live in a left rail over the 3D scene. The bezel rule still holds: the
+   MIDDLE of the viewport stays clear so the city is never hidden behind
+   chrome. The rail scrolls, and every panel is collapsible, so on a small
+   screen the map still wins.
+   ========================================================================= */
+
+.rail {
+  position: absolute;
+  z-index: 6;
+  top: 58px;
+  bottom: 96px;
+  left: var(--space-4);
+  width: 296px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+.rail::-webkit-scrollbar { width: 5px; }
+.rail::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 3px;
+}
+
+.panel {
+  padding: 11px 12px 12px;
+  flex-shrink: 0;
+}
+
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 9px;
+  cursor: default;
+}
+
+.climate .panel-head { cursor: pointer; user-select: none; }
+
+.panel-head h2 {
+  margin: 0;
+  font-family: var(--font-data);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+}
+
+.panel-sub {
+  font-family: var(--font-data);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+}
+
+.panel-toggle {
+  font-family: var(--font-data);
+  font-size: 13px;
+  line-height: 1;
+  color: var(--ink-500);
+}
+
+.panel-rule {
+  height: 1px;
+  background: var(--hairline);
+  margin: 11px 0;
+}
+
+.panel-note {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--hairline);
+  font-size: 9.5px;
+  line-height: 1.5;
+  color: var(--ink-700);
+}
+
+/* =========================================================================
+   Climate — headline + split meters
+   ========================================================================= */
+
+.headline-figure { margin-bottom: 10px; }
+
+.headline-value {
+  font-size: 34px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--terracota-400);
+}
+
+.headline-value em {
+  font-style: normal;
+  font-size: 13px;
+  color: var(--ink-500);
+  margin-left: 5px;
+  letter-spacing: 0;
+}
+
+.headline-caption {
+  margin-top: 5px;
+  font-size: 10.5px;
+  color: var(--ink-400);
+}
+
+.headline-caption b.good { color: var(--terracota-400); }
+
+.climate-note {
+  margin: 0 0 10px;
+  padding: 8px 9px;
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--hairline);
+  font-size: 9.5px;
+  line-height: 1.55;
+  color: var(--ink-400);
+}
+
+.meter-group { display: flex; flex-direction: column; gap: 9px; }
+
+.meter-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+
+.meter-label {
+  font-size: 10.5px;
+  color: var(--ink-300);
+}
+
+.meter-label em {
+  font-style: normal;
+  font-family: var(--font-data);
+  font-size: 8.5px;
+  color: var(--ink-700);
+  margin-left: 4px;
+}
+
+.meter-delta { font-size: 10.5px; color: var(--ink-500); }
+.meter-delta.good { color: var(--terracota-400); }
+.meter-delta.bad { color: var(--aturat); }
+
+/* The split meter: two bars growing outward from a shared centre rule. */
+.meter-body {
+  display: flex;
+  align-items: center;
+  height: 7px;
+  gap: 0;
+}
+
+.meter-side {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.045);
+  border-radius: 2px;
+}
+
+.meter-side.left { justify-content: flex-end; }
+
+/* slate-300, not slate-400. The baseline is meant to read as inert, but at
+   this bar height on a dark panel the darker slate was almost invisible — and
+   a comparison you cannot see both halves of is not a comparison. */
+.meter-side.left i { background: var(--slate-300); border-radius: 2px 0 0 2px; }
+.meter-side.right i { background: var(--terracota-500); border-radius: 0 2px 2px 0; }
+
+.meter-side i {
+  display: block;
+  height: 100%;
+  /* Without this the empty bar is a flex child with nothing to hold it open
+     and collapses below its set width. */
+  flex-shrink: 0;
+  transition: width var(--t-med) var(--ease-out);
+}
+
+.meter-rule {
+  width: 1px;
+  height: 13px;
+  background: var(--glass-lip);
+  flex-shrink: 0;
+}
+
+.meter-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 4px;
+  font-size: 10px;
+}
+
+.meter-foot .base { color: var(--slate-300); }
+.meter-foot .ai { color: var(--terracota-400); }
+
+.meter-legend {
+  font-family: var(--font-data);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-700);
+}
+
+/* =========================================================================
+   Mode legend
+   ========================================================================= */
+
+.mode-rows { display: flex; flex-direction: column; gap: 6px; }
+
+.mode-row, .mode-queued {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10.5px;
+}
+
+.mode-queued {
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid var(--hairline);
+}
+
+.mode-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.mode-label { color: var(--ink-400); width: 84px; flex-shrink: 0; }
+
+.mode-bar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.mode-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  transition: width var(--t-med) var(--ease-out);
+}
+
+.mode-count {
+  font-size: 10.5px;
+  color: var(--ink-100);
+  min-width: 38px;
+  text-align: right;
+}
+
+.mode-count.queued { color: var(--aturat); }
+
+/* =========================================================================
+   Day & peak
+   ========================================================================= */
+
+.timectl.busy { opacity: 0.6; pointer-events: none; }
+
+.day-row { display: flex; gap: 3px; margin-bottom: 10px; }
+
+.day-chip {
+  flex: 1;
+  padding: 5px 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--ink-500);
+  font-family: var(--font-data);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all var(--t-fast) var(--ease-out);
+}
+
+.day-chip:hover { background: rgba(255, 255, 255, 0.1); color: var(--ink-100); }
+
+.day-chip.on {
+  background: var(--terracota-500);
+  color: #180d08;
+  font-weight: 600;
+}
+
+/* Measured demand curve for the selected day. */
+.spark {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 40px;
+  padding: 0 1px;
+}
+
+.spark i {
+  flex: 1;
+  background: linear-gradient(180deg, var(--slate-400), rgba(138, 148, 166, 0.25));
+  border-radius: 1px 1px 0 0;
+  min-height: 2px;
+  transition: height var(--t-med) var(--ease-out);
+}
+
+/* The hour the simulated clock is currently in. */
+.spark i.now {
+  background: linear-gradient(180deg, var(--terracota-400), var(--terracota-600));
+  box-shadow: 0 0 8px var(--terracota-glow);
+}
+
+.spark-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 3px;
+  font-family: var(--font-data);
+  font-size: 8px;
+  color: var(--ink-700);
+}
+
+.peak-row { display: flex; gap: 5px; margin-top: 10px; }
+
+.peak-chip {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ink-400);
+  cursor: pointer;
+  transition: all var(--t-fast) var(--ease-out);
+}
+
+.peak-chip:hover { background: rgba(255, 255, 255, 0.09); color: var(--ink-100); }
+
+.peak-chip.on {
+  border-color: var(--terracota-500);
+  background: rgba(217, 119, 87, 0.14);
+  color: var(--terracota-400);
+}
+
+.peak-label {
+  font-size: 9px;
+  letter-spacing: 0.02em;
+}
+
+.peak-hour { font-size: 11.5px; }
+
+/* =========================================================================
+   Weather chip in the masthead
+   ========================================================================= */
+
+.wx {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--r-pill, 999px);
+  background: var(--glass-fill);
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-edge);
+  font-size: 10px;
+  color: var(--ink-300);
+}
+
+.wx-temp { font-family: var(--font-data); color: var(--ink-100); }
+.wx-label { color: var(--ink-500); }
+.wx.wet .wx-label { color: var(--bici, #4fd8e8); }
+
+/* Narrow the rail rather than dropping it. Hiding it outright meant the
+   climate figures — the whole point of the project — vanished on any laptop
+   under 1080px, which is most of them. */
+@media (max-width: 1100px) {
+  .rail { width: 244px; }
+  .mode-label { width: 68px; }
+  .panel { padding: 9px 10px 10px; }
+  .headline-value { font-size: 28px; }
+}
+
+@media (max-width: 760px) {
+  .rail { display: none; }
+}

@@ -173,6 +173,14 @@ This matters more than the numbers, so it is also shown in the UI.
 - The cycle-lane network — the Ajuntament de Barcelona's own published
   `carril-bici` dataset from Open Data BCN, 386 segments / ~209 km inside the
   extract, drawn on the map as-is
+- **When the peaks are** — derived from **3,242,572 real observations** of
+  Barcelona's own traffic-state feed (Open Data BCN `trams`, 532 road sections,
+  Jan–Mar 2026). The morning peak is 08:00, the afternoon peak 17:00, the
+  evening 18:00, and Friday is the busiest day, because that is what the city
+  measured. See `sim/fetch_traffic_profile.py`.
+- **Weather** — live from Open-Meteo (free, no key). Rain is not a graphic: it
+  lowers speed factors, lengthens headways, weakens braking and takes cyclists
+  off the road, through the same levers the manual rain scenario uses.
 - Vehicle dynamics — SUMO microsimulation (Krauss car-following)
 - Emissions — SUMO's HBEFA3 model, computed per vehicle from actual speed and
   acceleration traces, not a grams-per-km multiplier
@@ -185,6 +193,15 @@ This matters more than the numbers, so it is also shown in the UI.
   vehicle positions and are not tied to a GTFS timetable.
 - Fleet composition is calibrated to the Barcelona metro-area mix but is not a
   vehicle-by-vehicle registry.
+
+**Derived, and labelled as such:** the `trams` feed reports how congested a
+section *is*, not how many vehicles are on it — an empty road at 03:00 still
+reports "very fluid", so the measured index floors at ~0.45 of peak while real
+volume is nearer 0.10. Feeding it in raw would put four times too much traffic
+on the network overnight. So the **shape** of the demand curve is measured and
+the **amplitude** is rescaled, with the transform stated in the profile JSON
+itself (`derivation.formula`). Congestion state is not traffic volume, and
+conflating them would be a fabrication wearing real data's clothes.
 
 **Wanted but not available:**
 - TMB does not publish an open GTFS feed on the municipal portal, so bus routes

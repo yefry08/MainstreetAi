@@ -48,4 +48,49 @@
            length="1.8" minGap="0.6" maxSpeed="6.5" accel="1.0" decel="3.0"
            sigma="0.6" tau="0.9" width="0.7" guiShape="bicycle"/>
 
+    <!-- ==================== MOTORCYCLES ====================
+         Barcelona runs on two wheels to a degree few European cities match —
+         roughly a third of its vehicle fleet. Leaving motorcycles out and
+         calling the result "Barcelona traffic" would be the single most
+         obvious thing missing to anyone who has stood on Gran Via.
+
+         They matter to the simulation, not just the picture: short, quick to
+         accelerate, and they filter to the front of a queue, so they discharge
+         from a green far faster than cars and change what a signal decision is
+         actually worth.
+
+         Emissions: SUMO's HBEFA3 set has no dedicated motorcycle class, so a
+         small petrol light-duty vehicle stands in. That OVERSTATES motorcycle
+         CO2, which is the safe direction to be wrong in for a project claiming
+         emissions reductions. -->
+    <vTypeDistribution id="moto">
+        <vType id="moto_scooter" vClass="motorcycle" emissionClass="HBEFA3/LDV_G_EU6"
+               probability="0.68" color="0.85,0.78,0.55"
+               length="1.9" width="0.8" minGap="1.0" maxSpeed="19.4"
+               accel="3.4" decel="5.5" sigma="0.55" tau="0.8"
+               carFollowModel="Krauss" guiShape="motorcycle"/>
+        <vType id="moto_bike" vClass="motorcycle" emissionClass="HBEFA3/LDV_G_EU5"
+               probability="0.32" color="0.80,0.74,0.52"
+               length="2.1" width="0.85" minGap="1.1" maxSpeed="22.2"
+               accel="3.8" decel="6.0" sigma="0.5" tau="0.8"
+               carFollowModel="Krauss" guiShape="motorcycle"/>
+    </vTypeDistribution>
+
+    <!-- ==================== URBAN FREIGHT ====================
+         Deliveries are most of the freight a city centre sees, and they are
+         disproportionately responsible for congestion because they stop on the
+         carriageway. Split into light vans (the majority) and rigid trucks. -->
+    <vTypeDistribution id="truck">
+        <vType id="van_diesel" vClass="delivery" emissionClass="HBEFA3/LDV_D_EU5"
+               probability="0.72" color="0.72,0.76,0.80"
+               length="5.4" width="2.0" minGap="2.5" maxSpeed="16.7"
+               accel="1.8" decel="4.0" sigma="0.5" tau="1.3"
+               carFollowModel="Krauss" guiShape="delivery"/>
+        <vType id="truck_rigid" vClass="truck" emissionClass="HBEFA3/HDV_D_EU5"
+               probability="0.28" color="0.66,0.70,0.75"
+               length="9.5" width="2.4" minGap="3.0" maxSpeed="13.9"
+               accel="1.1" decel="3.5" sigma="0.4" tau="1.7"
+               carFollowModel="Krauss" guiShape="truck"/>
+    </vTypeDistribution>
+
 </additional>

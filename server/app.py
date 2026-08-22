@@ -38,6 +38,8 @@ from sim_worker import run_worker
 # break a run.
 from ai import Emulator, Orchestrator
 from ai import summary as ai_summary
+from controllers import DOW_NAMES, PROFILE, PROFILE_SOURCE, peaks_for
+from weather import WeatherFeed
 
 HERE = Path(__file__).resolve().parent
 DATA = HERE.parent / "web" / "public" / "data"
@@ -69,6 +71,12 @@ class Engine:
         self.emulator = Emulator()
         self._ai_thread: threading.Thread | None = None
 
+        # Live Barcelona weather. Real conditions drive real driving behaviour.
+        self.weather = WeatherFeed()
+        self._weather_applied: str | None = None
+        self.day = "Friday"          # the busiest day in the measured data
+        self.hour = 8.0              # the measured morning peak
+
     # -----------------------------------------------------------------
     def start(self, cfg: dict) -> None:
         ctx = mp.get_context("spawn")
@@ -88,6 +96,9 @@ class Engine:
             t.start()
             self._threads.append(t)
 
+        self.weather.start()
+        threading.Thread(target=self._weather_loop, daemon=True).start()
+
         if self.orchestrator.available:
             self._ai_thread = threading.Thread(target=self._orchestrate, daemon=True)
             self._ai_thread.start()
@@ -95,6 +106,31 @@ class Engine:
                   f"deciding every {self.orchestrator.interval_s:.0f} simulated seconds")
         else:
             print("[ai] no orchestration key — running the rules-based policy")
+
+    def _weather_loop(self) -> None:
+        """
+        Push live conditions into both twins whenever they change.
+
+        Both twins, deliberately: weather is a fact about the city, not a
+        treatment. Applying rain to only one would rig the comparison exactly
+        the way injecting traffic into one would.
+        """
+        while not self._stop.is_set():
+            time.sleep(5.0)
+            st = self.weather.state
+            if not st.get("available"):
+                continue
+            cond = st.get("condition", "clear")
+            if cond == self._weather_applied:
+                continue
+            self._weather_applied = cond
+            self.send({
+                "type": "weather",
+                "effect": st.get("effect", {}),
+                "label": st.get("label", ""),
+            })
+            print(f"[weather] {st.get('label')} "
+                  f"({st.get('temperature_c')}C) -> driving condition '{cond}'")
 
     def _orchestrate(self) -> None:
         """
@@ -180,8 +216,10 @@ class Engine:
 
         header = {
             "clock": fsnap["clock"],
+            "day": fsnap.get("day", self.day),
             "sim_time": fsnap["metrics"]["sim_time"],
             "demand_factor": fsnap["demand_factor"],
+            "weather": self.weather.state,
             "focus": self.focus,
             "paused": self.paused,
             "speed": self.speed,
@@ -219,7 +257,8 @@ engine = Engine()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    engine.start({"seed": 42, "start_hour": 7.0, "end": 3600, "speed": engine.speed})
+    engine.start({"seed": 42, "start_hour": engine.hour, "day": engine.day,
+                  "end": 3600, "speed": engine.speed})
     print("[engine] two SUMO processes starting (baseline + ai) ...")
     yield
     engine.stop()
@@ -246,7 +285,27 @@ async def health():
         "uptime_s": round(time.time() - engine.started_at, 1),
         "ai": ai_summary(),
         "policy": engine.orchestrator.current.to_dict(),
+        "weather": engine.weather.state,
+        "clock": {"day": engine.day, "hour": engine.hour},
+        "demand_profile": {
+            "source": PROFILE_SOURCE,
+            "observations": (PROFILE or {}).get("source", {}).get("observations"),
+            "months": (PROFILE or {}).get("source", {}).get("months"),
+        },
     }
+
+
+@app.get("/api/profile")
+async def profile():
+    """
+    The measured demand profile, for the UI's day and peak selector.
+
+    Served rather than bundled so the front end always reflects whatever
+    sim/fetch_traffic_profile.py last built.
+    """
+    if not PROFILE:
+        return JSONResponse({"error": "traffic profile not built"}, status_code=404)
+    return PROFILE
 
 
 @app.get("/api/ai/policy")
@@ -304,6 +363,18 @@ async def control(payload: dict):
         engine.send({"type": "speed", "value": engine.speed})
     elif action == "focus":
         engine.set_focus(payload.get("value", "ai"))
+    elif action == "clock":
+        # Pick a day and an hour. Both twins move together — the comparison
+        # only means anything if they are living in the same moment.
+        day = payload.get("day")
+        hour = payload.get("hour")
+        if day in DOW_NAMES:
+            engine.day = day
+        if hour is not None:
+            engine.hour = float(hour)
+        engine.send({"type": "clock", "day": engine.day, "hour": engine.hour})
+        return {"ok": True, "day": engine.day, "hour": engine.hour,
+                "peaks": peaks_for(engine.day)}
     elif action == "watch":
         # Sent to both twins so the inspector can show fixed vs AI together.
         engine.send({"type": "watch", "value": payload.get("value")})

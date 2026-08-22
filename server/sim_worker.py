@@ -32,7 +32,9 @@ if str(HERE) not in sys.path:
 SIM = HERE.parent / "sim"
 NET = SIM / "net" / "barcelona.net.xml"
 
-KIND_CAR, KIND_BUS, KIND_BIKE = 0.0, 1.0, 2.0
+# Vehicle kinds on the wire. Order is fixed — the browser decodes these by
+# number, so appending is safe and reordering is not.
+KIND_CAR, KIND_BUS, KIND_BIKE, KIND_TRUCK, KIND_MOTO = 0.0, 1.0, 2.0, 3.0, 4.0
 
 
 # ---------------------------------------------------------------------------
@@ -102,6 +104,8 @@ class Metrics:
     bus_running: int = 0
     bus_mean_speed: float = 0.0
     bike_running: int = 0
+    truck_running: int = 0
+    moto_running: int = 0
 
     teleports: int = 0
 
@@ -131,6 +135,8 @@ class Metrics:
             "bus_running": self.bus_running,
             "bus_mean_speed_kmh": round(self.bus_mean_speed * 3.6, 2),
             "bike_running": self.bike_running,
+            "truck_running": self.truck_running,
+            "moto_running": self.moto_running,
             "teleports": self.teleports,
             "max_wait_s": round(self.max_wait_s, 1),
             "p95_wait_s": round(self.p95_wait_s, 1),
@@ -168,8 +174,15 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
     # validation harness re-test against genuinely different traffic, not just a
     # different driver-behaviour RNG on the same trips.
     tag = cfg.get("demand_tag", "")
-    routes = ",".join(str(SIM / "net" / f"{m}{tag}.rou.xml")
-                      for m in ("car", "bike", "bus"))
+    # Modes are optional on disk: a route file that has not been generated is
+    # skipped rather than crashing the worker, so adding a mode does not force
+    # everyone to rebuild demand before the sim will start.
+    routes = ",".join(
+        str(p) for p in (
+            SIM / "net" / f"{m}{tag}.rou.xml"
+            for m in ("car", "moto", "bike", "truck", "bus")
+        ) if p.exists()
+    )
     ls.start([
         "sumo",
         "-n", str(NET),
@@ -274,10 +287,16 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
     step_budget = cfg.get("end", 3600)
 
     def classify(vid: str) -> float:
+        # randomTrips writes the mode name as the id prefix, so this is the
+        # cheapest reliable classifier available — no per-vehicle TraCI call.
         if vid.startswith("bus"):
             return KIND_BUS
         if vid.startswith("bike"):
             return KIND_BIKE
+        if vid.startswith("truck"):
+            return KIND_TRUCK
+        if vid.startswith("moto"):
+            return KIND_MOTO
         return KIND_CAR
 
     # ---- event handling --------------------------------------------------
@@ -370,6 +389,25 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
     corridor_stats: dict[str, dict] = {}
     bus_requests: dict[str, list[int]] = {}
     watch_id: str | None = None
+    day_name = cfg.get("day", "Friday")
+    weather_label = ""
+
+    # --- demand shaping to the measured curve -----------------------------
+    # The route files hold a peak hour of trips. Without shaping, the simulated
+    # clock would change the SIGNAL POLICY but not the traffic, so "Sunday
+    # 04:00" would look exactly like "Friday 08:00" and the peak selector would
+    # be a lie.
+    #
+    # SUMO's own `setScale` is the right lever: it scales the insertion rate of
+    # already-loaded demand. The first attempt topped the network up by
+    # injecting extra vehicles instead, which could only ever ADD traffic —
+    # useless for showing an off-peak hour — and removing vehicles is not an
+    # option either, since deleting cars mid-journey would corrupt the
+    # trip-time and delay statistics the whole A/B rests on. setScale avoids
+    # both problems by never creating the trip in the first place.
+    scale_check_s = 30.0
+    last_scale_at = -1e9
+    last_scale = -1.0
 
     while running:
         # --- drain commands ---
@@ -400,6 +438,31 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
                 pending_events.append(c)
             elif t == "ai_event":
                 pending_events.append({"kind": "ai_event", "spec": c.get("spec")})
+            elif t == "clock":
+                # Jump the simulated clock to a chosen day and hour. This
+                # changes the demand curve the controller scales against AND
+                # the top-up target below, so picking "Friday evening peak"
+                # actually loads the network like a Friday evening.
+                if c.get("hour") is not None:
+                    start_hour = float(c["hour"]) - metrics.sim_time / 3600.0
+                if c.get("day"):
+                    day_name = str(c["day"])
+            elif t == "weather":
+                # Live conditions from Open-Meteo, applied through the same
+                # levers as the manual rain scenario so there is exactly one
+                # code path for "the roads are wet".
+                eff = c.get("effect") or {}
+                try:
+                    for vt in ls.vehicletype.getIDList():
+                        if vt.startswith(("car", "van", "truck", "moto")):
+                            ls.vehicletype.setSpeedFactor(vt, float(eff.get("speed_factor", 1.0)))
+                            ls.vehicletype.setTau(vt, float(eff.get("tau", 1.1)))
+                            ls.vehicletype.setDecel(vt, float(eff.get("decel", 4.5)))
+                        elif vt == "bike":
+                            ls.vehicletype.setSpeedFactor(vt, float(eff.get("bike_factor", 1.0)))
+                    weather_label = c.get("label", "")
+                except Exception:
+                    pass
 
         if not running:
             break
@@ -452,6 +515,8 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
             bus_spd_sum = 0.0
             bus_n = 0
             bike_n = 0
+            truck_n = 0
+            moto_n = 0
 
             i = 0
             for vid, d in res.items():
@@ -491,6 +556,10 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
                         metrics.bus_stopped_seconds += 1.0
                 elif k == KIND_BIKE:
                     bike_n += 1
+                elif k == KIND_TRUCK:
+                    truck_n += 1
+                elif k == KIND_MOTO:
+                    moto_n += 1
 
             # Drop the tail left unused by any skipped vehicles.
             if i < n:
@@ -528,6 +597,8 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
             metrics.bus_running = bus_n
             metrics.bus_mean_speed = (bus_spd_sum / bus_n) if bus_n else 0.0
             metrics.bike_running = bike_n
+            metrics.truck_running = truck_n
+            metrics.moto_running = moto_n
 
             lonlat = proj.to_lonlat(xy)
         else:
@@ -558,6 +629,17 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
         # --- run the control policy ---
         _halt_cache.clear()
         controller.step(metrics.sim_time, halt_fn, bus_requests)
+
+        # --- load the network to what the measured profile says this hour is ---
+        if metrics.sim_time - last_scale_at >= scale_check_s:
+            last_scale_at = metrics.sim_time
+            want = round(demand_factor(metrics.sim_time, start_hour, day_name), 3)
+            if abs(want - last_scale) > 0.02:
+                try:
+                    ls.simulation.setScale(want)
+                    last_scale = want
+                except Exception:
+                    pass
 
         # --- signal colours + congestion for the map ---
         # These are pure display data over 1,151 signals and 4,016 edges. At the
@@ -673,7 +755,10 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
             "type": "state",
             "mode": mode,
             "clock": clock_string(metrics.sim_time, start_hour),
-            "demand_factor": round(demand_factor(metrics.sim_time, start_hour), 3),
+            "day": day_name,
+            "weather": weather_label,
+            "demand_factor": round(
+                demand_factor(metrics.sim_time, start_hour, day_name), 3),
             "metrics": metrics.snapshot(),
             "controller": {
                 "name": controller.name,

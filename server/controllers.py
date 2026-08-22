@@ -37,28 +37,87 @@ from dataclasses import dataclass, field
 
 
 # --------------------------------------------------------------------------
-# Time-of-day demand profile
+# Time-of-day demand profile — MEASURED, not asserted
 # --------------------------------------------------------------------------
-# Relative traffic intensity by hour, shaped to the Barcelona working-day
-# pattern: a sharp 08:00-09:30 commute peak, a broad midday plateau (the city
-# genuinely does not empty at lunch), and a heavier, longer evening peak from
-# 18:00-20:30. Used to scale max_green -- longer cycles when demand is high,
-# snappier cycles when it is not.
-HOURLY_DEMAND = {
+# Derived from 3.24 million real observations of Barcelona's own traffic-state
+# feed (Open Data BCN `trams`, 532 road sections, Jan-Mar 2026). See
+# sim/fetch_traffic_profile.py, which also documents why the measured
+# congestion index is rescaled before being used as a demand multiplier:
+# congestion state is not traffic volume, and an empty road still reports
+# "fluid".
+#
+# What this buys, beyond accuracy: the peaks are no longer a shape someone drew
+# because it looked plausible. Morning 08:00, afternoon 17:00, evening 18:00,
+# Friday busiest — those are the hours Barcelona actually has.
+#
+# The literal table below is a fallback for when the profile has not been
+# built. It is the old hand-written curve and is clearly worse; the code says
+# which one is in use so the distinction never gets lost.
+import json as _json
+from pathlib import Path as _Path
+
+_FALLBACK_HOURLY = {
     0: 0.12, 1: 0.07, 2: 0.05, 3: 0.04, 4: 0.05, 5: 0.12,
     6: 0.35, 7: 0.72, 8: 1.00, 9: 0.88, 10: 0.70, 11: 0.68,
     12: 0.72, 13: 0.78, 14: 0.80, 15: 0.74, 16: 0.72, 17: 0.85,
     18: 0.97, 19: 1.00, 20: 0.86, 21: 0.60, 22: 0.40, 23: 0.24,
 }
 
+DOW_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday",
+             "Friday", "Saturday", "Sunday"]
 
-def demand_factor(sim_time: float, start_hour: float = 7.0) -> float:
+_PROFILE_PATH = (_Path(__file__).resolve().parent.parent
+                 / "web" / "public" / "data" / "traffic_profile.json")
+
+
+def _load_profile() -> dict | None:
+    try:
+        return _json.loads(_PROFILE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+PROFILE = _load_profile()
+PROFILE_SOURCE = (
+    "measured" if PROFILE and PROFILE.get("demand_by_day") else "fallback"
+)
+
+
+def demand_curve(day: str | int = "Friday") -> list:
+    """24 hourly demand multipliers for a named day (or weekday index)."""
+    if isinstance(day, int):
+        day = DOW_NAMES[day % 7]
+    if PROFILE:
+        by_day = PROFILE.get("demand_by_day") or {}
+        if day in by_day:
+            return by_day[day]
+        wk = PROFILE.get("demand_weekday_mean")
+        if wk:
+            return wk
+    return [_FALLBACK_HOURLY[h] for h in range(24)]
+
+
+def demand_factor(sim_time: float, start_hour: float = 7.0,
+                  day: str | int = "Friday") -> float:
     """Smoothly interpolated demand multiplier for the current simulated clock."""
+    curve = demand_curve(day)
     hour = (start_hour + sim_time / 3600.0) % 24.0
     lo = int(math.floor(hour)) % 24
     hi = (lo + 1) % 24
     frac = hour - math.floor(hour)
-    return HOURLY_DEMAND[lo] * (1 - frac) + HOURLY_DEMAND[hi] * frac
+    return curve[lo] * (1 - frac) + curve[hi] * frac
+
+
+def peaks_for(day: str | int = "Friday") -> dict:
+    """The measured morning / afternoon / evening peak hours for a day."""
+    if isinstance(day, int):
+        day = DOW_NAMES[day % 7]
+    if PROFILE:
+        p = (PROFILE.get("peaks") or {}).get(day)
+        if p:
+            return p
+        return PROFILE.get("weekday_peaks", {})
+    return {"morning": {"hour": 8}, "afternoon": {"hour": 14}, "evening": {"hour": 19}}
 
 
 def clock_string(sim_time: float, start_hour: float = 7.0) -> str:

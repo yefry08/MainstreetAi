@@ -3,6 +3,9 @@ import Scene from './scene/Scene'
 import Bezel from './ui/Bezel'
 import CameraControls from './ui/CameraControls'
 import Atmosphere from './ui/Atmosphere'
+import ClimatePanel from './ui/ClimatePanel'
+import ModeLegend from './ui/ModeLegend'
+import TimeControl from './ui/TimeControl'
 import { useSimSocket } from './data/useSimSocket'
 
 /**
@@ -39,6 +42,20 @@ export default function App() {
           <span className="wordmark-name">MainstreetAi</span>
         </div>
         <div className="masthead-right">
+          {header?.weather?.available && (
+            <span
+              className={`wx ${
+                header.weather.condition !== 'clear' ? 'wet' : ''
+              }`}
+              title={`${header.weather.source} — observed ${header.weather.observed_at}`}
+            >
+              <span className="wx-temp">
+                {Math.round(header.weather.temperature_c)}°
+              </span>
+              <span className="wx-label">{header.weather.label}</span>
+            </span>
+          )}
+          {header?.day && <span className="masthead-tag">{header.day}</span>}
           {header?.clock && (
             <span className="masthead-clock value">{header.clock}</span>
           )}
@@ -50,6 +67,12 @@ export default function App() {
           }`} />
         </div>
       </header>
+
+      <aside className="rail">
+        <ClimatePanel header={header} />
+        <ModeLegend header={header} />
+        <TimeControl header={header} />
+      </aside>
 
       <CameraControls map={map} />
 

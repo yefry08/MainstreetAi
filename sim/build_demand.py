@@ -33,13 +33,33 @@ NET = NET_DIR / "barcelona.net.xml"
 TOOLS = Path(sumolib.__file__).resolve().parent.parent / "sumo" / "tools"
 RANDOM_TRIPS = TOOLS / "randomTrips.py"
 
-# Agent-count mode split. Buses are few in number but carry ~120 people each,
-# which is exactly why giving them signal priority is a high-leverage lever.
+# Mode split by AGENT COUNT, shaped to Barcelona rather than to a generic city.
+#
+# The two that make it read as Barcelona specifically:
+#   moto   roughly a third of the city's vehicle fleet is two-wheeled, a share
+#          almost no other European city approaches
+#   truck  urban freight, which is a small count but a large share of the
+#          disruption because vans stop on the carriageway
+#
+# Buses are deliberately few — around 8% of agents — because that is the point:
+# a handful of vehicles carrying a large share of the people, which is what
+# makes signal priority for them such a high-leverage lever.
+# These periods define the PEAK hour. The simulation scales insertion down from
+# here with SUMO's own `setScale`, driven by the measured demand curve — so this
+# is the busiest the network ever gets, not its average.
+#
+# Total is held near 9,000 trips/hour because that is what the network was
+# validated at. The first version of this table simply added motos and trucks on
+# top of the existing car demand, which pushed it to 11,000, gridlocked the
+# Eixample, and drove SUMO from 0.2 s to 6 s per simulated second. Composition
+# changed; volume should not have.
 MODES = {
-    #  name    vclass       vType   period  fringe  min_dist  extra
-    "car":  dict(vclass="passenger", vtype="car",  period=0.50, fringe=8.0, min_dist=600),
-    "bike": dict(vclass="bicycle",   vtype="bike", period=2.20, fringe=3.0, min_dist=400),
-    "bus":  dict(vclass="bus",       vtype="bus",  period=7.00, fringe=1.5, min_dist=1800),
+    #  name     vclass          vType    period  fringe  min_dist   share
+    "car":   dict(vclass="passenger",  vtype="car",   period=0.80, fringe=8.0, min_dist=600),   # ~50%
+    "moto":  dict(vclass="motorcycle", vtype="moto",  period=1.45, fringe=6.0, min_dist=450),   # ~28%
+    "bike":  dict(vclass="bicycle",    vtype="bike",  period=3.30, fringe=3.0, min_dist=400),   # ~12%
+    "truck": dict(vclass="delivery",   vtype="truck", period=6.70, fringe=4.0, min_dist=900),   # ~6%
+    "bus":   dict(vclass="bus",        vtype="bus",   period=10.0, fringe=1.5, min_dist=1800),  # ~4%
 }
 
 

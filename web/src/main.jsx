@@ -13,6 +13,7 @@ import '@fontsource/jetbrains-mono/600.css'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import './design/tokens.css'
 import './design/bezel.css'
+import './design/panels.css'
 import App from './App'
 
 createRoot(document.getElementById('root')).render(
