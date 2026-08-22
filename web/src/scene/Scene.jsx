@@ -3,6 +3,9 @@ import maplibregl from 'maplibre-gl'
 import { addBuildings, growBuildings, BUILDING_LAYER_ID } from './buildings'
 import { pruneUnusableSources } from './pruneStyle'
 import { HOME } from '../ui/CameraControls'
+import { createThreeLayer } from './three/ThreeLayer'
+import { createTraffic } from './three/traffic'
+import { createSignals } from './three/signals'
 
 // Free, key-less vector tiles serving the OpenMapTiles schema, which carries
 // per-building `render_height` — that is what lets us extrude real Barcelona
@@ -52,10 +55,18 @@ const RASTER_FALLBACK = {
  * no traffic, no overlay, no data connection. This pass is about how the city
  * looks and how it feels to move through it.
  */
-export default function Scene({ onMapReady, onBasemapStatus }) {
+// Scene origin, near the middle of the simulated extract. Everything three.js
+// draws is expressed in metres from here — see three/geo.js for why.
+const ORIGIN = [2.1662, 41.3925]
+
+export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const grownRef = useRef(false)
+  const threeRef = useRef(null)
+  const trafficRef = useRef(null)
+  const signalsRef = useRef(null)
+  const signalDataRef = useRef(null)
 
   useEffect(() => {
     const map = new maplibregl.Map({
@@ -180,6 +191,50 @@ export default function Scene({ onMapReady, onBasemapStatus }) {
           grownRef.current = true
           growBuildings(map, { duration: 1900 })
         }
+
+        // The traffic scene is a MapLibre custom layer, so it shares the map's
+        // GL context and needs no camera synchronisation of its own — pan,
+        // zoom, rotate and pitch keep working for free.
+        if (!threeRef.current) {
+          const layer = createThreeLayer({
+            origin: ORIGIN,
+            onInit: ({ scene, proj }) => {
+              trafficRef.current = createTraffic({ scene, proj })
+              // Signal geometry is fixed, so it can be built as soon as the
+              // positions arrive — state colours stream in separately.
+              fetch('/data/signals.geojson')
+                .then((r) => r.json())
+                .then((gj) => {
+                  const pts = gj.features.map((f) => ({
+                    pos: f.geometry.coordinates,
+                    id: f.properties.id,
+                    label: f.properties.label,
+                    links: f.properties.links,
+                    phases: f.properties.phases,
+                    corridor: f.properties.corridor,
+                  }))
+                  signalDataRef.current = pts
+                  signalsRef.current = createSignals({ scene, proj, signals: pts })
+                })
+                .catch(() => {
+                  /* no signal geometry; traffic still renders */
+                })
+            },
+            // Runs inside MapLibre's render pass, so vehicle positions are
+            // recomputed for the frame that is about to be drawn rather than
+            // one frame late.
+            onFrame: () => {
+              trafficRef.current?.tick()
+              signalsRef.current?.update(
+                frameRef?.current?.signals,
+                map.getZoom()
+              )
+            },
+          })
+          threeRef.current = layer
+          map.addLayer(layer)
+        }
+
         onMapReady?.(map)
       } catch (err) {
         window.__mstLastError = String(err?.message || err)
@@ -192,8 +247,54 @@ export default function Scene({ onMapReady, onBasemapStatus }) {
     // Debug handle. requestAnimationFrame is throttled to zero in a
     // backgrounded or non-compositing tab, which stalls every animation; this
     // makes camera state inspectable regardless.
+    // ---- render pump ------------------------------------------------------
+    // Vehicles are dead-reckoned continuously, so the scene has to be redrawn
+    // continuously — MapLibre otherwise only repaints when the camera moves,
+    // and the traffic would freeze the moment you let go of the mouse.
+    // Repaints stop when there is nothing moving, so an idle map costs nothing.
+    let raf = 0
+    let live = 0
+    const pump = () => {
+      raf = requestAnimationFrame(pump)
+      const traffic = trafficRef.current
+      const layer = threeRef.current
+      if (!traffic || !layer) return
+
+      const f = frameRef?.current
+      if (f) {
+        const n = traffic.applyFrame(f)
+        if (n >= 0) live = n
+      }
+      if (live > 0) layer.redraw()
+    }
+    raf = requestAnimationFrame(pump)
+
     window.__mst = {
       map,
+
+      /** Advance the scene by hand when requestAnimationFrame is throttled. */
+      forceTick: (times = 1) => {
+        const traffic = trafficRef.current
+        if (frameRef?.current) traffic?.applyFrame(frameRef.current)
+        for (let i = 0; i < times; i++) {
+          traffic?.tick()
+          signalsRef.current?.update(frameRef?.current?.signals, map.getZoom())
+          map.triggerRepaint()
+          try {
+            map._render(0)
+          } catch {
+            /* mid style swap */
+          }
+        }
+        return traffic?.stats?.() ?? null
+      },
+
+      get traffic() {
+        return trafficRef.current
+      },
+      get signals() {
+        return signalsRef.current
+      },
 
       /**
        * Live tone controls, so building colour can be judged against a real
@@ -246,6 +347,10 @@ export default function Scene({ onMapReady, onBasemapStatus }) {
           minZoom: map.getMinZoom(),
           maxZoom: map.getMaxZoom(),
         },
+        traffic: trafficRef.current?.stats?.() ?? null,
+        signals: signalsRef.current?.stats?.() ?? null,
+        threeLayer: !!map.getLayer('mst-three'),
+        clock: frameRef?.current?.header?.clock ?? null,
         handlers: {
           dragPan: map.dragPan.isEnabled(),
           dragRotate: map.dragRotate.isEnabled(),
@@ -257,12 +362,15 @@ export default function Scene({ onMapReady, onBasemapStatus }) {
     }
 
     return () => {
+      cancelAnimationFrame(raf)
       clearTimeout(watchdog)
       if (fallbackWatchdog) clearTimeout(fallbackWatchdog)
+      trafficRef.current?.dispose?.()
+      signalsRef.current?.dispose?.()
       map.remove()
       delete window.__mst
     }
-  }, [onMapReady, onBasemapStatus])
+  }, [onMapReady, onBasemapStatus, frameRef])
 
   return <div ref={containerRef} className="scene" />
 }

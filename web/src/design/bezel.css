@@ -123,6 +123,19 @@ body,
   gap: 8px;
 }
 
+.masthead-clock {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  margin-right: 2px;
+}
+
+/* Queued vehicles are the delay you are watching the AI remove, so the number
+   carries the same red the stopped vehicles do on the map. */
+.readout .value.queued {
+  color: var(--aturat);
+}
+
 .masthead-tag {
   font-family: var(--font-data);
   font-size: 9px;

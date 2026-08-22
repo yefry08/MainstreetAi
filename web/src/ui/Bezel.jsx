@@ -33,7 +33,7 @@ for (let deg = -TICK_SPAN; deg <= TICK_SPAN; deg += 10) {
   })
 }
 
-export default function Bezel({ map }) {
+export default function Bezel({ map, header }) {
   const tapeRef = useRef(null)
   const latRef = useRef(null)
   const lonRef = useRef(null)
@@ -91,6 +91,24 @@ export default function Bezel({ map }) {
         <Readout label="Zoom" valueRef={zoomRef} />
         <Readout label="Pitch" valueRef={pitchRef} />
         <Readout label="Bearing" valueRef={bearingRef} />
+
+        {header?.twins?.ai?.metrics && (
+          <>
+            <span className="readout-rule" />
+            <div className="readout">
+              <span className="label">On street</span>
+              <span className="value">
+                {header.twins.ai.metrics.running.toLocaleString()}
+              </span>
+            </div>
+            <div className="readout">
+              <span className="label">Queued</span>
+              <span className="value queued">
+                {header.twins.ai.metrics.halting.toLocaleString()}
+              </span>
+            </div>
+          </>
+        )}
 
         {/* Rotation is bound to right-drag and ctrl-drag and is otherwise
             undiscoverable, so the bezel says so once, quietly. */}
