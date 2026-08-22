@@ -295,14 +295,57 @@ server/
   profile_step.py         per-phase timing of the simulation loop
   smoke_test.py           run one twin and print what it emits
 
+server/ai/            the two AI roles — inert without keys
+  config.py           separate keys per role, loaded from .env
+  orchestrator.py     LLM sets signal POLICY; rules execute it
+  emulator.py         natural language -> structured scenario events
+  README.md           architecture, bounds, and how to plug keys in
+
 web/
-  src/MapView.jsx         MapLibre 3D basemap + deck.gl layers
-  src/Dashboard.jsx       live twin comparison, incl. the equity block
-  src/Corridors.jsx       per-corridor flow index
-  src/Controls.jsx        speed, focus, scenario injection
-  src/Inspector.jsx       click a junction, see both controllers reason
-  src/useSimSocket.js     binary frame decoder
+  src/scene/Scene.jsx       MapLibre basemap + camera + three.js layer
+  src/scene/buildings.js    extruded OSM footprints, raised on load
+  src/scene/three/geo.js    WGS84 <-> Mercator <-> scene metres (tested)
+  src/scene/three/traffic.js    instanced 3D vehicles, dead-reckoned
+  src/scene/three/signals.js    1,151 signal masts with live state
+  src/ui/Bezel.jsx          instrument readouts + bearing tape
+  src/data/useSimSocket.js  binary frame decoder
 ```
+
+### The front end
+
+A dark control-room view of the city: real extruded OSM buildings, GPU-instanced
+3D vehicles, and 1,151 traffic signals with live red/amber/green state, all over
+a free camera (drag pan, scroll zoom, right-drag orbit, pitch to 85°).
+
+The whole dynamic scene costs **7 draw calls** — 4 for the fleet, 3 for the
+signals — regardless of how many vehicles are on screen.
+
+Vehicles are **dead-reckoned** between simulation ticks. The wire format carries
+no vehicle IDs, so vehicles cannot be matched frame-to-frame and therefore
+cannot be interpolated; instead each one advances along its reported heading at
+its reported speed until the next tick corrects it. Data arrives at ~5 Hz and
+the scene renders at display rate, so traffic flows continuously rather than
+stepping.
+
+Buildings come from our own OSM extract (`sim/fetch_buildings.py`), not the
+basemap. Only the OpenMapTiles schema carries per-building height and its one
+free host is a single point of failure — on conference wifi that is exactly what
+stops resolving, and the 3D city would silently flatten to nothing. Owning the
+geometry also means the city stands up offline.
+
+### The AI layer
+
+Two roles, two keys, both **inert without a key** — the simulation falls back to
+the validated rules-based policy and the three built-in scenarios.
+
+The architectural point: **an LLM cannot drive 1,151 junctions at 1 Hz.** So the
+orchestrator is a *strategic* layer that reads the whole network once a minute
+and returns five bounded policy parameters, which the deterministic controller
+executes every second at every junction. Every parameter is clamped in code —
+the model cannot set a green below the pedestrian clearance interval, and it
+cannot change the six rules at all.
+
+See [`server/ai/README.md`](server/ai/README.md).
 
 ### Why two processes
 
