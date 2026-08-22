@@ -322,6 +322,43 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
 
             elif kind == "clear_events":
                 event_log.clear()
+
+            elif kind == "ai_event":
+                # A scenario composed by the emulator. The model chose the
+                # location, scale and timing; the injection path below is the
+                # same validated one the built-in scenarios use, so nothing
+                # about the physics is model-generated.
+                spec = ev.get("spec") or {}
+                ekind = spec.get("kind")
+                note = spec.get("note") or ekind
+
+                if ekind == "rain":
+                    apply_event({"kind": "rain"})
+                    return
+                if ekind == "clear_weather":
+                    apply_event({"kind": "clear_weather"})
+                    return
+
+                if ekind == "surge":
+                    origins = _edges_near(
+                        roads, tuple(spec["center"]), float(spec.get("radius_m", 700))
+                    )
+                elif ekind == "corridor_surge":
+                    origins = corridors.get(spec.get("corridor", ""), [])
+                else:
+                    return
+
+                dests = _fringe_edges(roads)
+                added = _inject(
+                    ls, origins, dests, int(spec.get("vehicles", 0)),
+                    CAR_TYPES, f"ai_{ekind}", now, seed,
+                    window_s=float(spec.get("over_minutes", 10)) * 60.0,
+                    offset_s=float(spec.get("delay_minutes", 0)) * 60.0,
+                )
+                event_log.append({
+                    "t": now, "kind": ekind,
+                    "note": f"{note} — {added} trips injected",
+                })
         except Exception as exc:
             event_log.append({"t": now, "kind": kind, "note": f"failed: {exc}"})
 
@@ -349,8 +386,20 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
                 send_vehicles = (mode == c.get("value"))
             elif t == "watch":
                 watch_id = c.get("value") or None
+            elif t == "policy":
+                # Strategic policy from the AI orchestration layer. Only the
+                # adaptive twin listens: the baseline must keep running the
+                # fixed-time programme or the A/B stops meaning anything.
+                if isinstance(controller, AdaptiveController):
+                    controller.apply_policy(
+                        c.get("value") or {},
+                        source=c.get("source", "ai"),
+                        rationale=c.get("rationale", ""),
+                    )
             elif t == "event":
                 pending_events.append(c)
+            elif t == "ai_event":
+                pending_events.append({"kind": "ai_event", "spec": c.get("spec")})
 
         if not running:
             break
@@ -630,6 +679,8 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
                 "name": controller.name,
                 "label": controller.label,
                 "stats": dict(controller.stats),
+                "policy": (controller.current_policy()
+                           if isinstance(controller, AdaptiveController) else None),
             },
             "events": event_log[-8:],
             "watch": watch,
@@ -723,7 +774,8 @@ def _fringe_edges(roads: dict, _dir=None) -> list[str]:
 
 
 def _inject(ls, origins: list[str], dests: list[str], n: int,
-            vtypes: tuple[str, ...], prefix: str, now: float, seed: int) -> int:
+            vtypes: tuple[str, ...], prefix: str, now: float, seed: int,
+            window_s: float = 600.0, offset_s: float = 0.0) -> int:
     """
     Add `n` extra trips spread over the next ~10 simulated minutes.
 
@@ -760,7 +812,7 @@ def _inject(ls, origins: list[str], dests: list[str], n: int,
                 continue
             ls.route.add(rid, stage.edges)
             ls.vehicle.add(vid, rid, typeID=vt,
-                           depart=str(now + float(rng.uniform(1, 600))))
+                           depart=str(now + offset_s + float(rng.uniform(1, window_s))))
             added += 1
         except Exception:
             continue

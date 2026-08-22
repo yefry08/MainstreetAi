@@ -200,6 +200,10 @@ class AdaptiveController:
 
         self.stats = {"tsp_grants": 0, "early_releases": 0, "extensions": 0}
         self._last_reason: dict[str, str] = {}
+        # Set by the AI orchestration layer, if one is configured. Purely
+        # informational here — the parameters above are what actually run.
+        self.policy_source = "default"
+        self.policy_rationale = ""
         # When we grant a hold we already know when the green will now expire,
         # so we can skip re-issuing the command until it is nearly up. Without
         # this we were sending ~500 setPhaseDuration calls every single step.
@@ -300,6 +304,54 @@ class AdaptiveController:
             self._release(tid, plan, sim_time, f"queue {served} vs {waiting}: switching")
 
     # ---------------------------------------------------------------
+    def apply_policy(self, policy: dict, source: str = "ai", rationale: str = "") -> dict:
+        """
+        Adopt a policy from the strategic (AI) layer.
+
+        The values are ALREADY clamped by ai.orchestrator.clamp_policy before
+        they reach here, and they are clamped again below. That duplication is
+        deliberate: this is the last line before parameters reach 1,151 live
+        signal controllers, and a bound that only exists in the caller is a
+        bound that disappears the first time someone adds a second caller.
+
+        Only the tunable knobs are exposed. Nothing here can change the
+        controller's STRUCTURE — the six rules, their priority order, and the
+        fact that clearance intervals are always run by SUMO are fixed in code
+        and unreachable from the model.
+        """
+        limits = {
+            "min_green": (6.0, 20.0),
+            "max_green_base": (25.0, 90.0),
+            "imbalance": (1.0, 2.0),
+            "bus_detect_m": (60.0, 220.0),
+            "tsp_max_green": (30.0, 110.0),
+        }
+        applied = {}
+        for key, (lo, hi) in limits.items():
+            if key not in policy:
+                continue
+            try:
+                v = max(lo, min(hi, float(policy[key])))
+            except (TypeError, ValueError):
+                continue
+            setattr(self, key, v)
+            applied[key] = v
+
+        self.policy_source = source
+        self.policy_rationale = str(rationale)[:240]
+        return applied
+
+    def current_policy(self) -> dict:
+        return {
+            "min_green": self.min_green,
+            "max_green_base": self.max_green_base,
+            "imbalance": self.imbalance,
+            "bus_detect_m": self.bus_detect_m,
+            "tsp_max_green": self.tsp_max_green,
+            "source": self.policy_source,
+            "rationale": self.policy_rationale,
+        }
+
     def _count_tsp(self, tid: str, plan: JunctionPlan, phase: int) -> None:
         """
         Count one transit-priority intervention per junction per phase.

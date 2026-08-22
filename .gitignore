@@ -23,3 +23,7 @@ __pycache__/
 
 # Building footprints (regenerate with sim/fetch_buildings.py)
 web/public/data/buildings.geojson
+
+# API keys — never commit. Copy .env.example to .env.
+.env
+.env.local

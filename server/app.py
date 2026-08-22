@@ -33,6 +33,12 @@ from fastapi.staticfiles import StaticFiles
 
 from sim_worker import run_worker
 
+# The two AI roles. Both are inert without their key, and the simulation runs
+# its validated rules-based policy in that state, so importing this can never
+# break a run.
+from ai import Emulator, Orchestrator
+from ai import summary as ai_summary
+
 HERE = Path(__file__).resolve().parent
 DATA = HERE.parent / "web" / "public" / "data"
 WEB_DIST = HERE.parent / "web" / "dist"
@@ -56,6 +62,13 @@ class Engine:
         self._stop = threading.Event()
         self.started_at = time.time()
 
+        # Strategic layer. Runs on its own thread so a slow API call can never
+        # stall the simulation — the tactical controller keeps executing the
+        # previous policy while a decision is in flight.
+        self.orchestrator = Orchestrator()
+        self.emulator = Emulator()
+        self._ai_thread: threading.Thread | None = None
+
     # -----------------------------------------------------------------
     def start(self, cfg: dict) -> None:
         ctx = mp.get_context("spawn")
@@ -74,6 +87,50 @@ class Engine:
             t = threading.Thread(target=self._drain, args=(mode,), daemon=True)
             t.start()
             self._threads.append(t)
+
+        if self.orchestrator.available:
+            self._ai_thread = threading.Thread(target=self._orchestrate, daemon=True)
+            self._ai_thread.start()
+            print(f"[ai] orchestrator active ({self.orchestrator.cfg.model}), "
+                  f"deciding every {self.orchestrator.interval_s:.0f} simulated seconds")
+        else:
+            print("[ai] no orchestration key — running the rules-based policy")
+
+    def _orchestrate(self) -> None:
+        """
+        Strategic control loop.
+
+        Deliberately slow. An LLM cannot drive 1,151 junctions at 1 Hz, so it
+        sets policy on a long cadence and the deterministic controller executes
+        it every second. See ai/orchestrator.py for the full reasoning.
+        """
+        while not self._stop.is_set():
+            time.sleep(2.0)
+            item = self.latest.get("ai")
+            if item is None:
+                continue
+            snap = item[0]
+            sim_time = snap["metrics"]["sim_time"]
+            if not self.orchestrator.due(sim_time):
+                continue
+
+            decision = self.orchestrator.decide(sim_time, {
+                "clock": snap.get("clock"),
+                "metrics": snap.get("metrics", {}),
+                "corridors": snap.get("corridors", {}),
+                "events": snap.get("events", []),
+            })
+            # Only the adaptive twin. Sending policy to the baseline would
+            # destroy the comparison the whole demo rests on.
+            if decision.source == "ai":
+                self.send({
+                    "type": "policy",
+                    "value": decision.policy,
+                    "source": decision.source,
+                    "rationale": decision.rationale,
+                }, mode="ai")
+                print(f"[ai] t={sim_time:.0f}s policy updated "
+                      f"({decision.latency_ms:.0f} ms): {decision.rationale}")
 
     def _drain(self, mode: str) -> None:
         """mp.Queue.get blocks, so each worker gets a reader thread."""
@@ -187,7 +244,53 @@ async def health():
         "have_snapshot": {m: m in engine.latest for m in MODES},
         "errors": engine.errors[-3:],
         "uptime_s": round(time.time() - engine.started_at, 1),
+        "ai": ai_summary(),
+        "policy": engine.orchestrator.current.to_dict(),
     }
+
+
+@app.get("/api/ai/policy")
+async def ai_policy():
+    """Current strategic policy and the last few decisions behind it."""
+    return {
+        "current": engine.orchestrator.current.to_dict(),
+        "history": engine.orchestrator.history[-10:],
+        "bounds": {k: list(v) for k, v in
+                   __import__("ai").POLICY_BOUNDS.items()},
+        "interval_s": engine.orchestrator.interval_s,
+        "available": engine.orchestrator.available,
+    }
+
+
+@app.post("/api/ai/scenario")
+async def ai_scenario(payload: dict):
+    """
+    Compose a scenario from a description and stage it.
+
+    The model chooses WHAT happens and where; SUMO decides what the city does
+    about it. Set `dry_run` to see the events without injecting them.
+    """
+    description = (payload.get("description") or "").strip()
+    if not description:
+        return JSONResponse({"error": "description is required"}, status_code=400)
+
+    item = engine.latest.get(engine.focus) or engine.latest.get("ai")
+    state = None
+    if item:
+        snap = item[0]
+        state = {"clock": snap.get("clock"), "metrics": snap.get("metrics", {})}
+
+    scenario = engine.emulator.compose(description, state)
+    result = scenario.to_dict()
+
+    if scenario.events and not payload.get("dry_run"):
+        # Applied to BOTH twins identically, exactly like the built-in
+        # scenarios. Injecting into only one would rig the comparison.
+        for ev in scenario.events:
+            engine.send({"type": "ai_event", "spec": ev})
+        result["staged"] = len(scenario.events)
+
+    return result
 
 
 @app.post("/api/control")
