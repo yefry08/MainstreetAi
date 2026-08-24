@@ -4,6 +4,7 @@ import Bezel from './ui/Bezel'
 import CameraControls from './ui/CameraControls'
 import Atmosphere from './ui/Atmosphere'
 import ClimatePanel from './ui/ClimatePanel'
+import LiveCity from './ui/LiveCity'
 import ModeLegend from './ui/ModeLegend'
 import TimeControl from './ui/TimeControl'
 import { useSimSocket } from './data/useSimSocket'
@@ -42,6 +43,8 @@ export default function App() {
           <span className="wordmark-name">MainstreetAi</span>
         </div>
         <div className="masthead-right">
+          {/* The one live thing on a screen full of simulation. */}
+          <LiveCity />
           {header?.weather?.available && (
             <span
               className={`wx ${

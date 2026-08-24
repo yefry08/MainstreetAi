@@ -32,9 +32,14 @@ MODES = ("baseline", "ai")
 METRICS = [
     ("stopped-vehicle hours", "stopped_veh_hours", "down"),
     ("avg trip time", "avg_trip_time_s", "down"),
-    ("network speed", "mean_speed_kmh", "up"),
+    # The time-INTEGRATED speeds (distance / vehicle-seconds), not the
+    # instantaneous means. Sampled an instant apart on two independently
+    # seeded twins, the instantaneous figure swung between +98% and -4% while
+    # the underlying advantage sat steady near +39%; averaging that across
+    # seeds would report a spread that is measurement noise, not policy.
+    ("network speed", "avg_speed_kmh", "up"),
     ("bus stopped hours", "bus_stopped_hours", "down"),
-    ("bus mean speed", "bus_mean_speed_kmh", "up"),
+    ("bus speed", "bus_avg_speed_kmh", "up"),
     ("trips completed", "completed", "up"),
     ("CO2", "co2_kg", "down"),
     ("NOx", "nox_kg", "down"),
@@ -130,6 +135,7 @@ def main() -> None:
     print()
 
     runs = []
+    failed: list[str] = []
     t0 = time.perf_counter()
     for i, (seed, dtag) in enumerate(plan, 1):
         label = f"seed {seed} / demand {'A' if not dtag else 'B'}"
@@ -138,6 +144,7 @@ def main() -> None:
         r = run_pair(seed, until, dtag)
         if r is None:
             print("FAILED")
+            failed.append(label)
             continue
         runs.append((label, r))
         d = r["ai"]["stopped_veh_hours"] - r["baseline"]["stopped_veh_hours"]
@@ -178,6 +185,25 @@ def main() -> None:
           "\nnumber worth quoting, not the mean. Runs vary both SUMO's"
           "\ndriver-behaviour seed and, where the tagged set exists, the"
           "\nunderlying trip demand itself.")
+
+    # A verdict of "improved on every run" is only worth as much as the number
+    # of runs behind it, and half of them failing while the table still reads
+    # "every run" overstates the evidence badly. Say what actually ran.
+    demands = {("B" if "demand B" in lbl else "A") for lbl, _ in runs}
+    print(f"\nBASED ON {len(runs)} SUCCESSFUL RUN(S), "
+          f"demand set(s): {', '.join(sorted(demands))}")
+    if failed:
+        print(f"!! {len(failed)} run(s) FAILED and are NOT in the table above:")
+        for lbl in failed:
+            print(f"     {lbl}")
+        print("   Treat the verdicts as covering only the runs that completed.")
+    if len(demands) < 2:
+        print("!! Only ONE demand set contributed, so this varies the")
+        print("   driver-behaviour seed but NOT the underlying trips. Build the")
+        print("   alternate set for the stronger claim:")
+        print("     python sim/build_demand.py --seed 909 --tag _b")
+    if len(runs) < 2:
+        print("!! A single run cannot distinguish policy from luck.")
 
 
 if __name__ == "__main__":

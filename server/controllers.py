@@ -54,6 +54,7 @@ from dataclasses import dataclass, field
 # built. It is the old hand-written curve and is clearly worse; the code says
 # which one is in use so the distinction never gets lost.
 import json as _json
+import os as _os
 from pathlib import Path as _Path
 
 _FALLBACK_HOURLY = {
@@ -97,6 +98,27 @@ def demand_curve(day: str | int = "Friday") -> list:
     return [_FALLBACK_HOURLY[h] for h in range(24)]
 
 
+# How much of the measured demand this network can actually clear.
+#
+# The profile in traffic_profile.json is a MEASURED shape and stays untouched;
+# this scales it. Without it the morning peak inserts more traffic than the
+# network can discharge, backlog accumulates over the run, and by three
+# simulated hours both twins are crawling -- 9.0 km/h fixed-time against
+# 11.1 km/h adaptive. The AI still wins every metric there, but two jams that
+# differ by 2 km/h is not a demo; you cannot SEE the difference.
+#
+# Calibration (fresh simulation pair per point, server/calibrate.py) put the
+# best operating point at scale 0.70: 1,409 vehicles, 16.5 km/h fixed-time
+# against 20.4 km/h adaptive. The measured Friday peak is 0.885, so
+# 0.70 / 0.885 = 0.79 maps the real curve onto that point while preserving
+# its shape -- the three peaks stay where the data put them, they just stop
+# overflowing the network.
+#
+# Raise it for a more congested picture, lower it for free-flow. Override with
+# MAINSTREET_CAPACITY without editing this file.
+NETWORK_CAPACITY = float(_os.environ.get("MAINSTREET_CAPACITY", "0.79"))
+
+
 def demand_factor(sim_time: float, start_hour: float = 7.0,
                   day: str | int = "Friday") -> float:
     """Smoothly interpolated demand multiplier for the current simulated clock."""
@@ -105,7 +127,7 @@ def demand_factor(sim_time: float, start_hour: float = 7.0,
     lo = int(math.floor(hour)) % 24
     hi = (lo + 1) % 24
     frac = hour - math.floor(hour)
-    return curve[lo] * (1 - frac) + curve[hi] * frac
+    return (curve[lo] * (1 - frac) + curve[hi] * frac) * NETWORK_CAPACITY
 
 
 def peaks_for(day: str | int = "Friday") -> dict:

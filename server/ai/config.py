@@ -74,7 +74,12 @@ def infer_provider(key: str | None) -> str | None:
 # survives whichever happens on the day.
 FALLBACK_CHAINS = {
     "gemini": ["gemini-3.5-flash", "gemini-3-flash-preview", "gemini-3.1-flash-lite"],
-    "nvidia": ["mistralai/mistral-nemotron"],
+    # nemotron-3-nano-omni is a REASONING model: it returns its chain of
+    # thought in a separate `reasoning_content` field and leaves `content`
+    # as clean JSON, so the existing parser needs no special case. Verified
+    # to accept response_format=json_object (2.4 s round trip).
+    "nvidia": ["nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+               "mistralai/mistral-nemotron"],
     "anthropic": ["claude-opus-5"],
 }
 

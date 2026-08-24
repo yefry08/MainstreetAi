@@ -8,7 +8,9 @@ import {
   motoGeometry,
   truckGeometry,
   vehicleMaterial,
-} from './vehicleMeshes'
+  // Extension included deliberately: Vite resolves the bare specifier, plain
+  // Node ESM does not, and the tests run under node.
+} from './vehicleMeshes.js'
 
 // From design/tokens.css. Cars are a dim steel mass; buses glow from within,
 // because transit priority is the argument and the mode carrying eighty people
@@ -33,6 +35,11 @@ const KIND_MOTO = 4
 
 // Generous headroom; peak observed load is ~2,300 vehicles across all modes.
 const CAPACITY = { car: 4200, bus: 700, bike: 1600, truck: 900, moto: 2600 }
+
+// Float32s per vehicle on the wire: lon, lat, angle, kind, speed, turn-rate.
+// Keep in step with sim_worker.py's veh array — a mismatch shears the whole
+// fleet across the map rather than failing outright.
+const STRIDE = 6
 
 /** Below this (m/s) a vehicle is queued, and turns red. */
 const STOPPED_MS = 0.6
@@ -138,6 +145,30 @@ export function createTraffic({ scene, proj }) {
   let tickAt = 0
   let lastSimTime = -1
 
+  // Heading is INTERPOLATED, position is not.
+  //
+  // A vehicle's heading arrives once per simulation tick and can change by 90°
+  // in a single step at a corner. Applied raw that is an instantaneous snap —
+  // and the slower the simulation runs, the more violent it looks, because the
+  // same 90° lands in one frame however long the tick took. Turning the yaw
+  // toward its target over the tick interval, by the shortest arc, is what
+  // makes a turn read as a turn.
+  let yaw = new Float32Array(0)      // this tick's measured heading
+  let yawRate = new Float32Array(0)  // radians turned over the last tick
+  // Measured inter-tick interval. The extrapolation window has to track the
+  // real data rate: a fixed clamp that assumed ~200 ms ticks left vehicles
+  // frozen for 3.6 s of every 4 s once the simulation slowed down.
+  let tickInterval = 0.25
+  let colourEpoch = -2
+
+  // Per-mesh record of what each instance SLOT was last painted, so colour
+  // uploads happen only on change.
+  const carState = new Uint8Array(CAPACITY.car).fill(255)
+  const busState = new Uint8Array(CAPACITY.bus).fill(255)
+  const bikeState = new Uint8Array(CAPACITY.bike).fill(255)
+  const truckState = new Uint8Array(CAPACITY.truck).fill(255)
+  const motoState = new Uint8Array(CAPACITY.moto).fill(255)
+
   const grow = (n) => {
     if (n <= cap) return
     cap = Math.ceil(n * 1.3)
@@ -148,6 +179,8 @@ export function createTraffic({ scene, proj }) {
     spd = new Float32Array(cap)
     knd = new Uint8Array(cap)
     stopped = new Uint8Array(cap)
+    yaw = new Float32Array(cap)
+    yawRate = new Float32Array(cap)
   }
 
   const mat = new THREE.Matrix4()
@@ -173,11 +206,11 @@ export function createTraffic({ scene, proj }) {
         return 0
       }
 
-      const n = Math.min(v.length / 5, CAPACITY.car + CAPACITY.bus + CAPACITY.bike)
+      const n = Math.min(v.length / STRIDE, CAPACITY.car + CAPACITY.bus + CAPACITY.bike)
       grow(n)
 
       for (let i = 0; i < n; i++) {
-        const o = i * 5
+        const o = i * STRIDE
         const p = proj.toScene(v[o], v[o + 1], 0)
         px[i] = p.x
         py[i] = p.y
@@ -190,9 +223,25 @@ export function createTraffic({ scene, proj }) {
         spd[i] = s
         knd[i] = v[o + 3] | 0
         stopped[i] = s < STOPPED_MS ? 1 : 0
+
+        // Heading is clockwise from north; scene rotation about +Z is
+        // counter-clockwise, hence the negation.
+        yaw[i] = -a
+        // How far this vehicle turned over the last tick, carried per-VEHICLE
+        // on the wire. It cannot be derived here: the array is repacked every
+        // tick and slot i holds the same vehicle only ~36% of the time, so
+        // anything remembered per slot belongs to a different car.
+        yawRate[i] = -(v[o + 5] * (Math.PI / 180))
       }
       count = n
-      tickAt = performance.now()
+
+      const now = performance.now()
+      if (tickAt) {
+        // Smoothed, so one slow frame does not make every vehicle lurch.
+        const gap = (now - tickAt) / 1000
+        if (gap > 0.01 && gap < 10) tickInterval = tickInterval * 0.7 + gap * 0.3
+      }
+      tickAt = now
       return n
     },
 
@@ -201,9 +250,28 @@ export function createTraffic({ scene, proj }) {
      * vehicle along its heading since the last tick.
      */
     tick(zoom = 16, lat = 41.39) {
-      // Clamp the extrapolation window. If the socket stalls, vehicles should
-      // coast to a stop, not sail across the city.
-      const dt = Math.min(0.45, (performance.now() - tickAt) / 1000)
+      const since = (performance.now() - tickAt) / 1000
+
+      // Extrapolate for as long as the data actually takes to arrive, plus a
+      // little slack — not a fixed 0.45 s. When the simulation slowed to one
+      // tick every 4 s, the old fixed clamp animated each vehicle for 0.45 s
+      // and then froze it for 3.6 s, which is what read as broken rendering.
+      // Still bounded, so a dead socket makes traffic coast to a halt rather
+      // than sail off the map.
+      const window_s = Math.min(6.0, tickInterval * 1.35)
+      const dt = Math.min(window_s, since)
+
+      // Fraction of the way through this tick, for turning vehicles toward
+      // their new heading rather than snapping to it.
+      const turn = Math.min(1, since / Math.max(0.05, tickInterval))
+
+      // Colours are rewritten on the first render after new data, and after
+      // that only where a slot's state actually changed. Rewriting every
+      // instance colour at display rate was ~4,000 wasted uploads per frame.
+      const recolour = colourEpoch !== lastSimTime
+      colourEpoch = lastSimTime
+      let carDirty = false, busDirty = false, bikeDirty = false
+      let truckDirty = false, motoDirty = false
 
       // Keep vehicles legible as the camera pulls back — see the note above.
       const mpp = metresPerPixel(zoom, lat)
@@ -221,32 +289,61 @@ export function createTraffic({ scene, proj }) {
       for (let i = 0; i < count; i++) {
         const adv = spd[i] * dt
         pos.set(px[i] + dx[i] * adv, py[i] + dy[i] * adv, 0.35)
-        // Heading is clockwise from north; scene rotation about +Z is
-        // counter-clockwise, hence the negation.
-        quat.setFromAxisAngle(zAxis, -Math.atan2(dx[i], dy[i]))
+
+        // Continue the vehicle's own turn at the rate it was last turning, so
+        // a 90° corner sweeps through instead of flipping in one frame. Same
+        // dead-reckoning idea as the position above: extrapolate FORWARD from
+        // this vehicle's measured state, never from whatever the slot held
+        // last tick.
+        quat.setFromAxisAngle(zAxis, yaw[i] + yawRate[i] * turn)
         mat.compose(pos, quat, scl)
 
+        // Colour only needs rewriting when a vehicle's moving/stopped state
+        // changed since the last DATA tick. Instance slots are packed per mesh
+        // and shift as vehicles enter and leave, so the comparison is against
+        // what that slot last held, not against the vehicle.
         const kind = knd[i]
+        const st = stopped[i]
         if (kind === KIND_BUS) {
           busMesh.setMatrixAt(nBus, mat)
           busGlow.setMatrixAt(nBus, mat)
-          busMesh.setColorAt(nBus, col.setHex(stopped[i] ? COLOR.stopped : COLOR.bus))
+          if (recolour || busState[nBus] !== st) {
+            busState[nBus] = st
+            busMesh.setColorAt(nBus, col.setHex(st ? COLOR.stopped : COLOR.bus))
+            busDirty = true
+          }
           nBus++
         } else if (kind === KIND_BIKE) {
           bikeMesh.setMatrixAt(nBike, mat)
-          bikeMesh.setColorAt(nBike, col.setHex(stopped[i] ? COLOR.stopped : COLOR.bike))
+          if (recolour || bikeState[nBike] !== st) {
+            bikeState[nBike] = st
+            bikeMesh.setColorAt(nBike, col.setHex(st ? COLOR.stopped : COLOR.bike))
+            bikeDirty = true
+          }
           nBike++
         } else if (kind === KIND_TRUCK) {
           truckMesh.setMatrixAt(nTruck, mat)
-          truckMesh.setColorAt(nTruck, col.setHex(stopped[i] ? COLOR.stopped : COLOR.truck))
+          if (recolour || truckState[nTruck] !== st) {
+            truckState[nTruck] = st
+            truckMesh.setColorAt(nTruck, col.setHex(st ? COLOR.stopped : COLOR.truck))
+            truckDirty = true
+          }
           nTruck++
         } else if (kind === KIND_MOTO) {
           motoMesh.setMatrixAt(nMoto, mat)
-          motoMesh.setColorAt(nMoto, col.setHex(stopped[i] ? COLOR.stopped : COLOR.moto))
+          if (recolour || motoState[nMoto] !== st) {
+            motoState[nMoto] = st
+            motoMesh.setColorAt(nMoto, col.setHex(st ? COLOR.stopped : COLOR.moto))
+            motoDirty = true
+          }
           nMoto++
         } else {
           carMesh.setMatrixAt(nCar, mat)
-          carMesh.setColorAt(nCar, col.setHex(stopped[i] ? COLOR.stopped : COLOR.car))
+          if (recolour || carState[nCar] !== st) {
+            carState[nCar] = st
+            carMesh.setColorAt(nCar, col.setHex(st ? COLOR.stopped : COLOR.car))
+            carDirty = true
+          }
           nCar++
         }
       }
@@ -258,10 +355,14 @@ export function createTraffic({ scene, proj }) {
       truckMesh.count = nTruck
       motoMesh.count = nMoto
 
-      for (const m of meshes) {
-        m.instanceMatrix.needsUpdate = true
-        if (m.instanceColor) m.instanceColor.needsUpdate = true
-      }
+      // Transforms change every frame (vehicles are dead-reckoned); colours
+      // only when a slot's state moved.
+      for (const m of meshes) m.instanceMatrix.needsUpdate = true
+      if (carDirty && carMesh.instanceColor) carMesh.instanceColor.needsUpdate = true
+      if (busDirty && busMesh.instanceColor) busMesh.instanceColor.needsUpdate = true
+      if (bikeDirty && bikeMesh.instanceColor) bikeMesh.instanceColor.needsUpdate = true
+      if (truckDirty && truckMesh.instanceColor) truckMesh.instanceColor.needsUpdate = true
+      if (motoDirty && motoMesh.instanceColor) motoMesh.instanceColor.needsUpdate = true
 
       return { cars: nCar, buses: nBus, bikes: nBike, trucks: nTruck, motos: nMoto }
     },

@@ -202,17 +202,32 @@ export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
               trafficRef.current = createTraffic({ scene, proj })
               // Signal geometry is fixed, so it can be built as soon as the
               // positions arrive — state colours stream in separately.
-              fetch('/data/signals.geojson')
-                .then((r) => r.json())
-                .then((gj) => {
-                  const pts = gj.features.map((f) => ({
+              // One lamp per APPROACH, not per junction. The server emits one
+              // state byte per feature of signal_approaches.geojson in file
+              // order, so these two must stay in lockstep — regenerate with
+              // sim/build_signal_approaches.py. Falls back to the old junction
+              // lamps if that file has not been generated; the server applies
+              // the same fallback, so the two ends agree either way.
+              fetch('/data/signal_approaches.geojson')
+                .then((r) => (r.ok ? r.json() : Promise.reject(new Error('no approaches'))))
+                .then((gj) => gj.features.map((f) => ({
+                  pos: f.geometry.coordinates,
+                  id: f.properties.tls,
+                  label: f.properties.tls,
+                  bearing: f.properties.bearing,
+                  links: f.properties.links,
+                })))
+                .catch(() => fetch('/data/signals.geojson')
+                  .then((r) => r.json())
+                  .then((gj) => gj.features.map((f) => ({
                     pos: f.geometry.coordinates,
                     id: f.properties.id,
                     label: f.properties.label,
                     links: f.properties.links,
                     phases: f.properties.phases,
                     corridor: f.properties.corridor,
-                  }))
+                  }))))
+                .then((pts) => {
                   signalDataRef.current = pts
                   signalsRef.current = createSignals({ scene, proj, signals: pts })
                 })
@@ -235,7 +250,27 @@ export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
           })
           threeRef.current = layer
           map.addLayer(layer)
+        } else if (!map.getLayer('mst-three')) {
+          // A style swap can drop the custom layer entirely. The three.js
+          // scene object survives in threeRef, so re-attach that rather than
+          // rebuilding it — rebuilding would throw away every vehicle mesh
+          // and the signal geometry along with them.
+          map.addLayer(threeRef.current)
         }
+
+        // The traffic scene has to be painted AFTER the basemap and the
+        // buildings, and a fallback style swap does not preserve that: the
+        // replacement style's `bg` and `base` layers are inserted ON TOP of
+        // the surviving custom layer. The failure is silent and thoroughly
+        // misleading — the layer still renders every frame at full rate with
+        // the right instance counts and the right positions, and an opaque
+        // background is then painted straight over the top of it. It reads as
+        // "the traffic simulation is broken" when nothing about the traffic
+        // is broken at all. moveLayer with no beforeId lifts it back to the
+        // top. Vehicles are not thereby drawn through walls: renderingMode
+        // '3d' shares MapLibre's depth buffer, so fill-extrusion still
+        // occludes anything behind it.
+        if (map.getLayer('mst-three')) map.moveLayer('mst-three')
 
         onMapReady?.(map)
       } catch (err) {

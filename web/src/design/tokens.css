@@ -64,9 +64,30 @@
 
   /* ---- ink — warm greys, never pure white ------------------------------ */
   --ink-50: #f5f1ec;
+  --ink-100: #ded8d0;
   --ink-300: #b9b2a9;
+  --ink-400: #9b948c;
   --ink-500: #7e7871;
   --ink-700: #4a4640;
+
+  /* ---- slate — the COOL grey, used only for the fixed-time baseline -----
+     Deliberately cool against the warm ink scale above: in the split meter
+     the inert baseline half must be distinguishable from the terracotta AI
+     half at a glance, and hue does that more reliably than lightness.
+
+     These were referenced by panels.css before they existed. An undefined
+     custom property in `color:` merely inherits, which is subtle — but the
+     meter's baseline bar sets `background: var(--slate-300)`, and there the
+     miss resolved to transparent, so the half of the signature comparison
+     representing fixed-time control rendered as nothing at all. */
+  --slate-300: #a7b0be;
+  --slate-400: #8a94a6;
+
+  /* ---- spacing ---------------------------------------------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
 
   /* ---- glass ----------------------------------------------------------- */
   --glass-fill: rgba(12, 15, 22, 0.58);
@@ -79,6 +100,7 @@
   --r-sm: 6px;
   --r-md: 10px;
   --r-lg: 14px;
+  --r-pill: 999px;
   --hairline: rgba(255, 255, 255, 0.08);
 
   /* ---- motion -----------------------------------------------------------

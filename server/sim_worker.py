@@ -87,8 +87,19 @@ class Metrics:
     arrived: int = 0
     departed: int = 0
 
-    mean_speed: float = 0.0            # m/s, all modes
+    mean_speed: float = 0.0            # m/s, all modes — INSTANTANEOUS
     halting: int = 0                   # vehicles at a standstill right now
+
+    # Time-integrated network speed: total distance covered / total vehicle-
+    # seconds spent in the network. The instantaneous mean above is far too
+    # noisy to headline — sampled a second apart on two independently seeded
+    # twins it swung between +44% and -1% while the underlying advantage was
+    # a steady +20%. This ratio is the standard network mean speed and it
+    # settles, so the twins can actually be compared on it.
+    veh_distance_m: float = 0.0
+    veh_seconds: float = 0.0
+    bus_distance_m: float = 0.0
+    bus_seconds: float = 0.0
 
     # integrated over time -> the headline "delay" number
     stopped_veh_seconds: float = 0.0
@@ -118,7 +129,11 @@ class Metrics:
 
     def snapshot(self) -> dict:
         avg_trip = (self.total_travel_time / self.completed) if self.completed else 0.0
+        avg_spd = (self.veh_distance_m / self.veh_seconds) if self.veh_seconds else 0.0
+        bus_avg = (self.bus_distance_m / self.bus_seconds) if self.bus_seconds else 0.0
         return {
+            "avg_speed_kmh": round(avg_spd * 3.6, 2),
+            "bus_avg_speed_kmh": round(bus_avg * 3.6, 2),
             "sim_time": round(self.sim_time, 1),
             "running": self.running,
             "arrived": self.arrived,
@@ -273,6 +288,30 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
                          .read_text(encoding="utf-8"))
     sig_ids = [f["properties"]["id"] for f in signals["features"]]
 
+    # ---- approach lamps ---------------------------------------------------
+    # One lamp per APPROACH, not per junction. A junction lamp coloured "is
+    # anything green here" is green essentially always: measured on this
+    # network, 94% of samples at multi-approach junctions have approaches in
+    # DIFFERENT states, and one junction cycles 17 distinct phases that all
+    # collapse to the same green byte. The controller was fine; the display
+    # was throwing the signal away. See sim/build_signal_approaches.py.
+    #
+    # Falls back to junction lamps if the file has not been generated, so a
+    # fresh checkout still runs -- just with the old, less honest display.
+    appr_path = HERE.parent / "web" / "public" / "data" / "signal_approaches.geojson"
+    lamps_by_tls: dict[str, list[tuple[int, list[int]]]] = {}
+    n_lamps = 0
+    if appr_path.exists():
+        appr = json.loads(appr_path.read_text(encoding="utf-8"))
+        for i, f in enumerate(appr["features"]):
+            p = f["properties"]
+            lamps_by_tls.setdefault(p["tls"], []).append((i, p["links"]))
+        n_lamps = len(appr["features"])
+    else:
+        for i, tid in enumerate(sig_ids):
+            lamps_by_tls[tid] = [(i, [])]
+        n_lamps = len(sig_ids)
+
     VEH_VARS = [tc.VAR_POSITION, tc.VAR_ANGLE, tc.VAR_SPEED,
                 tc.VAR_CO2EMISSION, tc.VAR_NOXEMISSION, tc.VAR_FUELCONSUMPTION,
                 # Accumulated waiting time drives the equity metrics. Any
@@ -391,6 +430,8 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
     overlay_tick = 0
     sig_bytes: bytes | None = None
     cong_bytes: bytes = b""
+    # vehicle id -> heading last tick, for the per-vehicle turn rate on the wire
+    prev_ang_of: dict[str, float] = {}
     corridor_stats: dict[str, dict] = {}
     bus_requests: dict[str, list[int]] = {}
     watch_id: str | None = None
@@ -413,6 +454,7 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
     scale_check_s = 30.0
     last_scale_at = -1e9
     last_scale = -1.0
+    manual_scale: float | None = cfg.get("manual_scale")
 
     while running:
         # --- drain commands ---
@@ -443,6 +485,14 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
                 pending_events.append(c)
             elif t == "ai_event":
                 pending_events.append({"kind": "ai_event", "spec": c.get("spec")})
+            elif t == "scale":
+                # Manual congestion pressure, overriding the measured demand
+                # curve. Used to calibrate the operating point, and to hold the
+                # network at a chosen load during a demo. None = follow the
+                # measured profile again.
+                v = c.get("value")
+                manual_scale = None if v is None else max(0.02, min(1.5, float(v)))
+                last_scale = -1.0
             elif t == "clock":
                 # Jump the simulated clock to a chosen day and hour. This
                 # changes the demand curve the controller scales against AND
@@ -511,6 +561,7 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
         if n:
             xy = np.empty((n, 2), dtype=np.float64)
             ang = np.empty(n, dtype=np.float32)
+            dang = np.empty(n, dtype=np.float32)
             spd = np.empty(n, dtype=np.float32)
             knd = np.empty(n, dtype=np.float32)
             wait = np.empty(n, dtype=np.float32)
@@ -536,7 +587,30 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
                 xy[i, 0] = p[0]
                 xy[i, 1] = p[1]
                 a = d.get(tc.VAR_ANGLE, 0.0)
-                ang[i] = a if -1e8 < a < 1e8 else 0.0
+                a = a if -1e8 < a < 1e8 else 0.0
+                ang[i] = a
+                # How far THIS vehicle turned since the last tick, as the
+                # shortest signed arc. The client extrapolates heading with it
+                # exactly as it extrapolates position with speed.
+                #
+                # This has to travel per-VEHICLE rather than being inferred
+                # client-side from the previous tick's array, because the wire
+                # carries no vehicle ids and the array is repacked every tick:
+                # measured on this network, a given slot holds the same vehicle
+                # only 36% of the time, and reusing the slot's previous heading
+                # renders a rotation that is more than 15 degrees wrong on 55%
+                # of slot-ticks (median error 95 degrees). Turning smoothly
+                # toward the wrong heading looks worse than snapping to the
+                # right one.
+                prev_a = prev_ang_of.get(vid)
+                if prev_a is None:
+                    dang[i] = 0.0
+                else:
+                    dd = (a - prev_a) % 360.0
+                    if dd > 180.0:
+                        dd -= 360.0
+                    dang[i] = dd
+                prev_ang_of[vid] = a
                 s = d.get(tc.VAR_SPEED, 0.0)
                 spd[i] = s
                 k = kind_of.get(vid, KIND_CAR)
@@ -570,9 +644,17 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
             if i < n:
                 xy = xy[:i]
                 ang = ang[:i]
+                dang = dang[:i]
                 spd = spd[:i]
                 knd = knd[:i]
                 wait = wait[:i]
+
+            # Vehicles that have left the network must not keep a heading
+            # entry, or this dict grows for the whole run.
+            if len(prev_ang_of) > 4 * max(i, 1) + 512:
+                live = set(res.keys())
+                for gone in [k for k in prev_ang_of if k not in live]:
+                    del prev_ang_of[gone]
 
             # Equity: the tail of the waiting-time distribution, not the mean.
             if len(wait):
@@ -599,6 +681,12 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
             halt_mask = spd < 0.1
             metrics.halting = int(halt_mask.sum())
             metrics.stopped_veh_seconds += float(halt_mask.sum())
+            # Same 1 s step the line above assumes: speed in m/s integrated
+            # over one second is metres, and each vehicle contributes 1 s.
+            metrics.veh_distance_m += float(spd.sum())
+            metrics.veh_seconds += float(len(spd))
+            metrics.bus_distance_m += bus_spd_sum
+            metrics.bus_seconds += bus_n
             metrics.bus_running = bus_n
             metrics.bus_mean_speed = (bus_spd_sum / bus_n) if bus_n else 0.0
             metrics.bike_running = bike_n
@@ -608,7 +696,7 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
             lonlat = proj.to_lonlat(xy)
         else:
             lonlat = np.zeros((0, 2))
-            ang = spd = knd = np.zeros(0, dtype=np.float32)
+            ang = dang = spd = knd = np.zeros(0, dtype=np.float32)
             metrics.mean_speed = 0.0
             metrics.halting = 0
             metrics.bus_running = metrics.bike_running = 0
@@ -638,7 +726,8 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
         # --- load the network to what the measured profile says this hour is ---
         if metrics.sim_time - last_scale_at >= scale_check_s:
             last_scale_at = metrics.sim_time
-            want = round(demand_factor(metrics.sim_time, start_hour, day_name), 3)
+            want = (manual_scale if manual_scale is not None else
+                    round(demand_factor(metrics.sim_time, start_hour, day_name), 3))
             if abs(want - last_scale) > 0.02:
                 try:
                     ls.simulation.setScale(want)
@@ -651,16 +740,32 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
         # speeds we run the demo, refreshing them every other simulated second
         # is visually identical and halves the fixed per-step cost.
         if overlay_tick % 2 == 0 or sig_bytes is None:
-            sig_state = np.zeros(len(sig_ids), dtype=np.uint8)
-            for i, tid in enumerate(sig_ids):
+            sig_state = np.zeros(n_lamps, dtype=np.uint8)
+            # Still one SUMO call per JUNCTION -- the per-approach split is
+            # done on the string we already have, so resolving 3,230 lamps
+            # costs the same 1,151 calls the single lamp did.
+            for tid, group in lamps_by_tls.items():
                 try:
                     st = ls.trafficlight.getRedYellowGreenState(tid)
                 except Exception:
                     continue
-                if "G" in st or "g" in st:
-                    sig_state[i] = 2
-                elif "y" in st or "Y" in st:
-                    sig_state[i] = 1
+                for lamp_i, idxs in group:
+                    if not idxs:
+                        # Junction-lamp fallback: no approach geometry.
+                        sig_state[lamp_i] = (
+                            2 if ("G" in st or "g" in st)
+                            else 1 if ("y" in st or "Y" in st) else 0)
+                        continue
+                    v = 0
+                    for k in idxs:
+                        if k < len(st):
+                            c = st[k]
+                            if c == "G" or c == "g":
+                                v = 2
+                                break
+                            if c == "y" or c == "Y":
+                                v = 1
+                    sig_state[lamp_i] = v
             sig_bytes = sig_state.tobytes()
 
             edge_res = ls.edge.getAllSubscriptionResults()
@@ -776,19 +881,20 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
             "watch": watch,
             "corridors": corridor_stats,
             "n_veh": int(len(lonlat)),
-            "n_sig": len(sig_ids),
+            "n_sig": n_lamps,
             "n_edge": len(edge_ids),
             "has_vehicles": bool(send_vehicles),
             "step_ms": round((time.perf_counter() - t_wall) * 1000, 1),
         }
 
         if send_vehicles and len(lonlat):
-            veh = np.empty((len(lonlat), 5), dtype=np.float32)
+            veh = np.empty((len(lonlat), 6), dtype=np.float32)
             veh[:, 0] = lonlat[:, 0]
             veh[:, 1] = lonlat[:, 1]
             veh[:, 2] = ang
             veh[:, 3] = knd
             veh[:, 4] = spd
+            veh[:, 5] = dang
             veh_bytes = veh.tobytes()
         else:
             snap["n_veh"] = 0

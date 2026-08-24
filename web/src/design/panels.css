@@ -376,9 +376,65 @@
   color: var(--ink-300);
 }
 
-.wx-temp { font-family: var(--font-data); color: var(--ink-100); }
+/* --ink-100 was never defined, so this silently fell back to the inherited
+   --ink-300 and the temperature never read as the brighter value it was
+   meant to be. --ink-50 is the palette's brightest ink. */
+.wx-temp { font-family: var(--font-data); color: var(--ink-50); }
 .wx-label { color: var(--ink-500); }
 .wx.wet .wx-label { color: var(--bici, #4fd8e8); }
+
+/* Live Barcelona congestion — the only non-simulated figure on screen, so it
+   gets the one live-pulsing dot and is deliberately distinguishable from the
+   simulated readouts sitting beside it. */
+.livecity {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--r-pill, 999px);
+  background: var(--glass-fill);
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-edge);
+  font-size: 10px;
+  color: var(--ink-300);
+  letter-spacing: 0.04em;
+}
+
+.livecity-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--senyal-verd);
+  box-shadow: 0 0 6px var(--senyal-verd);
+  animation: livecity-pulse 2.4s ease-in-out infinite;
+}
+
+.livecity-label {
+  color: var(--ink-500);
+  text-transform: uppercase;
+  font-size: 9px;
+}
+
+.livecity-value { font-family: var(--font-data); color: var(--ink-50); }
+.livecity-unit { color: var(--ink-500); }
+
+/* A reading too old to present as current: the pulse stops and the colour
+   drops back, so "stale" is visible without reading the tooltip. */
+.livecity.stale .livecity-dot {
+  background: var(--ink-500);
+  box-shadow: none;
+  animation: none;
+}
+.livecity.stale .livecity-value { color: var(--ink-300); }
+
+@keyframes livecity-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .livecity-dot { animation: none; }
+}
 
 /* Narrow the rail rather than dropping it. Hiding it outright meant the
    climate figures — the whole point of the project — vanished on any laptop

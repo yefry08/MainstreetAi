@@ -7,16 +7,25 @@ import { useEffect, useRef, useState } from 'react'
  *
  *   uint32   headerLen        header JSON is padded so the float block stays
  *   bytes    headerLen        4-byte aligned, which lets the typed arrays be
- *   float32  n_veh * 5        VIEWS onto the socket buffer with no copying
- *   uint8    n_sig            0=red 1=amber 2=green, in signals.geojson order
+ *   float32  n_veh * 6        VIEWS onto the socket buffer with no copying
+ *   uint8    n_sig            0=red 1=amber 2=green, signal_approaches order
  *   uint8    n_edge           mean speed / speed limit * 255, roads.geojson order
  *
- * Per vehicle the five floats are: lon, lat, angle, kind, speed.
- * kind: 0 car, 1 bus, 2 bike. angle is degrees clockwise from north.
+ * Per vehicle the six floats are: lon, lat, angle, kind, speed, turn.
+ * kind: 0 car, 1 bus, 2 bike, 3 truck, 4 moto. angle is degrees clockwise
+ * from north; turn is the signed degrees that VEHICLE rotated over the last
+ * tick, which the renderer extrapolates forward exactly as it extrapolates
+ * position with speed. It has to be sent per vehicle rather than inferred
+ * from the previous frame because the array is repacked every tick and
+ * carries no vehicle ids — a slot holds the same vehicle only ~36% of
+ * the time.
  *
  * JSON per tick would be roughly 8x larger for the vehicle array and would
  * stall the main thread parsing it at 10 Hz.
  */
+// Keep in step with sim_worker.py's veh array and traffic.js's STRIDE.
+const VEH_FLOATS = 6
+const VEH_BYTES = VEH_FLOATS * 4
 export function decodeFrame(buf) {
   const view = new DataView(buf)
   const headerLen = view.getUint32(0, true)
@@ -28,9 +37,9 @@ export function decodeFrame(buf) {
   const { n_veh: nVeh, n_sig: nSig, n_edge: nEdge } = header
 
   let vehicles = null
-  if (nVeh > 0 && off + nVeh * 20 <= buf.byteLength) {
-    vehicles = new Float32Array(buf, off, nVeh * 5)
-    off += nVeh * 20
+  if (nVeh > 0 && off + nVeh * VEH_BYTES <= buf.byteLength) {
+    vehicles = new Float32Array(buf, off, nVeh * VEH_FLOATS)
+    off += nVeh * VEH_BYTES
   }
 
   let signals = null

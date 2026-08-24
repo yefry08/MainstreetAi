@@ -54,13 +54,30 @@ RANDOM_TRIPS = TOOLS / "randomTrips.py"
 # top of the existing car demand, which pushed it to 11,000, gridlocked the
 # Eixample, and drove SUMO from 0.2 s to 6 s per simulated second. Composition
 # changed; volume should not have.
+# TRIP LENGTH IS A CAPACITY LEVER, not just a realism setting.
+#
+# The first version used min_dist 600 m with fringe-factor 8, which biases both
+# ends of a trip toward the edge of the extract — i.e. long cross-city runs.
+# Every such vehicle occupies the network for many minutes, so concurrency
+# climbed until the Eixample gridlocked: 6,602 vehicles, 80% stationary,
+# 4.4 km/h, and BOTH twins collapsed to the same speed. Past saturation the
+# adaptive controller has nothing left to recover, which destroys the very
+# comparison the demo exists to show.
+#
+# Shorter, more local trips clear faster, so the same visual density costs far
+# less network occupancy — which is what leaves headroom for the AI twin to
+# pull away from the fixed-time twin instead of both jamming.
+#
+# Buses keep long routes and a low fringe factor on purpose: a bus route that
+# crosses the city is what a bus route IS, and their journey time is the metric
+# transit priority is judged on.
 MODES = {
     #  name     vclass          vType    period  fringe  min_dist   share
-    "car":   dict(vclass="passenger",  vtype="car",   period=0.80, fringe=8.0, min_dist=600),   # ~50%
-    "moto":  dict(vclass="motorcycle", vtype="moto",  period=1.45, fringe=6.0, min_dist=450),   # ~28%
-    "bike":  dict(vclass="bicycle",    vtype="bike",  period=3.30, fringe=3.0, min_dist=400),   # ~12%
-    "truck": dict(vclass="delivery",   vtype="truck", period=6.70, fringe=4.0, min_dist=900),   # ~6%
-    "bus":   dict(vclass="bus",        vtype="bus",   period=10.0, fringe=1.5, min_dist=1800),  # ~4%
+    "car":   dict(vclass="passenger",  vtype="car",   period=0.80, fringe=2.5, min_dist=350),   # ~50%
+    "moto":  dict(vclass="motorcycle", vtype="moto",  period=1.45, fringe=2.2, min_dist=300),   # ~28%
+    "bike":  dict(vclass="bicycle",    vtype="bike",  period=3.30, fringe=1.8, min_dist=250),   # ~12%
+    "truck": dict(vclass="delivery",   vtype="truck", period=6.70, fringe=2.2, min_dist=500),   # ~6%
+    "bus":   dict(vclass="bus",        vtype="bus",   period=10.0, fringe=1.2, min_dist=1500),  # ~4%
 }
 
 
