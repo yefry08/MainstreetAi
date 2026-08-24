@@ -118,6 +118,12 @@ def demand_curve(day: str | int = "Friday") -> list:
 # MAINSTREET_CAPACITY without editing this file.
 NETWORK_CAPACITY = float(_os.environ.get("MAINSTREET_CAPACITY", "0.79"))
 
+# The fairness cap must sit at least this many times above the minimum green,
+# or there is no range for the controller to act within. 1.5 is deliberately
+# modest: it is enough to keep rule 4 reachable at every demand level without
+# second-guessing an otherwise legal policy. See AdaptiveController.apply_policy.
+MIN_GREEN_BAND_RATIO = 1.5
+
 
 def demand_factor(sim_time: float, start_hour: float = 7.0,
                   day: str | int = "Friday") -> float:
@@ -417,6 +423,36 @@ class AdaptiveController:
                 continue
             setattr(self, key, v)
             applied[key] = v
+
+        # ---- the parameters must also be legal TOGETHER --------------------
+        # Every bound above is validated on its own, and none of them is wrong.
+        # Their INTERACTION was unconstrained, and that is enough to produce a
+        # controller that cannot adapt at all: max_green is derived as
+        # max_green_base * (0.62 + 0.55 * demand), so picking the ceiling of
+        # min_green (20) with the floor of max_green_base (25) yields a cap of
+        # 16.9 s at low demand -- BELOW the 20 s floor. Rule 4 then never fires,
+        # every phase runs exactly min_green, and the adaptive twin degenerates
+        # into fixed-time control wearing an adaptive badge.
+        #
+        # That is not hypothetical. The orchestrator settled on exactly that
+        # pair, and measured against the defaults on identical seed and demand
+        # it cost 17.5 points of network speed (+20.7% vs +38.2%), 89 completed
+        # trips, and 42% more teleports. See server/policy_ab.py.
+        #
+        # min_green is the parameter that gives way, never max_green_base:
+        # raising the cap would lengthen reds beyond what has been validated,
+        # whereas lowering the floor only restores headroom. The 6 s pedestrian
+        # clearance minimum is never crossed -- if the band cannot be opened
+        # without breaching it, the floor stays and the band stays narrow.
+        worst_max_green = self.max_green_base * 0.62      # at zero demand
+        floor_lo = limits["min_green"][0]
+        needed = worst_max_green / MIN_GREEN_BAND_RATIO
+        if self.min_green > needed:
+            adjusted = max(floor_lo, needed)
+            if adjusted < self.min_green:
+                self.min_green = adjusted
+                applied["min_green"] = adjusted
+                applied["min_green_reduced_for_band"] = True
 
         self.policy_source = source
         self.policy_rationale = str(rationale)[:240]
