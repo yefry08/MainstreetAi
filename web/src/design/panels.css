@@ -83,7 +83,7 @@
   border-top: 1px solid var(--hairline);
   font-size: 9.5px;
   line-height: 1.5;
-  color: var(--ink-700);
+  color: var(--ink-400);
 }
 
 /* =========================================================================
@@ -145,7 +145,7 @@
   font-style: normal;
   font-family: var(--font-data);
   font-size: 8.5px;
-  color: var(--ink-700);
+  color: var(--ink-400);
   margin-left: 4px;
 }
 
@@ -210,7 +210,7 @@
   font-size: 8px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--ink-700);
+  color: var(--ink-400);
 }
 
 /* =========================================================================
@@ -324,7 +324,7 @@
   margin-top: 3px;
   font-family: var(--font-data);
   font-size: 8px;
-  color: var(--ink-700);
+  color: var(--ink-400);
 }
 
 .peak-row { display: flex; gap: 5px; margin-top: 10px; }

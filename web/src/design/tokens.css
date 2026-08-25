@@ -67,7 +67,16 @@
   --ink-100: #ded8d0;
   --ink-300: #b9b2a9;
   --ink-400: #9b948c;
-  --ink-500: #7e7871;
+  /* Lifted from #7e7871, which measured 4.39:1 against the glass panels —
+     just under the 4.5:1 needed for text this small, across 16 elements.
+     #847e77 measures 4.78:1, enough margin that a slightly different panel
+     backdrop cannot push it back under. */
+  --ink-500: #847e77;
+
+  /* NOT a text colour. At 2.06:1 on these dark panels it is barely visible;
+     it was being used for six small labels including the map attribution
+     link. Kept for the borders and fills below, where contrast is not the
+     question — for de-emphasised text use --ink-500 or --ink-400. */
   --ink-700: #4a4640;
 
   /* ---- slate — the COOL grey, used only for the fixed-time baseline -----
