@@ -124,5 +124,45 @@ check('six draw calls regardless of count', st.drawCalls === 6, `${st.drawCalls}
 check('duplicate sim_time is rejected',
   traffic.applyFrame(frame(5, [[2.1662, 41.3925, 0, 0, 5, 0]])) === -1)
 
+// ---------------------------------------------------------------------------
+// PROPORTIONS. Vehicles are exaggerated as the camera pulls back, but the
+// exaggeration must be uniform: a separate width cap once froze width while
+// length grew to its cap, drawing 30m x 4.4m slivers at wide zoom -- 6.8:1
+// against a real car's 2.32:1. The overview showed coloured needles rather
+// than traffic, and nothing in the numbers revealed it.
+const CAR_L = 4.3, CAR_W = 1.85, REAL_ASPECT = CAR_L / CAR_W
+
+function scaleAt(zoom) {
+  traffic.applyFrame(frame(100 + zoom, [[2.1662, 41.3925, 0, 0, 5, 0]]))
+  traffic.tick(zoom, 41.39)
+  const m = new THREE.Matrix4()
+  carMesh.getMatrixAt(0, m)
+  const sc = new THREE.Vector3()
+  m.decompose(new THREE.Vector3(), new THREE.Quaternion(), sc)
+  return sc
+}
+
+let worstAspect = 0
+let anisotropic = []
+for (const z of [13.5, 14.6, 15.5, 16.4, 17.2, 18.0, 19.0]) {
+  const sc = scaleAt(z)
+  const aspect = (CAR_L * sc.y) / (CAR_W * sc.x)
+  worstAspect = Math.max(worstAspect, aspect)
+  if (Math.abs(sc.x - sc.y) > 1e-6) anisotropic.push(`z${z}: ${sc.x.toFixed(2)}x${sc.y.toFixed(2)}`)
+}
+check('scaling is uniform at every zoom', anisotropic.length === 0,
+  anisotropic.join(', '))
+check('aspect ratio never distorts',
+  Math.abs(worstAspect - REAL_ASPECT) < 0.01,
+  `worst ${worstAspect.toFixed(2)}:1, real ${REAL_ASPECT.toFixed(2)}:1`)
+
+// The whole point of exaggerating: a car must stay legible when zoomed out,
+// and must be true-to-life once the camera is at street level.
+const wide = scaleAt(14.0)
+const close = scaleAt(18.5)
+check('exaggerated when zoomed out', wide.y > 3, `${wide.y.toFixed(2)}x`)
+check('true scale at street level', Math.abs(close.y - 1) < 1e-6,
+  `${close.y.toFixed(3)}x`)
+
 console.log(failures ? `\n${failures} FAILED` : '\nall passed')
 process.exit(failures ? 1 : 0)

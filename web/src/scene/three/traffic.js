@@ -57,14 +57,23 @@ const STOPPED_MS = 0.6
  * and everything is true-to-life. This is the same treatment the signal heads
  * already get, for exactly the same reason.
  *
- * Width and height grow more slowly than length (capped by WIDTH_CAP): letting
- * them scale uniformly turns a car into a square blob wider than the lane it is
- * in, which reads worse than a slightly elongated one.
+ * The exaggeration is UNIFORM. An earlier version held width back with a
+ * separate cap, on the reasoning that scaling every axis together would turn a
+ * car into a blob wider than its lane. That reasoning was wrong, and visibly
+ * so once the scene was finally rendered: freezing width while length kept
+ * growing to the cap drew a 30 m x 4.4 m sliver at wide zooms — an aspect ratio
+ * of 6.8:1 against a real car's 2.32:1. The overview did not show traffic, it
+ * showed coloured needles.
+ *
+ * Uniform scaling cannot produce a blob here, because `s` is derived from a
+ * LENGTH target: a car drawn MIN_CAR_PX long is, by its own proportions,
+ * MIN_CAR_PX * 1.85 / 4.3 = 3 px wide at every zoom. The pixel width is
+ * self-limiting, so the cap was defending against something the length target
+ * had already ruled out — while causing the distortion it was meant to prevent.
  */
 const MIN_CAR_PX = 7.0
 const CAR_LENGTH_M = 4.3
 const SCALE_CAP = 7.0
-const WIDTH_CAP = 2.4
 
 /** Metres per pixel at a given MapLibre zoom and latitude. */
 function metresPerPixel(zoom, lat) {
@@ -276,9 +285,9 @@ export function createTraffic({ scene, proj }) {
       // Keep vehicles legible as the camera pulls back — see the note above.
       const mpp = metresPerPixel(zoom, lat)
       const s = Math.max(1, Math.min(SCALE_CAP, (MIN_CAR_PX * mpp) / CAR_LENGTH_M))
-      const w = Math.min(s, WIDTH_CAP)
       lastScale = s
-      scl.set(w, s, w)
+      // Uniform: every vehicle keeps its real proportions at every zoom.
+      scl.set(s, s, s)
 
       let nCar = 0
       let nBus = 0
