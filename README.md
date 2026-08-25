@@ -54,6 +54,27 @@ is exactly why it is not the one quoted.
 The emissions figures cross-check: 2 384 kg CO₂ at 2.31 kg per litre of petrol
 implies 1 032 l, against the 1 016 l SUMO reports independently — 1.6 % apart.
 
+### The two clocks drift, and it counts against the AI
+
+The twins are separate OS processes stepping at slightly different rates, so
+their simulated clocks pull apart — measured at a stable **~195 s, about 1% of
+elapsed**, not growing. Every cumulative metric accrues with time, so the live
+panel is not comparing exactly equal durations.
+
+The direction is the reassuring part. The AI twin is normally the one *ahead*,
+so it has had **longer** to accumulate the emissions and delay it is being
+credited with reducing. A live reading of −10.0% on CO₂ is really nearer −11%.
+The on-screen figure understates the case rather than flattering it.
+
+It is left uncorrected. Nudging a headline number by a hand-applied factor is
+precisely the kind of adjustment nobody can audit afterwards, so `/api/twins`
+reports `sim_time_drift_s`, `sim_time_drift_pct` and `drift_favours` instead
+and lets anyone check the size and sign for themselves.
+
+The headless harnesses do not have this problem: `compare.py` and
+`validate_seeds.py` run each twin until it reaches the same `sim_time` before
+reading anything, so the numbers quoted above are measured like for like.
+
 ### Read the emissions number late, not early
 
 CO₂ is the one metric that needs the run to mature before it means anything:

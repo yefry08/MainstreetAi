@@ -308,6 +308,27 @@ async def twins():
         snap = item[0]
         out[m] = {**snap["metrics"], "step_ms": snap["step_ms"]}
     out["scale"] = engine.manual_scale
+
+    # The twins are separate OS processes stepping at slightly different rates,
+    # so their simulated clocks drift apart -- measured at a stable ~195 s,
+    # about 1% of elapsed. Every cumulative metric (CO2, fuel, stopped hours,
+    # trips) accrues with time, so comparing them at unequal clocks is not
+    # quite like for like, and anyone quoting these numbers should be able to
+    # see by how much.
+    #
+    # The bias runs AGAINST the AI twin, which is the safe direction: it is
+    # usually the one further ahead, so it has had longer to accumulate the
+    # emissions and delay it is being credited with reducing. A reported
+    # -10.0% on CO2 is really about -11%. Left uncorrected rather than
+    # adjusted, because a hand-applied correction to a headline number is
+    # exactly the kind of thing nobody can audit later.
+    if "ai" in out and "baseline" in out:
+        drift = out["ai"]["sim_time"] - out["baseline"]["sim_time"]
+        elapsed = max(out["ai"]["sim_time"], 1.0)
+        out["sim_time_drift_s"] = round(drift, 1)
+        out["sim_time_drift_pct"] = round(100.0 * abs(drift) / elapsed, 2)
+        out["drift_favours"] = ("baseline" if drift > 0
+                                else "ai" if drift < 0 else "neither")
     return out
 
 
