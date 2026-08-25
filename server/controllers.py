@@ -116,6 +116,26 @@ def demand_curve(day: str | int = "Friday") -> list:
 #
 # Raise it for a more congested picture, lower it for free-flow. Override with
 # MAINSTREET_CAPACITY without editing this file.
+#
+# THIS IS CALIBRATED FOR A SHORT RUN, and drifts over a long one. Measured on
+# one continuous session:
+#
+#     0.5 h    ~1,400 vehicles    31% halting    +38% network speed
+#     3.0 h    ~3,400 vehicles    69% halting    +23%
+#     4.2 h    ~3,100 vehicles    73% halting    +16.5%
+#
+# Insertion still slightly exceeds what the network clears, so vehicles
+# accumulate and the advantage narrows as the jam deepens. Step time grows with
+# it -- at 4.2 h the simulation runs at 0.47x realtime, so the clock visibly
+# crawls. Restart before showing it; a fresh run sits at the calibrated point.
+#
+# The obvious fix -- feed `running` back into the scale so insertion eases off
+# as the network fills -- MUST NOT be done. Both twins are scaled from the
+# clock alone, which is the only reason they carry identical demand and the
+# A/B means anything. Load feedback would insert more into whichever twin is
+# less congested, and that is always the AI twin, so the adaptive controller
+# would be handed extra throughput and the comparison would quietly measure
+# the feedback loop instead of the policy.
 NETWORK_CAPACITY = float(_os.environ.get("MAINSTREET_CAPACITY", "0.79"))
 
 # The fairness cap must sit at least this many times above the minimum green,

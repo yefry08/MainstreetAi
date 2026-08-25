@@ -369,6 +369,20 @@ python server/app.py
 Open **http://127.0.0.1:8000**. Nothing else needs to be running, which is what
 you want on a conference projector.
 
+> **Restart it before you present.** The demand level is calibrated for a fresh
+> run and drifts over a long one — insertion slightly exceeds what the network
+> clears, so vehicles accumulate:
+>
+> | simulated time | vehicles | halting | AI advantage |
+> |---|---:|---:|---:|
+> | 0.5 h | ~1,400 | 31% | **+38%** |
+> | 3.0 h | ~3,400 | 69% | +23% |
+> | 4.2 h | ~3,100 | 73% | +16.5% |
+>
+> Step time grows with the jam — by 4.2 h the simulation runs at 0.47× realtime
+> and the clock visibly crawls. At the default 5× speed you have roughly half an
+> hour of wall clock before it softens. A restart takes seconds.
+
 **Dev mode — hot reload.** Run the Vite dev server against the same backend; it
 proxies `/api` and `/ws` to port 8000:
 
