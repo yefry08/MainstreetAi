@@ -49,6 +49,30 @@ const RASTER_FALLBACK = {
 }
 
 /**
+ * Last resort: a style that needs no network at all.
+ *
+ * The two fallbacks above both fetch from somewhere. If the venue's wifi is
+ * dead rather than merely slow, both fail and the map is left with an empty
+ * style — and the buildings and traffic go with it, even though both are
+ * LOCAL and would have rendered perfectly well. Losing the whole city because
+ * the basemap could not be reached is precisely the failure the raster
+ * fallback exists to prevent, arrived at one step later.
+ *
+ * A bare background is enough. `ensureCity` attaches our own extruded
+ * buildings and the three.js traffic layer on top of whatever style is
+ * current, so with this in place the demo still shows a 3D Barcelona with
+ * live traffic on a completely offline machine. It loses the ground texture,
+ * which is the least important thing on screen.
+ */
+const OFFLINE_STYLE = {
+  version: 8,
+  sources: {},
+  layers: [
+    { id: 'bg', type: 'background', paint: { 'background-color': '#0b0e15' } },
+  ],
+}
+
+/**
  * The empty 3D city.
  *
  * Deliberately just the basemap, the extruded buildings and a free camera —
@@ -148,9 +172,29 @@ export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
         usingFallback = true
         onBasemapStatus?.('fallback')
         map.setStyle(RASTER_FALLBACK)
-        // Give the raster host its own chance before declaring defeat.
+        // Give the raster host its own chance before declaring defeat, then
+        // drop to a style that cannot fail. Without this last step a dead
+        // network leaves the map with an empty style and takes the buildings
+        // and traffic down with it — both of which are local files that never
+        // needed the network in the first place.
         fallbackWatchdog = setTimeout(() => {
-          if (!everLoaded) onBasemapStatus?.('offline')
+          if (everLoaded) return
+          onBasemapStatus?.('offline')
+          try {
+            map.setStyle(OFFLINE_STYLE)
+            // Rebuild the city EXPLICITLY rather than waiting for a
+            // `styledata` event to do it. Rebuilding is normally event-driven
+            // and that is fine in the ordinary case, but this branch runs
+            // precisely when the network is behaving badly, and a swap made
+            // mid-load can leave the map settled with no event still to come.
+            // Calling it directly is idempotent -- ensureCity returns early
+            // if the buildings are already there -- so the worst case is a
+            // wasted call, against a best case of not losing the city.
+            setTimeout(ensureCity, 250)
+            setTimeout(ensureCity, 1500)
+          } catch {
+            /* nothing further to fall back to */
+          }
         }, 12000)
       } else {
         onBasemapStatus?.('offline')
