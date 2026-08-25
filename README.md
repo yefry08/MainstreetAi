@@ -226,6 +226,26 @@ the **amplitude** is rescaled, with the transform stated in the profile JSON
 itself (`derivation.formula`). Congestion state is not traffic volume, and
 conflating them would be a fabrication wearing real data's clothes.
 
+**The 3D city is smaller than the simulation.** Signals and traffic span about
+8.0 × 6.4 km; the building extract covers 2.7 × 3.1 km — **17% of that
+footprint**. Pull the camera back and the 3D city visibly stops while traffic
+carries on over flat basemap. It is a deliberate trade for browser performance,
+and it is adjustable with measured numbers rather than guesswork:
+
+| extent | area | buildings | file | coverage |
+|---|---|---|---:|---:|
+| default | 2.7 × 3.1 km | 10,425 | 3.8 MB | 17% |
+| `--expand 2` | 6.1 × 5.3 km | 29,991 | 11.1 MB | 63% |
+
+```bash
+python sim/fetch_buildings.py --expand 2
+```
+
+Judge it on the target machine, not the download — the file is served from
+localhost, so its size costs nothing on the wire. What it costs is parse time
+and GPU load for ~30k extruded polygons, and the stated target is an Intel
+N100. The default stays because that cost has not been measured there.
+
 **Wanted but not available:**
 - TMB does not publish an open GTFS feed on the municipal portal, so bus routes
   are not real line geometries.

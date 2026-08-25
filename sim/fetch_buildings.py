@@ -34,8 +34,38 @@ OUT.parent.mkdir(parents=True, exist_ok=True)
 # Focused on the Eixample core, where the demo actually happens. The full
 # simulation extract would be ~10x this and far too heavy to hand a browser as
 # one GeoJSON file.
+#
+# THIS IS SMALLER THAN THE SIMULATION. Signals and traffic span roughly
+# 8.0 x 6.4 km; these buildings cover 2.7 x 3.1 km, about 17% of that footprint
+# by area. Pull the camera back far enough and the 3D city visibly stops while
+# traffic carries on over flat basemap. That is the price of the decision
+# above, and it is a real one -- so `--expand` exists to revisit it with
+# measurements rather than by rewriting this line.
+#
+#   python sim/fetch_buildings.py --expand 2      # 2x linear, 4x area
+#   python sim/fetch_buildings.py --bbox S,W,N,E  # explicit
+#
+# MEASURED, so the trade is a decision rather than a guess:
+#
+#   default      2.7 x 3.1 km    10,425 buildings     3.8 MB    17% coverage
+#   --expand 2   6.1 x 5.3 km    29,991 buildings    11.1 MB    63% coverage
+#
+# Weigh it against the target hardware, not the download: the file is served
+# from localhost in demo mode, so its size costs nothing on the wire. What it
+# costs is browser parse time and GPU load for ~30k extruded polygons, and the
+# stated target is an Intel N100 with integrated graphics. The default is kept
+# because that cost has NOT been measured on the target machine -- try
+# --expand 2 there, watch the frame rate, and keep it if it holds.
 #            south      west     north      east
 BBOX = (41.3805, 2.1470, 41.4045, 2.1840)
+
+
+def expand_bbox(bbox, factor):
+    """Grow a bbox about its centre by `factor` in each linear dimension."""
+    s, w, n, e = bbox
+    clat, clon = (s + n) / 2.0, (w + e) / 2.0
+    dlat, dlon = (n - s) / 2.0 * factor, (e - w) / 2.0 * factor
+    return (clat - dlat, clon - dlon, clat + dlat, clon + dlon)
 
 STOREY_M = 3.2  # a Barcelona residential floor, roughly
 
@@ -55,9 +85,10 @@ ENDPOINTS = [
     "https://overpass.osm.ch/api/interpreter",
 ]
 
-QUERY = f"""
+def build_query(bbox) -> str:
+    return f"""
 [out:json][timeout:240];
-way["building"]["building"!="roof"]({BBOX[0]},{BBOX[1]},{BBOX[2]},{BBOX[3]});
+way["building"]["building"!="roof"]({bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]});
 out geom;
 """
 
@@ -115,22 +146,44 @@ def ring_area_m2(coords) -> float:
     return abs(a) / 2.0
 
 
-def fetch() -> None:
+def fetch(bbox=BBOX) -> None:
+    query = build_query(bbox)
+    km_ns = (bbox[2] - bbox[0]) * 111.0
+    km_ew = (bbox[3] - bbox[1]) * 82.5
     last_err = None
     data = None
     for i, url in enumerate(ENDPOINTS, 1):
         print(f"[overpass] mirror {i}/{len(ENDPOINTS)}: {url}")
-        print(f"[overpass] bbox S={BBOX[0]} W={BBOX[1]} N={BBOX[2]} E={BBOX[3]}")
+        print(f"[overpass] bbox S={bbox[0]:.4f} W={bbox[1]:.4f} "
+              f"N={bbox[2]:.4f} E={bbox[3]:.4f}"
+              f"   ({km_ew:.1f} x {km_ns:.1f} km)")
         try:
             t0 = time.time()
-            r = requests.post(url, data={"data": QUERY}, timeout=300,
+            r = requests.post(url, data={"data": query}, timeout=300,
                               headers={"User-Agent": "mainstreetai/1.0"})
             if r.status_code != 200:
                 last_err = f"HTTP {r.status_code}"
                 print(f"[overpass] {last_err} — next mirror")
                 continue
             data = r.json()
-            print(f"[overpass] OK {len(r.content) / 1e6:.1f} MB in {time.time() - t0:.1f}s")
+            # A 200 is not the same as an answer. A loaded or rate-limited
+            # mirror will happily return an empty element list with a cheerful
+            # status code, and taking that as success means the next mirror --
+            # which would have answered properly -- is never tried, and the
+            # empty result goes on to overwrite good data. Observed: one
+            # mirror returned 0 elements in 1.8s while another returned 30,290
+            # for the identical query.
+            n = len(data.get("elements", []))
+            if n == 0:
+                last_err = "200 but zero elements (mirror busy or rate limited)"
+                remark = str(data.get("remark") or "").strip()
+                if remark:
+                    last_err += f": {remark[:120]}"
+                print(f"[overpass] {last_err} — next mirror")
+                data = None
+                continue
+            print(f"[overpass] OK {n:,} elements, "
+                  f"{len(r.content) / 1e6:.1f} MB in {time.time() - t0:.1f}s")
             break
         except Exception as exc:
             last_err = f"{type(exc).__name__}: {exc}"
@@ -180,11 +233,31 @@ def fetch() -> None:
             },
         })
 
-    OUT.write_text(
+    # Refuse to publish an empty result over a good one.
+    #
+    # An Overpass mirror can answer 200 with an empty element list -- rate
+    # limited, or a query it decided not to run -- and the old code wrote that
+    # straight over buildings.geojson. The city then vanishes from the map with
+    # no error anywhere, and the only way back is to re-fetch and hope the
+    # mirror cooperates. Losing good data to a successful-looking HTTP response
+    # is the worst possible trade.
+    if not feats:
+        raise SystemExit(
+            f"[abort] Overpass returned no buildings for this bbox. "
+            f"{OUT.name} left untouched.\n"
+            f"        Usually a rate-limited or unhappy mirror -- wait a "
+            f"minute and retry, or try a smaller --expand."
+        )
+
+    # Write beside the target and swap, so an interruption mid-write cannot
+    # leave a truncated file that parses as far as the browser gets.
+    tmp = OUT.with_suffix(".geojson.tmp")
+    tmp.write_text(
         json.dumps({"type": "FeatureCollection", "features": feats},
                    separators=(",", ":")),
         encoding="utf-8",
     )
+    tmp.replace(OUT)
 
     mb = OUT.stat().st_size / 1e6
     heights = [f["properties"]["h"] for f in feats]
@@ -197,4 +270,22 @@ def fetch() -> None:
 
 
 if __name__ == "__main__":
-    fetch()
+    import argparse
+
+    ap = argparse.ArgumentParser(
+        description="Fetch OSM building footprints for the 3D city.")
+    ap.add_argument("--expand", type=float, default=1.0,
+                    help="grow the default bbox about its centre by this "
+                         "factor in each dimension (2 = 4x the area)")
+    ap.add_argument("--bbox", type=str, default=None,
+                    help="explicit bbox as S,W,N,E")
+    args = ap.parse_args()
+
+    if args.bbox:
+        box = tuple(float(v) for v in args.bbox.split(","))
+        if len(box) != 4:
+            raise SystemExit("--bbox needs exactly four values: S,W,N,E")
+    else:
+        box = expand_bbox(BBOX, args.expand) if args.expand != 1.0 else BBOX
+
+    fetch(box)
