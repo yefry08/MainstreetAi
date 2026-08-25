@@ -60,19 +60,32 @@ export default function LiveCity() {
   const stale = live.age_s != null && live.age_s > STALE_S
   const pct = live.congested_pct
 
+  // Overnight most of the city's detectors go dark — at 05:00 only 85 of 532
+  // sections were reporting. The percentage is still correct, but four
+  // congested sections out of 85 is a much weaker statement than four out of
+  // 342, so it is shown as approximate rather than to a decimal place.
+  const thin = live.low_coverage === true
+
   const title =
     `${live.attribution}\n` +
     `${live.congested} of ${live.sections_reporting} reporting sections ` +
-    `dense or worse (${live.sections_total} instrumented)\n` +
+    `dense or worse (${live.sections_total} instrumented, ` +
+    `${live.coverage_pct ?? '?'}% reporting)\n` +
+    (thin ? 'Low detector coverage — most sections are not reporting.\n' : '') +
     `observed ${live.observed_at}` +
     (ageMin == null ? '' : ` — ${ageMin.toFixed(0)} min ago`)
 
   return (
-    <span className={`livecity ${stale ? 'stale' : ''}`} title={title}>
+    <span className={`livecity ${stale ? 'stale' : ''} ${thin ? 'thin' : ''}`}
+          title={title}>
       <span className="livecity-dot" />
       <span className="livecity-label">BCN live</span>
-      <span className="livecity-value value">{pct.toFixed(1)}%</span>
-      <span className="livecity-unit">congested</span>
+      <span className="livecity-value value">
+        {thin ? `~${Math.round(pct)}%` : `${pct.toFixed(1)}%`}
+      </span>
+      <span className="livecity-unit">
+        {thin ? `congested · ${live.coverage_pct}% reporting` : 'congested'}
+      </span>
     </span>
   )
 }

@@ -427,6 +427,11 @@
 }
 .livecity.stale .livecity-value { color: var(--ink-300); }
 
+/* Reading stands, but most detectors are dark — usually overnight. Dimmed and
+   marked approximate so a thin denominator is not read as a firm measurement. */
+.livecity.thin .livecity-dot { animation-duration: 4.5s; opacity: 0.6; }
+.livecity.thin .livecity-value { color: var(--ink-300); }
+
 @keyframes livecity-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }

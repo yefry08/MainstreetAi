@@ -101,6 +101,14 @@ STATE_LABELS = {
 # At or above this the section counts as congested for the headline figure.
 CONGESTED_AT = 4
 
+# Below this share of sections reporting, the percentage is still arithmetically
+# correct but rests on too few detectors to state plainly. Overnight most of the
+# network goes dark -- measured at 05:00 Barcelona time, 447 of 532 sections
+# reported no data, leaving a headline computed over 85. Four congested sections
+# out of 85 is not the same claim as four out of 342, and presenting them
+# identically would overstate what the city actually measured.
+MIN_COVERAGE = 0.30
+
 
 def parse_trams(text: str) -> dict:
     """Parse the live TRAMS_TRAMS.dat body into a state summary."""
@@ -155,6 +163,11 @@ def parse_trams(text: str) -> dict:
         "congested": congested,
         "congested_pct": (round(100.0 * congested / reporting, 1)
                           if reporting else None),
+        # How much of the network is actually behind that percentage, so the
+        # UI can decline to state it confidently when most detectors are dark.
+        "coverage_pct": (round(100.0 * reporting / len(sections), 1)
+                         if sections else None),
+        "low_coverage": bool(sections) and (reporting / len(sections)) < MIN_COVERAGE,
         "malformed_rows": malformed,
         "sections": sections,
     }

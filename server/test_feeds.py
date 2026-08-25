@@ -168,6 +168,23 @@ if bcn.BCN_TZ is not None:
           == winter.replace(tzinfo=bcn._madrid_offset(winter)).utcoffset())
 
 check("empty body does not crash", bcn.parse_trams("")["sections_total"] == 0)
+
+# Coverage: 4 of 5 sections reporting is plenty; the flag must stay off.
+check("healthy coverage is not flagged", p["low_coverage"] is False,
+      f"{p['coverage_pct']}%")
+
+# Overnight the city goes dark -- measured at 05:00, 447 of 532 sections
+# reported nothing. The percentage is still arithmetically right but rests on
+# far too few detectors to state as a firm measurement.
+DARK = "\n".join([f"{i}#20260825050052#0#0" for i in range(1, 91)]
+                 + [f"{i}#20260825050052#5#5" for i in range(91, 101)])
+d = bcn.parse_trams(DARK)
+check("mostly-dark network is flagged low coverage", d["low_coverage"] is True,
+      f"{d['coverage_pct']}% reporting")
+check("coverage_pct is share of TOTAL, not of reporting",
+      d["coverage_pct"] == 10.0, str(d["coverage_pct"]))
+check("congested_pct still uses reporting as denominator",
+      d["congested_pct"] == 100.0, str(d["congested_pct"]))
 check("summary drops the per-section payload",
       "sections" not in bcn.summary(p) and "counts" in bcn.summary(p))
 
