@@ -27,6 +27,13 @@ __pycache__/
 *.pyc
 .vite/
 
+# Knowledge-graph output (regenerate with /graphify). Entirely derived from the
+# source tree — graph.json, graph.html, GRAPH_REPORT.md and a 38-file AST cache,
+# ~1.5 MB in total. Two of the sidecars (.graphify_python, .graphify_root) also
+# record absolute paths to whichever machine produced them, which is worse than
+# merely redundant in a shared repo.
+graphify-out/
+
 # Building footprints (regenerate with sim/fetch_buildings.py)
 web/public/data/buildings.geojson
 
