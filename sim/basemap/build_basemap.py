@@ -209,11 +209,31 @@ def main() -> None:
     ap.add_argument("--preset", type=str, default="barcelona")
     ap.add_argument("--px-per-m", type=float, default=DEFAULT_PX_PER_M)
     ap.add_argument("--name", type=str, default="barcelona")
+    ap.add_argument("--patch", action="store_true",
+                    help="recompute the sidecar transform from an existing "
+                         "render, without re-rendering")
     args = ap.parse_args()
 
     DATA.mkdir(parents=True, exist_ok=True)
     out_png = DATA / f"basemap_{args.name}.png"
     out_json = DATA / f"basemap_{args.name}.json"
+
+    # Re-fitting the transform needs only the axes limits and the CRS, both of
+    # which are already in the sidecar. Re-rendering to change metadata would
+    # mean paying the 26-minute Overpass fetch again for nothing.
+    if args.patch:
+        if not out_json.exists():
+            raise SystemExit(f"[abort] no sidecar to patch: {out_json}")
+        meta = json.loads(out_json.read_text(encoding="utf-8"))
+        ext = tuple(meta.get("sim_extent") or sim_extent())
+        meta["sim_extent"] = list(ext)
+        meta["lonlat_to_px"] = fit_lonlat_to_px(
+            meta["crs"], meta["xlim"], meta["ylim"],
+            meta["width_px"], meta["height_px"], ext)
+        out_json.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+        print(f"[ok] patched {out_json.name}: transform max error "
+              f"{meta['lonlat_to_px']['max_error_px']:.4f} px on unseen points")
+        return
 
     centre = None
     if args.place:
