@@ -37,6 +37,17 @@ graphify-out/
 # Building footprints (regenerate with sim/fetch_buildings.py)
 web/public/data/buildings.geojson
 
+# Real transit geometry (regenerate with sim/transit/build_transit.py).
+# The GTFS zip is 9 MB of someone else's data on a weekly release cycle, so it
+# is fetched rather than vendored; transit.geojson is derived from it.
+sim/transit/cache/
+web/public/data/transit.geojson
+
+# Isolated env for city2graph. The geo stack (geopandas/momepy/duckdb) has no
+# wheels for this machine's default Python 3.14, so it is pinned to 3.11 and
+# kept out of the main environment.
+.venv-c2g/
+
 # API keys — never commit. Copy .env.example to .env.
 .env
 .env.local
