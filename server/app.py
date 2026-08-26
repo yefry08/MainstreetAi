@@ -21,6 +21,7 @@ import json
 import multiprocessing as mp
 import queue
 import struct
+import sys
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -386,6 +387,28 @@ async def bcn_traffic():
     if res.status not in ("ok", "stale") or not res.data:
         return {"status": res.status, "error": res.error, "source": "unavailable"}
     return {"status": res.status, **summary(res.data)}
+
+
+@app.get("/api/cities")
+async def cities():
+    """
+    Which cities the pipeline has actually baked, and what the others need.
+
+    The selector reads this rather than offering a free-text box. Only one
+    stage of the pipeline is fast: a basemap is a 25-60 minute Overpass-bound
+    render and a SUMO network is a multi-minute build, so a city that is not
+    already on disk cannot be made ready inside a page load. Listing the
+    missing artefacts by name lets the UI say so instead of appearing to work
+    and then hanging in front of an audience.
+    """
+    try:
+        sys.path.insert(0, str(HERE.parent / "sim"))
+        import cities as city_registry
+
+        return city_registry.registry()
+    except Exception as exc:
+        return JSONResponse({"error": f"registry unavailable: {exc}"},
+                            status_code=500)
 
 
 @app.get("/api/ai/policy")

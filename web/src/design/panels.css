@@ -491,12 +491,13 @@
 /* ---- AI toggle + before/after (pixel scene) ------------------------------ */
 
 /* Right-hand side on purpose: the left rail already holds the climate panel,
-   and stacking the two would put the AI comparison on top of the CO2 one. */
+   and stacking the two would put the AI comparison on top of the CO2 one.
+   Sits below the city selector, which shares this column. */
 .ai-toggle {
   position: absolute;
   z-index: 7;
   right: var(--space-4);
-  top: 58px;
+  top: 106px;
   width: 280px;
   padding: 11px 12px 12px;
 }
@@ -573,4 +574,78 @@
   font-family: var(--font-data);
   font-size: 8.5px;
   color: var(--ink-400);
+}
+
+/* ---- City selector (pixel scene) ---------------------------------------- */
+
+.city-select {
+  position: absolute;
+  z-index: 8;
+  right: var(--space-4);
+  top: 58px;
+  width: 280px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.city-current {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.city-label {
+  font-family: var(--font-data);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+}
+.city-name { flex: 1; font-size: 12px; color: var(--ink-50); }
+.city-caret { color: var(--ink-400); font-size: 10px; }
+
+.city-list { border-top: 1px solid var(--hairline); padding: 4px; }
+
+.city-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--ink-300);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--t-fast) var(--ease-out);
+}
+.city-item:hover:not(:disabled) { background: rgba(255, 255, 255, 0.07); }
+.city-item.on { background: rgba(217, 119, 87, 0.16); color: var(--ink-50); }
+.city-item.unbuilt { opacity: 0.55; cursor: not-allowed; }
+
+.city-item-name { flex: 1; }
+
+.city-tag {
+  font-family: var(--font-data);
+  font-size: 8.5px;
+  color: var(--ink-500);
+  white-space: nowrap;
+}
+.city-tag.ready { color: var(--terracota-400); }
+
+.city-note {
+  padding: 8px;
+  font-size: 9px;
+  line-height: 1.5;
+  color: var(--ink-400);
+  border-top: 1px solid var(--hairline);
+  margin-top: 4px;
 }

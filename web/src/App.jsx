@@ -9,6 +9,7 @@ import ModeLegend from './ui/ModeLegend'
 import TimeControl from './ui/TimeControl'
 import PixelScene from './pixel/PixelScene'
 import AiToggle from './pixel/AiToggle'
+import CitySelector from './pixel/CitySelector'
 import { useSimSocket } from './data/useSimSocket'
 
 /**
@@ -45,6 +46,7 @@ export default function App() {
       {PIXEL_MODE ? (
         <>
           <PixelScene frameRef={frameRef} />
+          <CitySelector current="barcelona" />
           <AiToggle />
         </>
       ) : (
