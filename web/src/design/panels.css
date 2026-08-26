@@ -487,3 +487,90 @@
 }
 .pixel-status { top: 50%; left: 50%; transform: translate(-50%, -50%); }
 .pixel-stats { right: 12px; bottom: 12px; }
+
+/* ---- AI toggle + before/after (pixel scene) ------------------------------ */
+
+/* Right-hand side on purpose: the left rail already holds the climate panel,
+   and stacking the two would put the AI comparison on top of the CO2 one. */
+.ai-toggle {
+  position: absolute;
+  z-index: 7;
+  right: var(--space-4);
+  top: 58px;
+  width: 280px;
+  padding: 11px 12px 12px;
+}
+
+.ai-switch {
+  display: flex;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+
+.ai-btn {
+  flex: 1;
+  padding: 7px 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--ink-400);
+  font-family: var(--font-data);
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all var(--t-fast) var(--ease-out);
+}
+.ai-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); }
+.ai-btn:disabled { opacity: 0.55; cursor: default; }
+.ai-btn.on {
+  background: var(--terracota-500);
+  color: #180d08;
+  font-weight: 600;
+}
+
+.ai-note {
+  font-size: 9.5px;
+  line-height: 1.5;
+  color: var(--ink-400);
+  margin-bottom: 9px;
+}
+
+.ai-stats { display: flex; flex-direction: column; gap: 5px; }
+
+.ai-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 10px;
+}
+
+.ai-label { flex: 1; color: var(--ink-300); }
+
+.ai-pair {
+  font-family: var(--font-data);
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+.ai-pair .base { color: var(--slate-300); font-weight: 400; }
+.ai-pair .ai { color: var(--terracota-400); font-weight: 500; }
+.ai-pair i { color: var(--ink-500); font-style: normal; margin: 0 3px; }
+
+.ai-delta {
+  font-family: var(--font-data);
+  font-size: 9.5px;
+  min-width: 46px;
+  text-align: right;
+  color: var(--ink-400);
+}
+.ai-delta.good { color: var(--terracota-400); }
+.ai-delta.bad { color: var(--aturat); }
+
+.ai-drift {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--hairline);
+  font-family: var(--font-data);
+  font-size: 8.5px;
+  color: var(--ink-400);
+}

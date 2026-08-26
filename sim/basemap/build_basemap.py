@@ -158,8 +158,42 @@ def render(query, radius: float, preset: str, px_per_m: float,
     t1 = time.time()
     fig.savefig(out_png, dpi=dpi, pad_inches=0,
                 facecolor=fig.get_facecolor())
-    save_s = time.time() - t1
     plt.close(fig)
+
+    # Quantise to a 256-colour palette.
+    #
+    # The full-city render is 24 MB as truecolour PNG, which is a real pause on
+    # the target hardware before a single frame is drawn. This art is flat
+    # fills and hard outlines, so almost all of its 29,732 distinct colours are
+    # antialiasing gradients rather than design intent.
+    #
+    # Measured over a dense Eixample crop against the truecolour original:
+    #
+    #     png truecolour   24.0 MB   --
+    #     webp lossless    12.3 MB   0%     of pixels visibly changed
+    #     webp q90         10.0 MB   43.9%
+    #     png palette-256   7.5 MB   0.38%
+    #
+    # Lossy WebP is the obvious size win and the wrong answer: flat colour with
+    # hard edges is its worst case, and it rings around exactly the bold
+    # outlines this style is made of. The palette is a third of the size with
+    # 0.38% of pixels shifting by more than 8/255.
+    try:
+        from PIL import Image
+
+        Image.MAX_IMAGE_PIXELS = None
+        with Image.open(out_png) as im:
+            pal = im.convert("RGB").convert(
+                "P", palette=Image.ADAPTIVE, colors=256)
+            tmp = out_png.with_name(out_png.name + ".tmp")
+            # format is explicit: Pillow infers it from the extension, and a
+            # .tmp suffix makes it raise "unknown file extension".
+            pal.save(tmp, format="PNG", optimize=True)
+        tmp.replace(out_png)
+    except Exception as exc:  # Pillow missing, or an image it cannot quantise
+        print(f"     (palette step skipped: {exc})")
+
+    save_s = time.time() - t1
 
     # Which projection are those axes in? Try the plausible candidates and keep
     # whichever puts the extent's own centre on the axes centre. Guessing would

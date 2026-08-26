@@ -8,6 +8,7 @@ import LiveCity from './ui/LiveCity'
 import ModeLegend from './ui/ModeLegend'
 import TimeControl from './ui/TimeControl'
 import PixelScene from './pixel/PixelScene'
+import AiToggle from './pixel/AiToggle'
 import { useSimSocket } from './data/useSimSocket'
 
 /**
@@ -42,7 +43,10 @@ export default function App() {
   return (
     <div className="app">
       {PIXEL_MODE ? (
-        <PixelScene frameRef={frameRef} />
+        <>
+          <PixelScene frameRef={frameRef} />
+          <AiToggle />
+        </>
       ) : (
         <>
           <Scene
