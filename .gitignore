@@ -43,11 +43,21 @@ web/public/data/buildings.geojson
 sim/transit/cache/
 web/public/data/transit.geojson
 
-# Isolated env for city2graph. The geo stack (geopandas/momepy/duckdb) has no
-# wheels for this machine's default Python 3.14, so it is pinned to 3.11 and
-# kept out of the main environment.
-.venv-c2g/
-
 # API keys — never commit. Copy .env.example to .env.
 .env
 .env.local
+
+# Illustrated base map (regenerate with sim/basemap/build_basemap.py).
+# A full-city render is a 25-60 minute Overpass-bound pre-bake producing an
+# 8000x8000 px image; both it and its transform sidecar are derived.
+web/public/data/basemap_*.png
+web/public/data/basemap_*.json
+
+# Pipeline env for city2graph + prettymaps. prettymaps needs Python >=3.12 and
+# the geo stack needs wheels, so both share one 3.13 env rather than two.
+.venv-pipeline/
+
+# osmnx writes its Overpass response cache to ./cache at the repo root when
+# prettymaps fetches. Leading slash so this matches only the root directory and
+# not, say, sim/transit/cache.
+/cache/
