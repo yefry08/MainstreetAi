@@ -7,7 +7,18 @@ import ClimatePanel from './ui/ClimatePanel'
 import LiveCity from './ui/LiveCity'
 import ModeLegend from './ui/ModeLegend'
 import TimeControl from './ui/TimeControl'
+import PixelScene from './pixel/PixelScene'
 import { useSimSocket } from './data/useSimSocket'
+
+/**
+ * The 2D pixel restructure runs behind ?mode=pixel until it has earned the
+ * default. Both consume the same WebSocket frames and the same SUMO twins, so
+ * this is purely a renderer swap and the two can be compared side by side on
+ * the same running simulation rather than from memory.
+ */
+const PIXEL_MODE =
+  typeof window !== 'undefined' &&
+  new URLSearchParams(window.location.search).get('mode') === 'pixel'
 
 /**
  * Direction prototype: the empty 3D city, a free camera, and the instruments
@@ -30,12 +41,18 @@ export default function App() {
 
   return (
     <div className="app">
-      <Scene
-        onMapReady={onMapReady}
-        onBasemapStatus={onBasemapStatus}
-        frameRef={frameRef}
-      />
-      <Atmosphere map={map} />
+      {PIXEL_MODE ? (
+        <PixelScene frameRef={frameRef} />
+      ) : (
+        <>
+          <Scene
+            onMapReady={onMapReady}
+            onBasemapStatus={onBasemapStatus}
+            frameRef={frameRef}
+          />
+          <Atmosphere map={map} />
+        </>
+      )}
 
       <header className="masthead">
         <div className="wordmark">
@@ -77,9 +94,12 @@ export default function App() {
         <TimeControl header={header} />
       </aside>
 
-      <CameraControls map={map} />
-
-      <Bezel map={map} header={header} />
+      {/* Both read the MapLibre instance for camera state, which the 2D scene
+          does not have. They are hidden rather than adapted: giving them a
+          shim that reports a fake bearing would put wrong numbers on an
+          instrument panel, which is worse than an absent one. */}
+      {!PIXEL_MODE && <CameraControls map={map} />}
+      {!PIXEL_MODE && <Bezel map={map} header={header} />}
     </div>
   )
 }

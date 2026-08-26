@@ -34,6 +34,25 @@ const STRIDE = 6            // lon, lat, angle, kind, speed, turn
 const STOPPED_MS = 0.6      // below this a vehicle reads as halted
 const GLOW_DIV = 4          // glow buffer is 1/N of the scene, upscale = blur
 
+// Smallest a car may render, in screen pixels along its length.
+//
+// The three.js version learned this the hard way: at the default camera a
+// true-to-scale car was 1.3 px long and the streets looked completely empty
+// while several hundred vehicles were being drawn every frame. The same
+// arithmetic applies here -- at 2 m/px and a city-wide view a 4.3 m car is
+// about 2 px -- so the same fix applies, and vehicles are exaggerated as the
+// view pulls back.
+//
+// The exaggeration is UNIFORM. The 3D version originally held width back with
+// a separate cap and drew 30 m x 4.4 m slivers at wide zoom, an aspect ratio
+// of 6.8:1 against a real car's 2.32:1. Scaling every axis together cannot do
+// that, and because the floor is expressed as a LENGTH the width follows from
+// the vehicle's own proportions.
+const MIN_CAR_PX = 9
+const CAR_LEN_ART = 10      // car sprite length in art pixels, see sprites.js
+const SPRITE_SCALE = 2      // art pixels -> sprite pixels, see buildSpriteSheet
+const MAX_EXAGGERATION = 6
+
 const SIGNAL_COLOUR = ['#f0454f', '#fbbf24', '#4ade80']  // red, amber, green
 
 export function createRenderer(canvas, { basemapMeta, basemapImage, signals }) {
@@ -127,15 +146,25 @@ export function createRenderer(canvas, { basemapMeta, basemapImage, signals }) {
     ctx.imageSmoothingEnabled = false
     ctx.setTransform(1, 0, 0, 1, 0, 0)
 
+    // Always paint the ground first. The basemap is square while the simulated
+    // extent is not, and the canvas aspect matches neither, so a fitted view
+    // very often reads past the edge of the image -- where drawImage draws
+    // nothing at all and leaves whatever was in the buffer. That showed up as a
+    // hard black band down one side, which looks like a broken renderer rather
+    // than like the edge of the map.
+    // White because that is what the PNG's own margin is -- sampled from its
+    // corners rather than guessed. A first attempt used the pale green apron
+    // colour, which is prettymaps' perimeter fill drawn INSIDE the image, and
+    // that left a visible vertical seam where the two met.
+    ctx.fillStyle = basemapMeta?.margin_colour ?? '#ffffff'
+    ctx.fillRect(0, 0, w, h)
+
     if (basemapImage) {
       ctx.drawImage(
         basemapImage,
         view.x, view.y, w / s, h / s,
         0, 0, w, h,
       )
-    } else {
-      ctx.fillStyle = '#0b0e15'
-      ctx.fillRect(0, 0, w, h)
     }
 
     if (!tf.ok || !veh) {
@@ -157,6 +186,12 @@ export function createRenderer(canvas, { basemapMeta, basemapImage, signals }) {
     gctx.setTransform(1, 0, 0, 1, 0, 0)
     gctx.clearRect(0, 0, glow.width, glow.height)
     const gs = 1 / GLOW_DIV
+
+    // Keep vehicles legible as the view pulls back. At city scale a real car
+    // is about 2 px and the streets look empty; see MIN_CAR_PX.
+    const carPx = CAR_LEN_ART * SPRITE_SCALE * s
+    const exaggerate = Math.max(1, Math.min(MAX_EXAGGERATION, MIN_CAR_PX / carPx))
+    const spriteScale = s * exaggerate
 
     for (let i = 0; i < vehCount; i++) {
       const o = i * STRIDE
@@ -186,17 +221,27 @@ export function createRenderer(canvas, { basemapMeta, basemapImage, signals }) {
       const entry = sheet[key]
       if (!entry) continue
       const f = entry.frames[frameIndex(rad + Math.PI / 2)]
-      const half = (entry.size * s) / 2
-      ctx.drawImage(f, sx - half, sy - half, entry.size * s, entry.size * s)
+      const size = entry.size * spriteScale
+      const half = size / 2
+      ctx.drawImage(f, sx - half, sy - half, size, size)
       drawn++
 
       // Headlights: only while moving, and only for things that have them.
+      //
+      // The glow is deliberately restrained. An earlier pass used alpha 0.5
+      // with a radius scaled off the sprite, and because the buffer composites
+      // additively the beams of neighbouring vehicles summed into large white
+      // patches that read as fog rather than as headlights -- worst exactly
+      // where traffic is densest, which is where the map most needs to stay
+      // readable. Lower alpha and a radius tied to the vehicle keep it as a
+      // highlight rather than a light source.
       if (!stopped && kind !== KIND.bike && nightness > 0.05) {
-        const ahead = (kind === KIND.bus || kind === KIND.truck ? 9 : 5) * s
+        const big = kind === KIND.bus || kind === KIND.truck
+        const ahead = (big ? 7 : 4) * spriteScale
         const hx = (sx + Math.cos(rad) * ahead) * gs
         const hy = (sy + Math.sin(rad) * ahead) * gs
-        const r = (kind === KIND.bus || kind === KIND.truck ? 13 : 9) * s * gs
-        gctx.globalAlpha = 0.5 * nightness
+        const r = (big ? 7 : 5) * spriteScale * gs
+        gctx.globalAlpha = 0.22 * nightness
         gctx.drawImage(dot, hx - r, hy - r, r * 2, r * 2)
       }
     }

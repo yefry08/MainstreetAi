@@ -454,3 +454,36 @@
 @media (max-width: 760px) {
   .rail { display: none; }
 }
+
+/* =========================================================================
+   Pixel scene (2D canvas restructure)
+   ========================================================================= */
+
+.pixel-scene { position: absolute; inset: 0; }
+
+.pixel-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+  /* The art is pixel-art: never let the browser smooth it on upscale. */
+  image-rendering: pixelated;
+  background: var(--nit-950, #07090d);
+}
+.pixel-canvas:active { cursor: grabbing; }
+
+.pixel-status,
+.pixel-stats {
+  position: absolute;
+  padding: 5px 10px;
+  border-radius: var(--r-pill);
+  background: var(--glass-fill);
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-edge);
+  font-family: var(--font-data);
+  font-size: 10px;
+  color: var(--ink-300);
+  pointer-events: none;
+}
+.pixel-status { top: 50%; left: 50%; transform: translate(-50%, -50%); }
+.pixel-stats { right: 12px; bottom: 12px; }

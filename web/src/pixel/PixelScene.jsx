@@ -1,0 +1,202 @@
+import { useEffect, useRef, useState } from 'react'
+import { createRenderer } from './renderer.js'
+
+/**
+ * Host for the 2D pixel-art scene.
+ *
+ * Owns three things the renderer deliberately does not: loading its assets,
+ * the animation loop, and the camera. The renderer is a pure draw function so
+ * it can be tested without a DOM.
+ *
+ * ASSET LOADING IS THE SLOW PART, AND IT IS HONEST ABOUT IT
+ * The basemap is a 24 MB PNG. Decoded it is ~100 MB of RGBA. That is a real
+ * pause on the Intel N100 this restructure targets, so the status is shown
+ * rather than hidden behind a blank canvas -- a silent black screen during a
+ * demo is indistinguishable from a crash.
+ */
+export default function PixelScene({ frameRef }) {
+  const canvasRef = useRef(null)
+  const rendererRef = useRef(null)
+  const [status, setStatus] = useState('loading basemap…')
+  const [stats, setStats] = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    let raf = 0
+
+    const load = async () => {
+      try {
+        const [metaRes, sigRes] = await Promise.all([
+          fetch('/data/basemap_barcelona.json'),
+          fetch('/data/signal_approaches.geojson'),
+        ])
+        if (!metaRes.ok) throw new Error(`basemap sidecar ${metaRes.status}`)
+        const meta = await metaRes.json()
+        const signals = sigRes.ok ? await sigRes.json() : null
+
+        if (!meta.lonlat_to_px) {
+          throw new Error(
+            'sidecar has no lonlat_to_px — run: python sim/basemap/build_basemap.py --patch')
+        }
+
+        setStatus(`decoding ${meta.width_px}×${meta.height_px} basemap…`)
+        const img = new Image()
+        img.decoding = 'async'
+        await new Promise((res, rej) => {
+          img.onload = res
+          img.onerror = () => rej(new Error(`could not load ${meta.png}`))
+          img.src = `/data/${meta.png}`
+        })
+        if (img.decode) { try { await img.decode() } catch { /* older browsers */ } }
+        if (!alive) return
+
+        const canvas = canvasRef.current
+        if (!canvas) return
+        const r = createRenderer(canvas, {
+          basemapMeta: meta,
+          basemapImage: img,
+          signals,
+        })
+        rendererRef.current = r
+
+        // Open on the simulated extent rather than the whole square render:
+        // the corners of the square are outside the simulation and would show
+        // a city with no traffic in it.
+        const ext = meta.sim_extent
+        if (ext && r.transformOk) {
+          const kx = meta.lonlat_to_px.kx
+          const ky = meta.lonlat_to_px.ky
+          const toPx = (lon, lat) => {
+            const b = [1, lon, lat, lon * lon, lon * lat, lat * lat]
+            return [
+              kx.reduce((s, k, i) => s + k * b[i], 0),
+              ky.reduce((s, k, i) => s + k * b[i], 0),
+            ]
+          }
+          const [x0, y1] = toPx(ext[0], ext[1])
+          const [x1, y0] = toPx(ext[2], ext[3])
+          const cw = canvas.clientWidth || 1200
+          const ch = canvas.clientHeight || 800
+          const dpr = Math.min(window.devicePixelRatio || 1, 2)
+          const scale = Math.min((cw * dpr) / (x1 - x0), (ch * dpr) / (y1 - y0))
+          r.setView({ x: x0, y: y0, scale })
+        }
+
+        setStatus(null)
+
+        const step = () => {
+          const f = frameRef?.current
+          if (f) r.applyFrame(f)
+          return r.draw(1)
+        }
+
+        const tick = () => {
+          if (!alive) return
+          setStatsThrottled(step())
+          raf = requestAnimationFrame(tick)
+        }
+        raf = requestAnimationFrame(tick)
+
+        // Debug handle, mirroring window.__mst for the three.js scene.
+        // requestAnimationFrame is throttled to zero in a backgrounded or
+        // non-compositing tab, which stalls the loop and makes a perfectly
+        // healthy renderer look dead. This advances it by hand so the scene
+        // stays inspectable when the browser will not schedule frames.
+        window.__pixel = {
+          renderer: r,
+          meta,
+          forceDraw: (n = 1) => {
+            let s = null
+            for (let i = 0; i < n; i++) s = step()
+            return s
+          },
+          setView: (v) => r.setView(v),
+          stats: () => r.stats(),
+        }
+      } catch (err) {
+        if (alive) setStatus(`failed: ${err.message}`)
+      }
+    }
+
+    // Reporting stats into React state every frame would re-render the tree at
+    // 60 Hz for a debug readout.
+    let lastStats = 0
+    const setStatsThrottled = (s) => {
+      const now = performance.now()
+      if (now - lastStats > 500) {
+        lastStats = now
+        setStats(s)
+      }
+    }
+
+    load()
+    return () => {
+      alive = false
+      if (raf) cancelAnimationFrame(raf)
+    }
+  }, [frameRef])
+
+  // ---- camera: drag to pan, wheel to zoom ------------------------------
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    let dragging = false
+    let lastX = 0
+    let lastY = 0
+
+    const down = (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY }
+    const up = () => { dragging = false }
+    const move = (e) => {
+      const r = rendererRef.current
+      if (!dragging || !r) return
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      const s = r.view.scale
+      r.setView({
+        x: r.view.x - ((e.clientX - lastX) * dpr) / s,
+        y: r.view.y - ((e.clientY - lastY) * dpr) / s,
+      })
+      lastX = e.clientX
+      lastY = e.clientY
+    }
+    const wheel = (e) => {
+      const r = rendererRef.current
+      if (!r) return
+      e.preventDefault()
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      const rect = canvas.getBoundingClientRect()
+      const mx = (e.clientX - rect.left) * dpr
+      const my = (e.clientY - rect.top) * dpr
+      const old = r.view.scale
+      const next = Math.max(0.05, Math.min(8, old * (e.deltaY < 0 ? 1.15 : 1 / 1.15)))
+      // Keep the point under the cursor fixed while zooming.
+      r.setView({
+        x: r.view.x + mx / old - mx / next,
+        y: r.view.y + my / old - my / next,
+        scale: next,
+      })
+    }
+
+    canvas.addEventListener('mousedown', down)
+    window.addEventListener('mouseup', up)
+    window.addEventListener('mousemove', move)
+    canvas.addEventListener('wheel', wheel, { passive: false })
+    return () => {
+      canvas.removeEventListener('mousedown', down)
+      window.removeEventListener('mouseup', up)
+      window.removeEventListener('mousemove', move)
+      canvas.removeEventListener('wheel', wheel)
+    }
+  }, [])
+
+  return (
+    <div className="pixel-scene">
+      <canvas ref={canvasRef} className="pixel-canvas" />
+      {status && <div className="pixel-status">{status}</div>}
+      {stats && (
+        <div className="pixel-stats">
+          {stats.drawn}/{stats.vehicles} veh · {stats.fps} fps
+        </div>
+      )}
+    </div>
+  )
+}
