@@ -25,15 +25,39 @@
  */
 export const DECODE_TIMEOUT_MS = 3000
 
-export async function loadImage(src, { timeoutMs = DECODE_TIMEOUT_MS } = {}) {
+// The load itself needs a bound for the same reason the decode does, one step
+// earlier: `onload` fires only if the browser finishes fetching AND rasterising
+// the image, and neither is guaranteed. A connection that stalls mid-download
+// never fires `onload` and never fires `error` either, so an unbounded await
+// leaves the page on "decoding..." with no error, forever.
+//
+// Generous on purpose. The Barcelona basemap is 7.5 MB, which is a slow but
+// entirely normal download on a phone; this is here to catch a dead transfer,
+// not to punish a slow one. Failing loudly beats a spinner that never resolves,
+// because a visible error tells the viewer to reload and a spinner does not.
+export const LOAD_TIMEOUT_MS = 60000
+
+export async function loadImage(src, {
+  timeoutMs = DECODE_TIMEOUT_MS,
+  loadTimeoutMs = LOAD_TIMEOUT_MS,
+} = {}) {
   const img = new Image()
   img.decoding = 'async'
 
-  await new Promise((resolve, reject) => {
-    img.onload = resolve
-    img.onerror = () => reject(new Error(`could not load ${src}`))
-    img.src = src
-  })
+  let loadTimer = null
+  try {
+    await new Promise((resolve, reject) => {
+      loadTimer = setTimeout(
+        () => reject(new Error(
+          `${src} did not finish loading after ${Math.round(loadTimeoutMs / 1000)}s`)),
+        loadTimeoutMs)
+      img.onload = resolve
+      img.onerror = () => reject(new Error(`could not load ${src}`))
+      img.src = src
+    })
+  } finally {
+    if (loadTimer) clearTimeout(loadTimer)
+  }
 
   // Past this point the image is drawable, so every failure mode below is
   // non-fatal and deliberately swallowed.
