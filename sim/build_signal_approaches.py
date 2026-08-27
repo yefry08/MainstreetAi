@@ -38,9 +38,17 @@ import libsumo as ls
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-NET = HERE / "net" / "barcelona.net.xml"
-OUT = ROOT / "web" / "public" / "data" / "signal_approaches.geojson"
-SIGNALS = ROOT / "web" / "public" / "data" / "signals.geojson"
+import argparse as _argparse
+
+_ap = _argparse.ArgumentParser()
+_ap.add_argument("--district", default="barcelona")
+DISTRICT = _ap.parse_known_args()[0].district
+
+# Barcelona keeps the unsuffixed filenames the renderer has always fetched.
+_sfx = "" if DISTRICT == "barcelona" else f"_{DISTRICT}"
+NET = HERE / "net" / f"{DISTRICT}.net.xml"
+OUT = ROOT / "web" / "public" / "data" / f"signal_approaches{_sfx}.geojson"
+SIGNALS = ROOT / "web" / "public" / "data" / f"signals{_sfx}.geojson"
 
 # How far back from the stop line to seat the lamp, in metres. A lamp exactly
 # on the stop line sits in the middle of the junction box once it is scaled up

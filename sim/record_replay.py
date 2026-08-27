@@ -45,6 +45,8 @@ import numpy as np
 import websockets
 
 ROOT = Path(__file__).resolve().parent.parent
+# Set per district in main(); Barcelona keeps the bare "replay" directory the
+# deployed page has always fetched.
 OUT = ROOT / "web" / "public" / "replay"
 WS = "ws://127.0.0.1:8000/ws"
 API = "http://127.0.0.1:8000/api"
@@ -161,9 +163,16 @@ async def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--seconds", type=float, default=60.0)
     ap.add_argument("--hz", type=float, default=4.0)
+    ap.add_argument("--district", default="barcelona")
     args = ap.parse_args()
 
-    meta_path = ROOT / "web" / "public" / "data" / "basemap_barcelona.json"
+    global OUT
+    if args.district != "barcelona":
+        OUT = ROOT / "web" / "public" / f"replay_{args.district}"
+    OUT.mkdir(parents=True, exist_ok=True)
+
+    meta_path = (ROOT / "web" / "public" / "data"
+                 / f"basemap_{args.district}.json")
     base = json.loads(meta_path.read_text(encoding="utf-8"))
     ext = tuple(base["sim_extent"])
 

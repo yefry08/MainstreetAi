@@ -11,19 +11,23 @@ Avinguda Diagonal and Avinguda Meridiana -- extending west far enough to
 include Camp Nou (used by the concert event scenario) and east to Glories.
 """
 
+import argparse
 import sys
 import time
 from pathlib import Path
 
 import requests
 
+from districts import DISTRICTS
+
 HERE = Path(__file__).resolve().parent
 NET_DIR = HERE / "net"
 NET_DIR.mkdir(parents=True, exist_ok=True)
-OSM_OUT = NET_DIR / "barcelona.osm.xml"
 
-# south, west, north, east  -- roughly 7.9 km (E-W) x 6.1 km (N-S)
-BBOX = (41.3650, 2.1150, 41.4200, 2.2100)
+# Barcelona's box predates the district registry and is kept verbatim: it is
+# the extract the network was validated against, and nudging it by a few metres
+# would silently invalidate every number the demo quotes.
+BARCELONA_BBOX = (41.3650, 2.1150, 41.4200, 2.2100)
 
 # Road tiers we import. Keeping residential in gives us the authentic Eixample
 # chamfered-block grid; without it Barcelona stops looking like Barcelona.
@@ -38,19 +42,39 @@ ENDPOINTS = [
     "https://overpass.osm.ch/api/interpreter",
 ]
 
-QUERY = f"""
+def build_query(bbox) -> str:
+    s, w, n, e = bbox
+    return f"""
 [out:xml][timeout:300];
 (
-  way["highway"~"{HIGHWAY_RE}"]["area"!~"yes"]({BBOX[0]},{BBOX[1]},{BBOX[2]},{BBOX[3]});
-  node["highway"="traffic_signals"]({BBOX[0]},{BBOX[1]},{BBOX[2]},{BBOX[3]});
+  way["highway"~"{HIGHWAY_RE}"]["area"!~"yes"]({s},{w},{n},{e});
+  node["highway"="traffic_signals"]({s},{w},{n},{e});
 );
 (._;>;);
 out body;
 """
 
 
-def fetch() -> None:
-    if OSM_OUT.exists() and OSM_OUT.stat().st_size > 1_000_000:
+def bbox_for(district: str):
+    if district == "barcelona":
+        return BARCELONA_BBOX
+    for d in DISTRICTS:
+        if d.key == district:
+            return tuple(d.bbox)
+    sys.exit(f"unknown district: {district} "
+             f"(have: {', '.join(x.key for x in DISTRICTS)})")
+
+
+def fetch(district: str = "barcelona") -> None:
+    OSM_OUT = NET_DIR / f"{district}.osm.xml"
+    BBOX = bbox_for(district)
+    QUERY = build_query(BBOX)
+
+    # A neighbourhood extract is legitimately far smaller than a city one, so
+    # the "did we get a real response" floor has to scale with the request or
+    # every district but Barcelona looks like a failed download.
+    floor = 1_000_000 if district == "barcelona" else 100_000
+    if OSM_OUT.exists() and OSM_OUT.stat().st_size > floor:
         mb = OSM_OUT.stat().st_size / 1e6
         print(f"[cache] {OSM_OUT.name} already present ({mb:.1f} MB) - skipping download.")
         print("        Delete the file to force a re-fetch.")
@@ -72,7 +96,7 @@ def fetch() -> None:
                 last_err = f"HTTP {resp.status_code}"
                 print(f"[overpass] {last_err} - trying next mirror")
                 continue
-            if len(resp.content) < 100_000:
+            if len(resp.content) < floor // 10:
                 last_err = f"suspiciously small response ({len(resp.content)} bytes)"
                 print(f"[overpass] {last_err} - trying next mirror")
                 continue
@@ -90,4 +114,6 @@ def fetch() -> None:
 
 
 if __name__ == "__main__":
-    fetch()
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--district", default="barcelona")
+    fetch(ap.parse_args().district)

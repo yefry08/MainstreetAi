@@ -48,7 +48,7 @@
       "radius_m": 1113,
       "why": "One of the most heavily signalised pedestrian-vehicle conflicts anywhere; the scramble crossing is the point.",
       "has_basemap": true,
-      "has_network": false
+      "has_network": true
     },
     {
       "key": "manhattan",

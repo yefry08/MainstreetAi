@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createRenderer } from './renderer.js'
 import { loadImage } from './decodeImage.js'
+import { hasTraffic as districtHasTraffic, replayDir, signalsPath, basemapPath }
+  from './districtAssets.js'
 import { loadReplay } from './replay.js'
 
 /**
@@ -20,10 +22,10 @@ export default function ReplayScene({ lighting = 'night', district = 'barcelona'
   // lighting axis is separate and is named separately -- reusing `mode` for
   // both silently shadowed the twin selector.
   const lightRef = useRef(lighting)
-  // Only Barcelona has a recording. The other districts are baked basemaps
-  // with no SUMO network behind them yet, so there is nothing truthful to
-  // animate over them.
-  const hasTraffic = district === 'barcelona'
+  // A district animates only if it has both a network and a recording; the
+  // rest are basemaps, and borrowing another city's traffic for them would be
+  // a picture that looks right and is not.
+  const hasTraffic = districtHasTraffic(district)
   const canvasRef = useRef(null)
   const rendererRef = useRef(null)
   const replayRef = useRef(null)
@@ -47,17 +49,18 @@ export default function ReplayScene({ lighting = 'night', district = 'barcelona'
     ;(async () => {
       try {
         setStatus(hasTraffic ? 'loading recording…' : 'loading map…')
-        const replay = hasTraffic ? await loadReplay('./replay') : null
+        const replay = hasTraffic ? await loadReplay(replayDir(district)) : null
         if (!alive) return
         replayRef.current = replay
 
-        const base = await (await fetch(`./data/basemap_${district}.json`)).json()
+        const base = await (await fetch(basemapPath(district))).json()
         setStatus(`decoding ${base.width_px}×${base.height_px} basemap…`)
         const { img, decodeTimedOut } = await loadImage(`./data/${base.png}`)
         if (decodeTimedOut) console.warn('[replay] pre-decode timed out; drawing anyway')
         if (!alive) return
 
-        const sigRes = await fetch('./data/signal_approaches.geojson')
+        const sigRes = hasTraffic ? await fetch(signalsPath(district))
+                                  : { ok: false }
         const signals = sigRes.ok ? await sigRes.json() : null
 
         const r = createRenderer(canvasRef.current, {

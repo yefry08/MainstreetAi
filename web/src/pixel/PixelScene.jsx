@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createRenderer } from './renderer.js'
 import { loadImage } from './decodeImage.js'
+import { hasTraffic as districtHasTraffic, signalsPath } from './districtAssets.js'
 
 /**
  * Host for the 2D pixel-art scene.
@@ -22,7 +23,7 @@ export default function PixelScene({ frameRef, mode = 'night', district = 'barce
   // vehicles or its signal lamps over another district's basemap would put
   // Barcelona's traffic on Tokyo's streets: it would look plausible and be
   // false. Other districts render as the map alone until they have a network.
-  const hasTraffic = district === 'barcelona'
+  const hasTraffic = districtHasTraffic(district)
   const [status, setStatus] = useState('loading basemap…')
   const [stats, setStats] = useState(null)
   // The rAF loop closes over its effect scope, so the live mode is read
@@ -39,7 +40,7 @@ export default function PixelScene({ frameRef, mode = 'night', district = 'barce
       try {
         const [metaRes, sigRes] = await Promise.all([
           fetch(`/data/basemap_${district}.json`),
-          hasTraffic ? fetch('/data/signal_approaches.geojson')
+          hasTraffic ? fetch(signalsPath(district, '/'))
                      : Promise.resolve({ ok: false }),
         ])
         if (!metaRes.ok) throw new Error(`basemap sidecar ${metaRes.status}`)

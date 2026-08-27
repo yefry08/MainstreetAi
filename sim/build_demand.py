@@ -31,6 +31,51 @@ import sumolib
 HERE = Path(__file__).resolve().parent
 NET_DIR = HERE / "net"
 NET = NET_DIR / "barcelona.net.xml"
+
+# Per-district demand. Barcelona's table below is the validated one; anything
+# here overrides it for another district.
+#
+# SHIBUYA IS NOT BARCELONA, AND THE SPLIT SAYS SO
+# Barcelona's defining feature is that roughly a third of its vehicle fleet is
+# two-wheeled. Central Tokyo is the opposite: scooters are a small share, light
+# commercial vehicles are a large one, and bicycles are common. Copying
+# Barcelona's split across would have produced a Tokyo full of mopeds, which is
+# a picture of Barcelona with Japanese street names on it.
+#
+# These proportions are an informed estimate of central-Tokyo road composition,
+# not a figure lifted from a published Tokyo modal-share table. They are stated
+# here so the assumption is visible rather than buried in a period constant.
+#
+# Volume is set so Shibuya carries the same vehicles-per-lane-km as Barcelona.
+# A first pass scaled trips/hour by lane-km, which sounds equivalent and is not:
+# Shibuya's trips are much shorter, so each one occupies the network briefly and
+# concurrency came out at 0.24 veh/lane-km against Barcelona's 0.60 -- a
+# district that looked half-abandoned. What matters on screen is how many
+# vehicles are present at once, not how many are dispatched per hour, and those
+# two only track each other when trip length is held constant.
+#
+# ~4,500 trips/h lands near Barcelona's density. It is deliberately short of
+# saturation: past that point both twins jam at the same speed and the
+# comparison the demo exists to show disappears.
+#
+# Trip lengths scale too: a 350 m minimum is a short hop across the Eixample
+# and most of the way across a 2.2 km Shibuya extract.
+DISTRICT_MODES = {
+    "shibuya": {
+        #  name    vclass          vType    period  fringe  min_dist  share
+        "car":   dict(vclass="passenger",  vtype="car",   period=1.22, fringe=2.2, min_dist=140),  # ~66%
+        "bike":  dict(vclass="bicycle",    vtype="bike",  period=5.72, fringe=1.8, min_dist=110),  # ~14%
+        "truck": dict(vclass="delivery",   vtype="truck", period=8.00, fringe=2.0, min_dist=180),  # ~10%
+        "moto":  dict(vclass="motorcycle", vtype="moto",  period=13.3, fringe=2.0, min_dist=130),  # ~6%
+        "bus":   dict(vclass="bus",        vtype="bus",   period=20.0, fringe=1.2, min_dist=700),  # ~4%
+    },
+}
+
+# Fewer distinct O-D pairs on a smaller network: 1,600 car routes over 1,938
+# edges would revisit the same streets so often the variety buys nothing.
+DISTRICT_FLOW_COUNT = {
+    "shibuya": {"car": 500, "moto": 120, "bike": 200, "truck": 160, "bus": 90},
+}
 TOOLS = Path(sumolib.__file__).resolve().parent.parent / "sumo" / "tools"
 RANDOM_TRIPS = TOOLS / "randomTrips.py"
 
@@ -269,7 +314,9 @@ def generate(mode: str, cfg: dict, end: int, seed: int, tag: str = "",
 
 
 def main() -> None:
+    global NET
     ap = argparse.ArgumentParser()
+    ap.add_argument("--district", default="barcelona")
     # A full simulated day. The demo needs to be able to sit on any hour of any
     # weekday without the network running dry.
     ap.add_argument("--end", type=int, default=86400,
@@ -284,19 +331,30 @@ def main() -> None:
                          "just a different driver-behaviour RNG.")
     args = ap.parse_args()
 
+    # Barcelona keeps the bare filenames it has always had, because the server
+    # and every recorded run reference them by those exact names.
+    if args.district != "barcelona":
+        NET = NET_DIR / f"{args.district}.net.xml"
+        if not args.tag:
+            args.tag = f"_{args.district}"
+
+    modes = DISTRICT_MODES.get(args.district, MODES)
+
     if not NET.exists():
-        sys.exit(f"Missing {NET}. Run build_net.py first.")
+        sys.exit(f"Missing {NET}. Run: python build_net.py --district {args.district}")
     if not RANDOM_TRIPS.exists():
         sys.exit(f"Missing randomTrips.py at {RANDOM_TRIPS}")
 
     # Distinct origin-destination pairs per mode. Enough that traffic does not
     # visibly repeat, few enough that the file stays small.
-    FLOW_COUNT = {"car": 1600, "moto": 900, "bike": 450, "truck": 300, "bus": 240}
+    FLOW_COUNT = DISTRICT_FLOW_COUNT.get(
+        args.district,
+        {"car": 1600, "moto": 900, "bike": 450, "truck": 300, "bus": 240})
 
     produced = [
         generate(m, c, args.end, args.seed + i, args.tag,
                  flows=FLOW_COUNT.get(m, 400) if args.flows else 0)
-        for i, (m, c) in enumerate(MODES.items())
+        for i, (m, c) in enumerate(modes.items())
     ]
     print("\n[ok] route files:")
     for p in produced:

@@ -30,7 +30,16 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 SIM = HERE.parent / "sim"
-NET = SIM / "net" / "barcelona.net.xml"
+
+# Which city the twins run. Barcelona is the default and keeps the unsuffixed
+# route filenames it has always used; another district loads its own network
+# and its own "_<district>"-tagged demand. Set through the environment rather
+# than a flag because the workers are spawned processes -- on Windows they
+# re-import this module in a fresh interpreter, so anything parsed from argv in
+# the parent is not there when the child needs it.
+DISTRICT = os.environ.get("MAINSTREET_DISTRICT", "barcelona")
+NET = SIM / "net" / f"{DISTRICT}.net.xml"
+DEMAND_TAG = "" if DISTRICT == "barcelona" else f"_{DISTRICT}"
 
 # Vehicle kinds on the wire. Order is fixed — the browser decodes these by
 # number, so appending is safe and reordering is not.
@@ -188,7 +197,7 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
     # An alternate demand set (built with `build_demand.py --tag _b`) lets the
     # validation harness re-test against genuinely different traffic, not just a
     # different driver-behaviour RNG on the same trips.
-    tag = cfg.get("demand_tag", "")
+    tag = cfg.get("demand_tag", DEMAND_TAG)
     # Modes are optional on disk: a route file that has not been generated is
     # skipped rather than crashing the worker, so adding a mode does not force
     # everyone to rebuild demand before the sim will start.

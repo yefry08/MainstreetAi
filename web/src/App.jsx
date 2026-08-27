@@ -94,8 +94,15 @@ export default function App() {
       {/* The scene stays mounted across tabs. Unmounting it would throw away a
           decoded 7.5 MB basemap and a warmed socket every time someone looks
           at the contact page. */}
-      <div className="scene-layer" style={{ opacity: showScene ? 1 : 0,
-                                            pointerEvents: showScene ? 'auto' : 'none' }}>
+      {/* opacity alone hides the scene from sight but not from a screen
+          reader, which still reads out the replay disclosure while the user is
+          on the contact page. aria-hidden takes it out of the tree; the layer
+          stays mounted so the basemap is not decoded again on every tab
+          change. */}
+      <div className="scene-layer"
+           aria-hidden={!showScene}
+           style={{ opacity: showScene ? 1 : 0,
+                    pointerEvents: showScene ? 'auto' : 'none' }}>
         {REPLAY_ONLY
           ? <ReplayScene lighting={mode} district={district} twin={twin}
                           onStats={setTwins} />

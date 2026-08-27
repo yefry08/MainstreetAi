@@ -5,7 +5,12 @@ from pathlib import Path
 
 import sumolib
 
-NET = Path(__file__).resolve().parent / "net" / "barcelona.net.xml"
+import argparse as _argparse
+
+_NET_DIR = Path(__file__).resolve().parent / "net"
+_ap = _argparse.ArgumentParser()
+_ap.add_argument("--district", default="barcelona")
+NET = _NET_DIR / f"{_ap.parse_known_args()[0].district}.net.xml"
 
 
 def main() -> None:
