@@ -57,7 +57,7 @@ export function decodeFrame(buf) {
   return { header, vehicles, signals, congestion }
 }
 
-export function useSimSocket() {
+export function useSimSocket({ enabled = true } = {}) {
   // The frame lives in a ref, not in state. It arrives 10x a second carrying
   // thousands of vehicles; re-rendering React at that rate would drop frames.
   // The scene reads the ref inside its own animation loop, and only the slow
@@ -68,6 +68,14 @@ export function useSimSocket() {
   const lastPush = useRef(0)
 
   useEffect(() => {
+    // The static replay has no server to reach. Without this the hook would
+    // open a WebSocket, fail, and retry on a timer forever on a page that was
+    // never going to have one -- console noise and wasted wakeups for nothing.
+    if (!enabled) {
+      setStatus('recorded')
+      return undefined
+    }
+
     let sock
     let closed = false
     let retry
@@ -110,7 +118,7 @@ export function useSimSocket() {
       clearTimeout(retry)
       sock?.close()
     }
-  }, [])
+  }, [enabled])
 
   return { frameRef, header, status }
 }

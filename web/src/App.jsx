@@ -10,6 +10,7 @@ import TimeControl from './ui/TimeControl'
 import PixelScene from './pixel/PixelScene'
 import AiToggle from './pixel/AiToggle'
 import CitySelector from './pixel/CitySelector'
+import ReplayScene from './pixel/ReplayScene'
 import { useSimSocket } from './data/useSimSocket'
 
 /**
@@ -18,9 +19,17 @@ import { useSimSocket } from './data/useSimSocket'
  * this is purely a renderer swap and the two can be compared side by side on
  * the same running simulation rather than from memory.
  */
-const PIXEL_MODE =
-  typeof window !== 'undefined' &&
-  new URLSearchParams(window.location.search).get('mode') === 'pixel'
+const MODE =
+  typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('mode')
+    : null
+const PIXEL_MODE = MODE === 'pixel'
+
+// Static replay. Built for GitHub Pages, which cannot run the Python server the
+// live app streams from, so VITE_REPLAY_ONLY makes it the default there rather
+// than shipping a page whose traffic layer silently never arrives.
+const REPLAY_MODE =
+  MODE === 'replay' || import.meta.env.VITE_REPLAY_ONLY === '1'
 
 /**
  * Direction prototype: the empty 3D city, a free camera, and the instruments
@@ -39,11 +48,13 @@ export default function App() {
   const [basemap, setBasemap] = useState('loading')
   const onMapReady = useCallback((m) => setMap(m), [])
   const onBasemapStatus = useCallback((s) => setBasemap(s), [])
-  const { frameRef, header, status } = useSimSocket()
+  const { frameRef, header, status } = useSimSocket({ enabled: !REPLAY_MODE })
 
   return (
     <div className="app">
-      {PIXEL_MODE ? (
+      {REPLAY_MODE ? (
+        <ReplayScene />
+      ) : PIXEL_MODE ? (
         <>
           <PixelScene frameRef={frameRef} />
           <CitySelector current="barcelona" />
@@ -66,8 +77,10 @@ export default function App() {
           <span className="wordmark-name">MainstreetAi</span>
         </div>
         <div className="masthead-right">
-          {/* The one live thing on a screen full of simulation. */}
-          <LiveCity />
+          {/* The one live thing on a screen full of simulation — and the one
+              thing a static replay genuinely cannot have, since it polls the
+              server for Barcelona's current congestion. */}
+          {!REPLAY_MODE && <LiveCity />}
           {header?.weather?.available && (
             <span
               className={`wx ${
@@ -86,19 +99,22 @@ export default function App() {
             <span className="masthead-clock value">{header.clock}</span>
           )}
           <span className="masthead-tag">
-            {status === 'live' ? BASEMAP_LABEL[basemap] : `Simulation · ${status}`}
+            {REPLAY_MODE
+              ? 'Barcelona · recorded'
+              : status === 'live' ? BASEMAP_LABEL[basemap] : `Simulation · ${status}`}
           </span>
           <span className={`masthead-dot ${
-            status === 'live' ? 'ready' : basemap === 'offline' ? 'offline' : ''
+            REPLAY_MODE || status === 'live' ? 'ready'
+              : basemap === 'offline' ? 'offline' : ''
           }`} />
         </div>
       </header>
 
-      <aside className="rail">
+      {!REPLAY_MODE && <aside className="rail">
         <ClimatePanel header={header} />
         <ModeLegend header={header} />
         <TimeControl header={header} />
-      </aside>
+      </aside>}
 
       {/* Both read the MapLibre instance for camera state, which the 2D scene
           does not have. They are hidden rather than adapted: giving them a

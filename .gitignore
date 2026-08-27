@@ -61,3 +61,10 @@ web/public/data/basemap_*.json
 # prettymaps fetches. Leading slash so this matches only the root directory and
 # not, say, sim/transit/cache.
 /cache/
+
+# Static replay for GitHub Pages (regenerate with sim/bake_replay.py).
+# Recorded binaries, derived from a simulation run.
+web/public/replay/
+
+# Pages build output.
+web/dist-pages/
