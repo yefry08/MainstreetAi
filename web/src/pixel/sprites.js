@@ -37,6 +37,11 @@ const PALETTE = {
   truck: { body: '#8a94a6', trim: '#5d6675', glass: '#2f3a45' },
   moto: { body: '#f0c14b', trim: '#b08a2e', glass: '#2f3a45' },
   stopped: '#f0454f',
+  // A diorama reads as a diorama because things sit ON something. This is the
+  // contact shadow that puts each vehicle on the road surface instead of
+  // floating above it. Kept translucent so overlapping traffic in a queue does
+  // not stack into a black mass.
+  shadow: 'rgba(28, 22, 18, 0.34)',
 }
 
 /**
@@ -67,10 +72,22 @@ const PLANS = {
 
 const NAME_BY_KIND = ['car', 'bus', 'bike', 'truck', 'moto']
 
-function drawPlan(ctx, name, scale, stopped) {
+// Screen-space offset of the contact shadow, in ART pixels. Applied BEFORE the
+// heading rotation so every vehicle's shadow falls the same way regardless of
+// which direction it is driving -- a shadow that rotates with the car reads as
+// a lighting bug, because a single sun does not turn with the traffic.
+const SHADOW_DX = 1
+const SHADOW_DY = 1
+
+function drawPlan(ctx, name, scale, stopped, shadowOnly = false) {
   const plan = PLANS[name]
   const pal = PALETTE[name]
   for (const [x, y, w, h, key] of plan.parts) {
+    if (shadowOnly) {
+      ctx.fillStyle = PALETTE.shadow
+      ctx.fillRect(x * scale, y * scale, w * scale, h * scale)
+      continue
+    }
     // A stopped vehicle recolours only its BODY. Recolouring the glass too
     // turned the sprite into a solid red lozenge at small sizes, which read as
     // a different vehicle type rather than as the same one halted.
@@ -90,16 +107,31 @@ export function buildSpriteSheet(scale = 2) {
       const plan = PLANS[name]
       // The rotated sprite must fit its own diagonal, or corners clip when it
       // points at 45 degrees.
-      const src = Math.ceil(Math.hypot(plan.w, plan.h) * scale) + 2
+      // Padding covers the rotation diagonal AND the shadow offset; too tight
+      // and the shadow is clipped off at some headings but not others.
+      const src = Math.ceil(Math.hypot(plan.w, plan.h) * scale)
+                  + 2 + Math.ceil(Math.max(SHADOW_DX, SHADOW_DY) * scale)
       const frames = []
       for (let i = 0; i < ROTATIONS; i++) {
         const c = document.createElement('canvas')
         c.width = c.height = src
         const ctx = c.getContext('2d')
         ctx.imageSmoothingEnabled = false
+        const angle = (i / ROTATIONS) * Math.PI * 2
+        const orient = () => {
+          ctx.rotate(angle)
+          ctx.translate(-(plan.w * scale) / 2, -(plan.h * scale) / 2)
+        }
+
+        // Shadow first, displaced in screen space, then the body over it.
+        ctx.save()
+        ctx.translate(src / 2 + SHADOW_DX * scale, src / 2 + SHADOW_DY * scale)
+        orient()
+        drawPlan(ctx, name, scale, stopped, true)
+        ctx.restore()
+
         ctx.translate(src / 2, src / 2)
-        ctx.rotate((i / ROTATIONS) * Math.PI * 2)
-        ctx.translate(-(plan.w * scale) / 2, -(plan.h * scale) / 2)
+        orient()
         drawPlan(ctx, name, scale, stopped)
         frames.push(c)
       }
