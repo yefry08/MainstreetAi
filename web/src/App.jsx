@@ -106,7 +106,8 @@ export default function App() {
         {REPLAY_ONLY
           ? <ReplayScene lighting={mode} district={district} twin={twin}
                           onStats={setTwins} />
-          : <PixelScene frameRef={frameRef} mode={mode} district={district} />}
+          : <PixelScene frameRef={frameRef} mode={mode} district={district}
+                        liveDistrict={header?.district ?? null} />}
       </div>
 
       <Navbar

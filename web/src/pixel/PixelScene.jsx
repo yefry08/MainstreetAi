@@ -16,14 +16,17 @@ import { hasTraffic as districtHasTraffic, signalsPath } from './districtAssets.
  * rather than hidden behind a blank canvas -- a silent black screen during a
  * demo is indistinguishable from a crash.
  */
-export default function PixelScene({ frameRef, mode = 'night', district = 'barcelona' }) {
+export default function PixelScene({ frameRef, mode = 'night', district = 'barcelona',
+                                     liveDistrict = null }) {
   const canvasRef = useRef(null)
   const rendererRef = useRef(null)
-  // The live socket carries Barcelona's network and nothing else. Drawing its
-  // vehicles or its signal lamps over another district's basemap would put
-  // Barcelona's traffic on Tokyo's streets: it would look plausible and be
-  // false. Other districts render as the map alone until they have a network.
-  const hasTraffic = districtHasTraffic(district)
+  // Two separate ways the traffic on the wire can fail to belong to the map on
+  // screen. The first is a district with no network at all. The second is a
+  // server simulating somewhere else entirely -- it now says which city it is
+  // running, and if that disagrees with what is being drawn the vehicles are
+  // dropped rather than scattered over the wrong streets.
+  const mismatched = liveDistrict != null && liveDistrict !== district
+  const hasTraffic = districtHasTraffic(district) && !mismatched
   const [status, setStatus] = useState('loading basemap…')
   const [stats, setStats] = useState(null)
   // The rAF loop closes over its effect scope, so the live mode is read
@@ -91,8 +94,11 @@ export default function PixelScene({ frameRef, mode = 'night', district = 'barce
           r.setView({ x: x0, y: y0, scale })
         }
 
-        setStatus(hasTraffic ? null
-                             : 'map only — no traffic model for this district yet')
+        setStatus(
+          hasTraffic ? null
+            : mismatched
+              ? `map only — the live server is simulating ${liveDistrict}, not this district`
+              : 'map only — no traffic model for this district yet')
 
         const step = () => {
           const f = hasTraffic ? frameRef?.current : null
@@ -144,7 +150,7 @@ export default function PixelScene({ frameRef, mode = 'night', district = 'barce
       alive = false
       if (raf) cancelAnimationFrame(raf)
     }
-  }, [frameRef, district, hasTraffic])
+  }, [frameRef, district, hasTraffic, mismatched, liveDistrict])
 
   // ---- camera: drag to pan, wheel to zoom ------------------------------
   useEffect(() => {

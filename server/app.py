@@ -32,7 +32,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from sim_worker import run_worker
+from sim_worker import DISTRICT, run_worker
 
 # The two AI roles. Both are inert without their key, and the simulation runs
 # its validated rules-based policy in that state, so importing this can never
@@ -218,6 +218,12 @@ class Engine:
         fsnap, veh, sig, cong = foc
 
         header = {
+            # Which city these vehicles belong to. The client draws them over a
+            # basemap it chose independently, and had no way to tell that the
+            # server was simulating somewhere else -- so running the server on
+            # one district while viewing another put real traffic on the wrong
+            # city's streets, which looks entirely plausible and is false.
+            "district": DISTRICT,
             "clock": fsnap["clock"],
             "day": fsnap.get("day", self.day),
             "sim_time": fsnap["metrics"]["sim_time"],
@@ -360,7 +366,8 @@ async def feeds():
         from feeds import feed_status
     except Exception as exc:
         return JSONResponse({"error": f"feeds unavailable: {exc}"}, status_code=500)
-    return {"feeds": feed_status(), "capacity": NETWORK_CAPACITY}
+    return {"feeds": feed_status(), "capacity": NETWORK_CAPACITY,
+            "district": DISTRICT}
 
 
 @app.get("/api/feeds/bcn")
