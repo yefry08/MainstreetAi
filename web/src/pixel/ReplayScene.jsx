@@ -3,6 +3,7 @@ import { createRenderer } from './renderer.js'
 import { loadImage } from './decodeImage.js'
 import { hasTraffic as districtHasTraffic, replayDir, signalsPath, basemapPath }
   from './districtAssets.js'
+import { openingView } from './framing.js'
 import { loadReplay } from './replay.js'
 
 /**
@@ -70,8 +71,7 @@ export default function ReplayScene({ lighting = 'night', district = 'barcelona'
         setMeta(replay ? { ...replay.stats, recordedAt: replay.recordedAt } : null)
         onStats?.(replay ? replay.stats : null)
 
-        // Frame the simulated extent, not the square render: its corners lie
-        // outside the simulation and would show city with no traffic in it.
+        // Open close, on the busiest part of the network. See framing.js.
         const kx = base.lonlat_to_px.kx
         const ky = base.lonlat_to_px.ky
         const toPx = (lon, lat) => {
@@ -79,14 +79,10 @@ export default function ReplayScene({ lighting = 'night', district = 'barcelona'
           return [kx.reduce((s, k, i) => s + k * b[i], 0),
                   ky.reduce((s, k, i) => s + k * b[i], 0)]
         }
-        const ext = base.sim_extent
-        const [x0, y1] = toPx(ext[0], ext[1])
-        const [x1, y0] = toPx(ext[2], ext[3])
         const c = canvasRef.current
         const dpr = Math.min(window.devicePixelRatio || 1, 2)
-        const scale = Math.min((c.clientWidth * dpr) / (x1 - x0),
-                               (c.clientHeight * dpr) / (y1 - y0))
-        r.setView({ x: x0, y: y0, scale })
+        r.setView(openingView(base, signals, c.clientWidth * dpr,
+                              c.clientHeight * dpr, toPx))
 
         setStatus(hasTraffic ? null : 'map only — no traffic model for this district yet')
 

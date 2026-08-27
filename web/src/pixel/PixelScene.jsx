@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createRenderer } from './renderer.js'
 import { loadImage } from './decodeImage.js'
 import { hasTraffic as districtHasTraffic, signalsPath } from './districtAssets.js'
+import { openingView } from './framing.js'
 
 /**
  * Host for the 2D pixel-art scene.
@@ -71,11 +72,9 @@ export default function PixelScene({ frameRef, mode = 'night', district = 'barce
         })
         rendererRef.current = r
 
-        // Open on the simulated extent rather than the whole square render:
-        // the corners of the square are outside the simulation and would show
-        // a city with no traffic in it.
-        const ext = meta.sim_extent
-        if (ext && r.transformOk) {
+        // Open close, on the busiest part of the network. See framing.js --
+        // framing the whole extent put a car at 3 x 5 pixels.
+        if (meta.sim_extent && r.transformOk) {
           const kx = meta.lonlat_to_px.kx
           const ky = meta.lonlat_to_px.ky
           const toPx = (lon, lat) => {
@@ -85,13 +84,10 @@ export default function PixelScene({ frameRef, mode = 'night', district = 'barce
               ky.reduce((s, k, i) => s + k * b[i], 0),
             ]
           }
-          const [x0, y1] = toPx(ext[0], ext[1])
-          const [x1, y0] = toPx(ext[2], ext[3])
-          const cw = canvas.clientWidth || 1200
-          const ch = canvas.clientHeight || 800
           const dpr = Math.min(window.devicePixelRatio || 1, 2)
-          const scale = Math.min((cw * dpr) / (x1 - x0), (ch * dpr) / (y1 - y0))
-          r.setView({ x: x0, y: y0, scale })
+          const dw = (canvas.clientWidth || 1200) * dpr
+          const dh = (canvas.clientHeight || 800) * dpr
+          r.setView(openingView(meta, signals, dw, dh, toPx))
         }
 
         setStatus(
