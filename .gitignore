@@ -68,3 +68,6 @@ web/public/replay/
 
 # Pages build output.
 web/dist-pages/
+
+# Vercel prebuilt output.
+web/dist-vercel/
