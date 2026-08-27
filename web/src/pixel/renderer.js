@@ -29,6 +29,7 @@
 
 import { createTransform, headingToCanvasRadians } from './transform.js'
 import { buildSpriteSheet, frameIndex, spriteKey, KIND } from './sprites.js'
+import { applyTint, glowFor, signalBoostFor } from './lighting.js'
 
 const STRIDE = 6            // lon, lat, angle, kind, speed, turn
 const STOPPED_MS = 0.6      // below this a vehicle reads as halted
@@ -138,10 +139,16 @@ export function createRenderer(canvas, { basemapMeta, basemapImage, signals }) {
 
   let lastDraw = performance.now()
 
-  function draw(nightness = 1) {
+  function draw(mode = 'night') {
+    // Lighting is a composite pass, not a light source: the tint lands between
+    // the basemap and the vehicles so sprites keep their own colours, and the
+    // mode scales the headlight bloom. See lighting.js for why re-lighting the
+    // map itself is not on the table.
+    const nightness = glowFor(mode)
     const { w, h } = resize()
     const s = view.scale
     let drawn = 0
+    let skipped = 0
 
     ctx.imageSmoothingEnabled = false
     ctx.setTransform(1, 0, 0, 1, 0, 0)
@@ -166,6 +173,9 @@ export function createRenderer(canvas, { basemapMeta, basemapImage, signals }) {
         0, 0, w, h,
       )
     }
+
+    // Tint the GROUND only. Everything drawn after this keeps its own colour.
+    applyTint(ctx, mode, w, h)
 
     if (!tf.ok || !veh) {
       // Say so rather than drawing a plausible-looking empty city.
@@ -202,6 +212,21 @@ export function createRenderer(canvas, { basemapMeta, basemapImage, signals }) {
       const speed = veh[o + 4]
       const turn = veh[o + 5]
 
+      // One bad vehicle must not take the whole loop down.
+      //
+      // ctx.drawImage(undefined, ...) THROWS, and the throw happens inside the
+      // requestAnimationFrame callback, so it does not just drop a sprite -- it
+      // stops the loop permanently and the scene freezes with no error visible
+      // on screen. A single NaN reaching frameIndex() is enough to do it:
+      // frames[NaN] is undefined. SUMO already filters vehicles that report
+      // INVALID_DOUBLE_VALUE, so this should never fire; it is here because the
+      // cost of being wrong about that is the entire demo stopping.
+      if (!Number.isFinite(lon) || !Number.isFinite(lat) ||
+          !Number.isFinite(angDeg) || !Number.isFinite(speed)) {
+        skipped++
+        continue
+      }
+
       tf.toPx(lon, lat, px)
 
       // Dead reckoning in PIXEL space. Metres-per-pixel is known and uniform,
@@ -221,6 +246,7 @@ export function createRenderer(canvas, { basemapMeta, basemapImage, signals }) {
       const entry = sheet[key]
       if (!entry) continue
       const f = entry.frames[frameIndex(rad + Math.PI / 2)]
+      if (!f) { skipped++; continue }
       const size = entry.size * spriteScale
       const half = size / 2
       ctx.drawImage(f, sx - half, sy - half, size, size)
@@ -257,7 +283,7 @@ export function createRenderer(canvas, { basemapMeta, basemapImage, signals }) {
 
     // Signals last: they must read on top of traffic, not under it.
     if (sigState && sig.n) {
-      const r = Math.max(1.5, 2.2 * s)
+      const r = Math.max(1.5, 2.2 * s) * signalBoostFor(mode)
       const n = Math.min(sig.n, sigState.length)
       for (let i = 0; i < n; i++) {
         const sx = (sig.x[i] - view.x) * s
@@ -272,6 +298,10 @@ export function createRenderer(canvas, { basemapMeta, basemapImage, signals }) {
     stats = {
       vehicles: vehCount,
       drawn,
+      // Surfaced rather than swallowed: a non-zero value means the wire is
+      // carrying something the renderer could not use, which is worth knowing
+      // before it becomes a visible gap in the traffic.
+      skipped,
       fps: Math.round(1000 / Math.max(1, now - lastDraw)),
     }
     lastDraw = now

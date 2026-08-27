@@ -1,0 +1,527 @@
+/* =========================================================================
+   Page shell: navbar, tabs, full-bleed scene, content pages
+   =========================================================================
+
+   The simulation is the page's background, not a widget inside it. Everything
+   else floats over it, and "Hide panels" takes all of it away so the city can
+   be looked at on its own.
+   ========================================================================= */
+
+.app { position: relative; width: 100%; height: 100%; overflow: hidden; }
+
+.scene-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  transition: opacity var(--t-med) var(--ease-out);
+}
+
+.page-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow-y: auto;
+  /* The scene keeps running behind the content pages; darkening it turns a
+     busy map into a texture instead of a distraction. */
+  background: rgba(7, 9, 13, 0.82);
+  backdrop-filter: blur(8px);
+  padding-top: 58px;
+}
+
+/* ---- navbar ------------------------------------------------------------- */
+
+.nav {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  z-index: 20;
+  height: 52px;
+  background: var(--glass-fill);
+  backdrop-filter: blur(var(--glass-blur));
+  border-bottom: 1px solid var(--glass-edge);
+}
+
+.nav-inner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 100%;
+  padding: 0 var(--space-4);
+}
+
+.nav-brand { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+.nav-mark {
+  width: 9px; height: 9px;
+  border-radius: 2px;
+  background: var(--terracota-500);
+}
+
+.nav-name {
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: -0.01em;
+  color: var(--ink-50);
+}
+
+.nav-tabs { display: flex; gap: 2px; flex: 1; }
+
+.nav-tab {
+  padding: 7px 13px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--ink-400);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--t-fast) var(--ease-out);
+}
+.nav-tab:hover { background: rgba(255, 255, 255, 0.07); color: var(--ink-100); }
+.nav-tab.on { background: rgba(255, 255, 255, 0.1); color: var(--ink-50); }
+
+.nav-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+
+/* ---- lighting toggle ---------------------------------------------------- */
+
+.nav-light {
+  display: flex;
+  gap: 1px;
+  padding: 2px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.light-btn {
+  padding: 5px 11px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: none;
+  color: var(--ink-400);
+  font-family: var(--font-data);
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all var(--t-fast) var(--ease-out);
+}
+.light-btn:hover { color: var(--ink-100); }
+.light-btn.on { background: var(--terracota-500); color: #180d08; font-weight: 600; }
+
+.nav-chrome {
+  padding: 6px 12px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink-300);
+  font-family: var(--font-data);
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.nav-chrome:hover { background: rgba(255, 255, 255, 0.11); color: var(--ink-50); }
+
+/* ---- hamburger ---------------------------------------------------------- */
+
+.nav-burger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 32px; height: 32px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  cursor: pointer;
+}
+.nav-burger span {
+  display: block;
+  height: 1.5px;
+  background: var(--ink-300);
+  border-radius: 1px;
+  transition: all var(--t-fast) var(--ease-out);
+}
+.nav-burger:hover span { background: var(--ink-50); }
+
+/* ---- clean view --------------------------------------------------------- */
+
+/* Everything except the scene goes. The exit button stays, or the only way
+   back would be a keyboard shortcut nobody was told about. */
+.app.bare .nav,
+.app.bare .rail,
+.app.bare .masthead-live { opacity: 0; pointer-events: none; }
+
+.app.bare .nav,
+.app.bare .rail { transition: opacity var(--t-med) var(--ease-out); }
+
+.bare-exit {
+  position: absolute;
+  z-index: 21;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  padding: 8px 14px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-pill);
+  background: var(--glass-fill);
+  backdrop-filter: blur(var(--glass-blur));
+  color: var(--ink-300);
+  font-family: var(--font-data);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity var(--t-fast) var(--ease-out);
+}
+.bare-exit:hover { opacity: 1; color: var(--ink-50); }
+
+/* ---- rail --------------------------------------------------------------- */
+
+.rail {
+  position: absolute;
+  z-index: 6;
+  top: 66px;
+  left: var(--space-4);
+  width: 272px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: calc(100% - 84px);
+  overflow-y: auto;
+  transition: opacity var(--t-med) var(--ease-out);
+}
+
+.masthead-live {
+  position: absolute;
+  z-index: 6;
+  top: 64px;
+  right: var(--space-4);
+  transition: opacity var(--t-med) var(--ease-out);
+}
+
+/* ---- impact panel ------------------------------------------------------- */
+
+.impact { padding: 12px 13px 13px; }
+
+.impact-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.impact-head h2 {
+  margin: 0;
+  font-family: var(--font-data);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+}
+.impact-sub {
+  font-family: var(--font-data);
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+}
+
+.impact-hero { margin-bottom: 12px; cursor: help; }
+.impact-value {
+  font-size: 36px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--terracota-400);
+}
+.impact-unit {
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--ink-400);
+}
+
+.impact-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+}
+.impact-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 10.5px;
+  cursor: help;
+}
+.impact-label { flex: 1; color: var(--ink-300); }
+.impact-num {
+  font-family: var(--font-data);
+  font-size: 10px;
+  color: var(--ink-50);
+}
+.impact-delta {
+  font-family: var(--font-data);
+  font-size: 9.5px;
+  min-width: 46px;
+  text-align: right;
+  color: var(--ink-400);
+}
+.impact-delta.good { color: var(--terracota-400); }
+.impact-delta.bad { color: var(--aturat); }
+
+.impact-note {
+  margin: 11px 0 0;
+  padding-top: 9px;
+  border-top: 1px solid var(--hairline);
+  font-size: 9px;
+  line-height: 1.5;
+  color: var(--ink-400);
+}
+
+/* ---- try your city ------------------------------------------------------ */
+
+.try-page { max-width: 1040px; margin: 0 auto; padding: 34px var(--space-4) 60px; }
+.try-head h1 {
+  margin: 0 0 8px;
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--ink-50);
+}
+.try-head p { margin: 0 0 26px; max-width: 620px; font-size: 12.5px;
+              line-height: 1.6; color: var(--ink-300); }
+
+.try-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.try-card {
+  display: block;
+  padding: 14px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-md);
+  background: var(--glass-fill);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--t-fast) var(--ease-out);
+}
+.try-card:hover:not(:disabled) {
+  border-color: var(--terracota-500);
+  background: rgba(217, 119, 87, 0.09);
+}
+.try-card.on { border-color: var(--terracota-500);
+               background: rgba(217, 119, 87, 0.14); }
+.try-card:disabled { opacity: 0.42; cursor: not-allowed; }
+
+.try-card-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 3px;
+}
+.try-city {
+  font-family: var(--font-data);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+}
+.try-state {
+  font-family: var(--font-data);
+  font-size: 8.5px;
+  letter-spacing: 0.05em;
+  color: var(--ink-500);
+}
+.try-state.ready { color: var(--terracota-400); }
+.try-state.map { color: var(--slate-300); }
+
+.try-name { font-size: 16px; color: var(--ink-50); margin-bottom: 3px; }
+.try-meta { font-family: var(--font-data); font-size: 9px; color: var(--ink-400); }
+.try-why { margin: 9px 0 0; font-size: 10.5px; line-height: 1.55;
+           color: var(--ink-300); }
+
+.try-note, .try-error {
+  margin-top: 22px;
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: var(--ink-400);
+  max-width: 620px;
+}
+.try-error { color: var(--aturat); }
+
+/* ---- contact ------------------------------------------------------------ */
+
+.contact-page { max-width: 1040px; margin: 0 auto; padding: 34px var(--space-4) 60px; }
+.contact-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.contact-bio, .contact-form { padding: 22px; }
+.contact-bio h1 {
+  margin: 0 0 4px;
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--ink-50);
+}
+.contact-role {
+  margin: 0 0 16px;
+  font-family: var(--font-data);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--terracota-400);
+}
+.contact-bio p { margin: 0 0 12px; font-size: 12.5px; line-height: 1.65;
+                 color: var(--ink-300); }
+
+.contact-links {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--hairline);
+}
+.contact-link {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  text-decoration: none;
+  transition: background var(--t-fast) var(--ease-out);
+}
+.contact-link:hover { background: rgba(255, 255, 255, 0.07); }
+.contact-link-label { flex: 1; font-size: 12px; color: var(--ink-50); }
+.contact-link-handle {
+  font-family: var(--font-data);
+  font-size: 10px;
+  color: var(--ink-400);
+}
+
+.contact-form h2 {
+  margin: 0 0 14px;
+  font-family: var(--font-data);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+}
+.contact-field { display: block; margin-bottom: 12px; }
+.contact-field span {
+  display: block;
+  margin-bottom: 5px;
+  font-family: var(--font-data);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+}
+.contact-field input, .contact-field textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink-50);
+  font-family: inherit;
+  font-size: 12px;
+  resize: vertical;
+}
+.contact-field input:focus, .contact-field textarea:focus {
+  outline: none;
+  border-color: var(--terracota-500);
+}
+
+.contact-send {
+  display: block;
+  padding: 10px 0;
+  border-radius: var(--r-sm);
+  background: var(--terracota-500);
+  color: #180d08;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+.contact-send.disabled { opacity: 0.4; pointer-events: none; }
+
+.contact-hint {
+  margin: 10px 0 0;
+  font-size: 9.5px;
+  line-height: 1.55;
+  color: var(--ink-400);
+}
+
+.contact-copy {
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px;
+  border: 1px dashed var(--glass-edge);
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--ink-400);
+  font-family: var(--font-data);
+  font-size: 10px;
+  cursor: pointer;
+}
+.contact-copy:hover { color: var(--ink-50); border-color: var(--ink-500); }
+
+/* ---- responsive --------------------------------------------------------- */
+
+/* Below tablet the tabs become a hamburger sheet. The breakpoint lives here
+   rather than in a JS resize listener so there is one source of truth. */
+@media (max-width: 860px) {
+  .nav-burger { display: flex; }
+
+  .nav-tabs {
+    position: absolute;
+    top: 52px; left: 0; right: 0;
+    flex-direction: column;
+    gap: 0;
+    padding: 6px;
+    background: var(--glass-fill);
+    backdrop-filter: blur(var(--glass-blur));
+    border-bottom: 1px solid var(--glass-edge);
+    display: none;
+  }
+  .nav-tabs.open { display: flex; }
+  .nav-tab { padding: 12px 14px; font-size: 14px; text-align: left; }
+
+  .nav-name { display: none; }
+  .light-btn { padding: 5px 8px; font-size: 9px; }
+  .nav-chrome { display: none; }
+
+  .rail {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    max-height: 46vh;
+    padding: 0 var(--space-3) var(--space-3);
+  }
+  .masthead-live { display: none; }
+
+  .contact-grid { grid-template-columns: 1fr; }
+}
+
+/* The rail's AI switch: the impact panel above it already carries the numbers,
+   so this is only the control and the sentence that stops it being read as a
+   live controller swap. */
+.ai-toggle.compact {
+  position: static;
+  width: auto;
+  top: auto; right: auto;
+}
+.ai-toggle.compact .ai-note { margin-bottom: 0; }

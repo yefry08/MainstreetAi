@@ -136,7 +136,17 @@ def demand_curve(day: str | int = "Friday") -> list:
 # less congested, and that is always the AI twin, so the adaptive controller
 # would be handed extra throughput and the comparison would quietly measure
 # the feedback loop instead of the policy.
-NETWORK_CAPACITY = float(_os.environ.get("MAINSTREET_CAPACITY", "0.79"))
+# Lowered from 0.79 to 0.5 for the demo build.
+#
+# 0.79 was calibrated to maximise the MEASURED advantage, and it does: ~1,400
+# vehicles at the operating point. But it is also where the network is closest
+# to saturating, which is where the long-run drift bites hardest and where a
+# screenshot reads as a wall of sprites rather than as traffic. The brief for
+# the demo is legibility and stability over density, and the AI gain is
+# famously flat across this range -- the calibration sweep measured +16% to
+# +25% from 231 vehicles all the way to 1,859 -- so most of the density buys
+# very little argument.
+NETWORK_CAPACITY = float(_os.environ.get("MAINSTREET_CAPACITY", "0.5"))
 
 # The fairness cap must sit at least this many times above the minimum green,
 # or there is no range for the controller to act within. 1.5 is deliberately

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createRenderer } from './renderer.js'
+import { loadImage } from './decodeImage.js'
 import { loadReplay } from './replay.js'
 
 /**
@@ -14,7 +15,15 @@ import { loadReplay } from './replay.js'
  * PRE-RECORDED twins rather than re-deciding anything, and the page says so
  * rather than letting a viewer assume the AI is thinking while they watch.
  */
-export default function ReplayScene() {
+export default function ReplayScene({ lighting = 'night', district = 'barcelona' }) {
+  // `mode` in this component already means which TWIN is on screen. The
+  // lighting axis is separate and is named separately -- reusing `mode` for
+  // both silently shadowed the twin selector.
+  const lightRef = useRef(lighting)
+  // Only Barcelona has a recording. The other districts are baked basemaps
+  // with no SUMO network behind them yet, so there is nothing truthful to
+  // animate over them.
+  const hasTraffic = district === 'barcelona'
   const canvasRef = useRef(null)
   const rendererRef = useRef(null)
   const replayRef = useRef(null)
@@ -24,6 +33,7 @@ export default function ReplayScene() {
   const [mode, setMode] = useState('ai')
   const [stats, setStats] = useState(null)
   const [meta, setMeta] = useState(null)
+  useEffect(() => { lightRef.current = lighting }, [lighting])
 
   const choose = useCallback((next) => {
     modeRef.current = next
@@ -36,21 +46,15 @@ export default function ReplayScene() {
 
     ;(async () => {
       try {
-        setStatus('loading recording…')
-        const replay = await loadReplay('./replay')
+        setStatus(hasTraffic ? 'loading recording…' : 'loading map…')
+        const replay = hasTraffic ? await loadReplay('./replay') : null
         if (!alive) return
         replayRef.current = replay
 
-        const base = await (await fetch('./data/basemap_barcelona.json')).json()
+        const base = await (await fetch(`./data/basemap_${district}.json`)).json()
         setStatus(`decoding ${base.width_px}×${base.height_px} basemap…`)
-        const img = new Image()
-        img.decoding = 'async'
-        await new Promise((res, rej) => {
-          img.onload = res
-          img.onerror = () => rej(new Error('basemap failed to load'))
-          img.src = `./data/${base.png}`
-        })
-        if (img.decode) { try { await img.decode() } catch { /* older browsers */ } }
+        const { img, decodeTimedOut } = await loadImage(`./data/${base.png}`)
+        if (decodeTimedOut) console.warn('[replay] pre-decode timed out; drawing anyway')
         if (!alive) return
 
         const sigRes = await fetch('./data/signal_approaches.geojson')
@@ -60,7 +64,7 @@ export default function ReplayScene() {
           basemapMeta: base, basemapImage: img, signals,
         })
         rendererRef.current = r
-        setMeta({ ...replay.stats, recordedAt: replay.recordedAt })
+        setMeta(replay ? { ...replay.stats, recordedAt: replay.recordedAt } : null)
 
         // Frame the simulated extent, not the square render: its corners lie
         // outside the simulation and would show city with no traffic in it.
@@ -80,12 +84,12 @@ export default function ReplayScene() {
                                (c.clientHeight * dpr) / (y1 - y0))
         r.setView({ x: x0, y: y0, scale })
 
-        setStatus(null)
+        setStatus(hasTraffic ? null : 'map only — no traffic model for this district yet')
 
         // Play at the rate it was recorded, so motion matches the simulation
         // rather than the display. The renderer dead-reckons between frames,
         // which is what keeps it smooth at 60 Hz from a 4 Hz recording.
-        const period = 1000 / replay.hz
+        const period = 1000 / (replay?.hz || 4)
         let last = performance.now()
         let idx = 0
         let lastStats = 0
@@ -96,14 +100,14 @@ export default function ReplayScene() {
           if (now - last >= period) {
             last = now
             idx += 1
-            const f = replay.frame(modeRef.current, idx)
+            const f = replay?.frame(modeRef.current, idx)
             if (f) r.applyFrame(f)
           }
-          const s = r.draw(1)
+          const s = r.draw(lightRef.current)
           if (now - lastStats > 500) { lastStats = now; setStats(s) }
           raf = requestAnimationFrame(tick)
         }
-        const f0 = replay.frame('ai', 0)
+        const f0 = replay?.frame('ai', 0)
         if (f0) r.applyFrame(f0)
         raf = requestAnimationFrame(tick)
 
@@ -112,9 +116,9 @@ export default function ReplayScene() {
           forceDraw: (n = 1) => {
             let s = null
             for (let i = 0; i < n; i++) {
-              const f = replay.frame(modeRef.current, ++idx)
+              const f = replay?.frame(modeRef.current, ++idx)
               if (f) r.applyFrame(f)
-              s = r.draw(1)
+              s = r.draw(lightRef.current)
             }
             return s
           },
@@ -127,7 +131,7 @@ export default function ReplayScene() {
     })()
 
     return () => { alive = false; if (raf) cancelAnimationFrame(raf) }
-  }, [choose])
+  }, [choose, district, hasTraffic])
 
   // Drag to pan, wheel to zoom.
   useEffect(() => {

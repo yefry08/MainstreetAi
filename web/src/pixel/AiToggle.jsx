@@ -17,7 +17,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 const POLL_MS = 2500
 
-export default function AiToggle({ onFocusChange }) {
+export default function AiToggle({ onFocusChange, compact = false }) {
   const [focus, setFocus] = useState('ai')
   const [twins, setTwins] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -87,7 +87,7 @@ export default function AiToggle({ onFocusChange }) {
   ]
 
   return (
-    <div className="ai-toggle glass">
+    <div className={`ai-toggle glass ${compact ? "compact" : ""}`}>
       <div className="ai-switch" role="group" aria-label="Signal control">
         {['baseline', 'ai'].map((k) => (
           <button
@@ -106,7 +106,7 @@ export default function AiToggle({ onFocusChange }) {
         the map draws.
       </div>
 
-      {twins ? (
+      {twins && !compact ? (
         <div className="ai-stats">
           {rows.map(([label, d, ai, base, unit]) => (
             <div className="ai-row" key={label}>
@@ -128,9 +128,7 @@ export default function AiToggle({ onFocusChange }) {
             </div>
           )}
         </div>
-      ) : (
-        <div className="ai-note">waiting for twin metrics…</div>
-      )}
+      ) : null}
     </div>
   )
 }

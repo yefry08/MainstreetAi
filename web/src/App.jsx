@@ -1,127 +1,121 @@
-import { useCallback, useState } from 'react'
-import Scene from './scene/Scene'
-import Bezel from './ui/Bezel'
-import CameraControls from './ui/CameraControls'
-import Atmosphere from './ui/Atmosphere'
-import ClimatePanel from './ui/ClimatePanel'
+import { useCallback, useEffect, useState } from 'react'
+import Navbar from './ui/Navbar'
+import ImpactPanel from './ui/ImpactPanel'
+import Contact from './ui/Contact'
+import TryCity from './ui/TryCity'
 import LiveCity from './ui/LiveCity'
-import ModeLegend from './ui/ModeLegend'
-import TimeControl from './ui/TimeControl'
 import PixelScene from './pixel/PixelScene'
-import AiToggle from './pixel/AiToggle'
-import CitySelector from './pixel/CitySelector'
 import ReplayScene from './pixel/ReplayScene'
+import AiToggle from './pixel/AiToggle'
 import { useSimSocket } from './data/useSimSocket'
 
 /**
- * The 2D pixel restructure runs behind ?mode=pixel until it has earned the
- * default. Both consume the same WebSocket frames and the same SUMO twins, so
- * this is purely a renderer swap and the two can be compared side by side on
- * the same running simulation rather than from memory.
+ * Single page: a full-bleed simulation with chrome over it, plus two content
+ * tabs.
+ *
+ * TWO RUNTIMES, ONE UI
+ * With a Python server the scene is live over a WebSocket. On a static host
+ * there is no server, so it plays a recording instead. VITE_REPLAY_ONLY is set
+ * at build time for the static bundles; everything above the scene is the same
+ * in both, which is what keeps the deployed page from drifting away from the
+ * one that gets developed.
  */
-const MODE =
-  typeof window !== 'undefined'
-    ? new URLSearchParams(window.location.search).get('mode')
-    : null
-const PIXEL_MODE = MODE === 'pixel'
-
-// Static replay. Built for GitHub Pages, which cannot run the Python server the
-// live app streams from, so VITE_REPLAY_ONLY makes it the default there rather
-// than shipping a page whose traffic layer silently never arrives.
-const REPLAY_MODE =
-  MODE === 'replay' || import.meta.env.VITE_REPLAY_ONLY === '1'
-
-/**
- * Direction prototype: the empty 3D city, a free camera, and the instruments
- * that frame it. No traffic, no simulation, no WebSocket — the point of this
- * pass is to settle how the thing looks and feels to move through.
- */
-const BASEMAP_LABEL = {
-  loading: 'Basemap · loading',
-  ready: 'Barcelona · Signal Twin',
-  fallback: 'Basemap · fallback',
-  offline: 'Basemap · offline',
-}
+const REPLAY_ONLY = import.meta.env?.VITE_REPLAY_ONLY === '1'
 
 export default function App() {
-  const [map, setMap] = useState(null)
-  const [basemap, setBasemap] = useState('loading')
-  const onMapReady = useCallback((m) => setMap(m), [])
-  const onBasemapStatus = useCallback((s) => setBasemap(s), [])
-  const { frameRef, header, status } = useSimSocket({ enabled: !REPLAY_MODE })
+  const [tab, setTab] = useState('home')
+  const [mode, setMode] = useState('night')
+  const [chrome, setChrome] = useState(true)
+  const [district, setDistrict] = useState('barcelona')
+  const [twins, setTwins] = useState(null)
+
+  // Live metrics for the impact panel. Skipped entirely in replay builds --
+  // there is no server to poll, and a retry loop against a 404 would run for
+  // as long as the page is open.
+  useEffect(() => {
+    if (REPLAY_ONLY) return
+    let alive = true
+    let timer = null
+    const poll = async () => {
+      try {
+        const r = await fetch('/api/twins')
+        const d = await r.json()
+        if (alive) setTwins(d)
+      } catch {
+        if (alive) setTwins(null)
+      }
+      if (alive) timer = setTimeout(poll, 2500)
+    }
+    poll()
+    return () => { alive = false; if (timer) clearTimeout(timer) }
+  }, [])
+
+  const { frameRef, header } = useSimSocket({ enabled: !REPLAY_ONLY })
+
+  // Escape leaves the clean view without hunting for the button.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape' && !chrome) setChrome(true)
+      if (e.key.toLowerCase() === 'h' && tab === 'home' &&
+          !/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName ?? '')) {
+        setChrome((v) => !v)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [chrome, tab])
+
+  const onSelectDistrict = useCallback((key) => {
+    setDistrict(key)
+    setTab('home')
+  }, [])
+
+  const showScene = tab === 'home'
 
   return (
-    <div className="app">
-      {REPLAY_MODE ? (
-        <ReplayScene />
-      ) : PIXEL_MODE ? (
+    <div className={`app ${chrome ? '' : 'bare'}`}>
+      {/* The scene stays mounted across tabs. Unmounting it would throw away a
+          decoded 7.5 MB basemap and a warmed socket every time someone looks
+          at the contact page. */}
+      <div className="scene-layer" style={{ opacity: showScene ? 1 : 0,
+                                            pointerEvents: showScene ? 'auto' : 'none' }}>
+        {REPLAY_ONLY
+          ? <ReplayScene lighting={mode} district={district} />
+          : <PixelScene frameRef={frameRef} mode={mode} district={district} />}
+      </div>
+
+      <Navbar
+        tab={tab} onTab={setTab}
+        mode={mode} onMode={setMode}
+        chrome={chrome} onChrome={setChrome}
+      />
+
+      {tab === 'home' && (
         <>
-          <PixelScene frameRef={frameRef} />
-          <CitySelector current="barcelona" />
-          <AiToggle />
-        </>
-      ) : (
-        <>
-          <Scene
-            onMapReady={onMapReady}
-            onBasemapStatus={onBasemapStatus}
-            frameRef={frameRef}
-          />
-          <Atmosphere map={map} />
+          <aside className="rail">
+            <ImpactPanel twins={twins} />
+            <AiToggle compact />
+          </aside>
+          {!REPLAY_ONLY && <div className="masthead-live"><LiveCity /></div>}
+          {!chrome && (
+            <button className="bare-exit" onClick={() => setChrome(true)}>
+              Show panels · Esc
+            </button>
+          )}
         </>
       )}
 
-      <header className="masthead">
-        <div className="wordmark">
-          <span className="wordmark-mark" />
-          <span className="wordmark-name">MainstreetAi</span>
+      {tab === 'city' && (
+        <div className="page-layer">
+          <TryCity current={district} onSelect={onSelectDistrict} />
         </div>
-        <div className="masthead-right">
-          {/* The one live thing on a screen full of simulation — and the one
-              thing a static replay genuinely cannot have, since it polls the
-              server for Barcelona's current congestion. */}
-          {!REPLAY_MODE && <LiveCity />}
-          {header?.weather?.available && (
-            <span
-              className={`wx ${
-                header.weather.condition !== 'clear' ? 'wet' : ''
-              }`}
-              title={`${header.weather.source} — observed ${header.weather.observed_at}`}
-            >
-              <span className="wx-temp">
-                {Math.round(header.weather.temperature_c)}°
-              </span>
-              <span className="wx-label">{header.weather.label}</span>
-            </span>
-          )}
-          {header?.day && <span className="masthead-tag">{header.day}</span>}
-          {header?.clock && (
-            <span className="masthead-clock value">{header.clock}</span>
-          )}
-          <span className="masthead-tag">
-            {REPLAY_MODE
-              ? 'Barcelona · recorded'
-              : status === 'live' ? BASEMAP_LABEL[basemap] : `Simulation · ${status}`}
-          </span>
-          <span className={`masthead-dot ${
-            REPLAY_MODE || status === 'live' ? 'ready'
-              : basemap === 'offline' ? 'offline' : ''
-          }`} />
+      )}
+
+      {tab === 'contact' && (
+        <div className="page-layer">
+          <Contact />
         </div>
-      </header>
-
-      {!REPLAY_MODE && <aside className="rail">
-        <ClimatePanel header={header} />
-        <ModeLegend header={header} />
-        <TimeControl header={header} />
-      </aside>}
-
-      {/* Both read the MapLibre instance for camera state, which the 2D scene
-          does not have. They are hidden rather than adapted: giving them a
-          shim that reports a fake bearing would put wrong numbers on an
-          instrument panel, which is worse than an absent one. */}
-      {!PIXEL_MODE && <CameraControls map={map} />}
-      {!PIXEL_MODE && <Bezel map={map} header={header} />}
+      )}
     </div>
   )
 }

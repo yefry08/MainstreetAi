@@ -49,6 +49,41 @@ import matplotlib.pyplot as plt  # noqa: E402
 import prettymaps  # noqa: E402
 from pyproj import Transformer  # noqa: E402
 
+
+def _tolerate_missing_highway() -> None:
+    """Let a street layer with no ``highway`` column render anyway.
+
+    prettymaps sizes each street by its OSM ``highway`` value, looking the
+    class up in a width dict. When the fetched street GeoDataFrame comes back
+    without that column at all, the lookup raises ``KeyError: 'highway'`` and
+    the whole basemap fails -- which is how Buenos Aires died while the five
+    other districts baked cleanly.
+
+    A missing column is not a missing city, so this fills it in with a neutral
+    class and carries on rather than losing the district. If the frame is also
+    empty then there genuinely is nothing to draw, and that is worth saying out
+    loud instead of silently shipping a map with no streets on it.
+    """
+    from prettymaps import draw as _draw
+
+    inner = _draw.graph_to_shapely
+
+    def patched(gdf, width=1.0, **kw):
+        if "highway" not in getattr(gdf, "columns", ()):
+            if len(gdf) == 0:
+                print("[warn] street layer is EMPTY -- basemap will have no roads")
+            else:
+                print(f"[warn] street layer has no 'highway' column "
+                      f"({len(gdf)} rows); using a uniform width")
+                gdf = gdf.copy()
+                gdf["highway"] = "unclassified"
+        return inner(gdf, width, **kw)
+
+    _draw.graph_to_shapely = patched
+
+
+_tolerate_missing_highway()
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 DATA = ROOT / "web" / "public" / "data"
@@ -115,6 +150,45 @@ def fit_lonlat_to_px(crs: str, xlim, ylim, px_w: int, px_h: int,
         "max_error_px": round(float(err.max()), 4),
         "fitted_over": [W, S, E, N],
     }
+
+
+def detect_crs(clon: float, clat: float, xlim, ylim) -> str:
+    """
+    Which projection are the axes in?
+
+    osmnx projects into the LOCAL UTM zone, so this is a property of each
+    render and changes from district to district. The zone is derived from
+    longitude rather than guessed from a list: an earlier version hardcoded the
+    European zones and every district outside Europe failed with a 14,000 km
+    residual -- Tokyo is zone 54, Manhattan 18, San Francisco 10, Buenos Aires
+    21 south.
+
+    Returns the EPSG code, or one annotated with its residual if nothing fits,
+    so a caller can refuse rather than write a transform that is quietly wrong.
+    """
+    cx, cy = (xlim[0] + xlim[1]) / 2, (ylim[0] + ylim[1]) / 2
+    zone = int((clon + 180.0) // 6) + 1
+    north = clat >= 0
+    base = 32600 if north else 32700
+    other = 32700 if north else 32600
+    cands = [
+        f"EPSG:{base + zone}",
+        f"EPSG:{base + max(1, zone - 1)}",
+        f"EPSG:{base + min(60, zone + 1)}",
+        f"EPSG:{other + zone}",
+        "EPSG:3857",
+    ]
+    best, best_err = None, float("inf")
+    for cand in cands:
+        try:
+            tx = Transformer.from_crs("EPSG:4326", cand, always_xy=True)
+            x, y = tx.transform(clon, clat)
+        except Exception:
+            continue
+        err = abs(x - cx) + abs(y - cy)
+        if err < best_err:
+            best, best_err = cand, err
+    return best if best_err < 1.0 else f"{best}?err={best_err:.1f}m"
 
 
 def sim_extent() -> tuple[float, float, float, float]:
@@ -200,20 +274,8 @@ def render(query, radius: float, preset: str, px_per_m: float,
     # be silently wrong rather than loudly wrong.
     crs = "unknown"
     if centre_lonlat is not None:
-        cx, cy = (xlim[0] + xlim[1]) / 2, (ylim[0] + ylim[1]) / 2
         clon, clat = centre_lonlat
-        best, best_err = None, float("inf")
-        for cand in ("EPSG:32629", "EPSG:32630", "EPSG:32631", "EPSG:32632",
-                     "EPSG:32633", "EPSG:3857"):
-            try:
-                tx = Transformer.from_crs("EPSG:4326", cand, always_xy=True)
-                x, y = tx.transform(clon, clat)
-            except Exception:
-                continue
-            err = abs(x - cx) + abs(y - cy)
-            if err < best_err:
-                best, best_err = cand, err
-        crs = best if best_err < 1.0 else f"{best}?err={best_err:.1f}m"
+        crs = detect_crs(clon, clat, xlim, ylim)
 
     meta = {
         "png": out_png.name,
@@ -237,7 +299,13 @@ def render(query, radius: float, preset: str, px_per_m: float,
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--place", type=str, default=None,
-                    help="city name; default is the simulated extent")
+                    help="place name; default is the simulated extent")
+    ap.add_argument("--centre", type=str, default=None,
+                    help="lat,lon for a point render (districts)")
+    ap.add_argument("--fit-bbox", type=str, default=None,
+                    help="S,W,N,E the transform is fitted over; required with "
+                         "--centre or the sidecar has no lonlat_to_px and the "
+                         "renderer refuses to draw")
     ap.add_argument("--radius", type=float, default=None,
                     help="metres; smaller renders are far faster")
     ap.add_argument("--preset", type=str, default="barcelona")
@@ -261,6 +329,14 @@ def main() -> None:
         meta = json.loads(out_json.read_text(encoding="utf-8"))
         ext = tuple(meta.get("sim_extent") or sim_extent())
         meta["sim_extent"] = list(ext)
+        # Re-detect rather than trusting the stored CRS: a sidecar written
+        # before the zone fix carries a value like "EPSG:32629?err=14607630.9m",
+        # and feeding that to pyproj raises rather than silently misprojecting.
+        W, S, E, N = ext
+        meta["crs"] = detect_crs((W + E) / 2, (S + N) / 2,
+                                 meta["xlim"], meta["ylim"])
+        if "err=" in meta["crs"]:
+            raise SystemExit(f"[abort] CRS not identified: {meta['crs']}")
         meta["lonlat_to_px"] = fit_lonlat_to_px(
             meta["crs"], meta["xlim"], meta["ylim"],
             meta["width_px"], meta["height_px"], ext)
@@ -270,7 +346,20 @@ def main() -> None:
         return
 
     centre = None
-    if args.place:
+    fit_ext = None
+    if args.centre:
+        # A district: an explicit point plus the box the transform is fitted
+        # over. prettymaps wants (lat, lon); passing "lat,lon" as a STRING
+        # sends it to the geocoder, which fails on a coordinate pair.
+        lat_s, lon_s = args.centre.split(",")
+        centre = (float(lon_s), float(lat_s))
+        query = (float(lat_s), float(lon_s))
+        radius = args.radius or 1200
+        if not args.fit_bbox:
+            raise SystemExit("[abort] --centre requires --fit-bbox S,W,N,E")
+        S, W, N, E = (float(v) for v in args.fit_bbox.split(","))
+        fit_ext = (W, S, E, N)
+    elif args.place:
         query = args.place
         radius = args.radius or 2000
     else:
@@ -298,7 +387,7 @@ def main() -> None:
     meta = render(query, radius, args.preset, args.px_per_m, out_png, out_json,
                   centre_lonlat=centre)
     if centre:
-        ext = sim_extent()
+        ext = fit_ext if fit_ext is not None else sim_extent()
         meta["sim_extent"] = list(ext)
         if meta["crs"].startswith("EPSG:") and "err=" not in meta["crs"]:
             meta["lonlat_to_px"] = fit_lonlat_to_px(

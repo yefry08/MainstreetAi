@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createRenderer } from './renderer.js'
+import { loadImage } from './decodeImage.js'
 
 /**
  * Host for the 2D pixel-art scene.
@@ -14,11 +15,21 @@ import { createRenderer } from './renderer.js'
  * rather than hidden behind a blank canvas -- a silent black screen during a
  * demo is indistinguishable from a crash.
  */
-export default function PixelScene({ frameRef }) {
+export default function PixelScene({ frameRef, mode = 'night', district = 'barcelona' }) {
   const canvasRef = useRef(null)
   const rendererRef = useRef(null)
+  // The live socket carries Barcelona's network and nothing else. Drawing its
+  // vehicles or its signal lamps over another district's basemap would put
+  // Barcelona's traffic on Tokyo's streets: it would look plausible and be
+  // false. Other districts render as the map alone until they have a network.
+  const hasTraffic = district === 'barcelona'
   const [status, setStatus] = useState('loading basemap…')
   const [stats, setStats] = useState(null)
+  // The rAF loop closes over its effect scope, so the live mode is read
+  // through a ref -- putting `mode` in the dependency list would tear the
+  // renderer down and re-decode the basemap on every lighting change.
+  const modeRef = useRef(mode)
+  useEffect(() => { modeRef.current = mode }, [mode])
 
   useEffect(() => {
     let alive = true
@@ -27,8 +38,9 @@ export default function PixelScene({ frameRef }) {
     const load = async () => {
       try {
         const [metaRes, sigRes] = await Promise.all([
-          fetch('/data/basemap_barcelona.json'),
-          fetch('/data/signal_approaches.geojson'),
+          fetch(`/data/basemap_${district}.json`),
+          hasTraffic ? fetch('/data/signal_approaches.geojson')
+                     : Promise.resolve({ ok: false }),
         ])
         if (!metaRes.ok) throw new Error(`basemap sidecar ${metaRes.status}`)
         const meta = await metaRes.json()
@@ -40,14 +52,10 @@ export default function PixelScene({ frameRef }) {
         }
 
         setStatus(`decoding ${meta.width_px}×${meta.height_px} basemap…`)
-        const img = new Image()
-        img.decoding = 'async'
-        await new Promise((res, rej) => {
-          img.onload = res
-          img.onerror = () => rej(new Error(`could not load ${meta.png}`))
-          img.src = `/data/${meta.png}`
-        })
-        if (img.decode) { try { await img.decode() } catch { /* older browsers */ } }
+        const { img, decodeTimedOut } = await loadImage(`/data/${meta.png}`)
+        if (decodeTimedOut) {
+          console.warn('[pixel] pre-decode timed out; drawing anyway')
+        }
         if (!alive) return
 
         const canvas = canvasRef.current
@@ -82,12 +90,13 @@ export default function PixelScene({ frameRef }) {
           r.setView({ x: x0, y: y0, scale })
         }
 
-        setStatus(null)
+        setStatus(hasTraffic ? null
+                             : 'map only — no traffic model for this district yet')
 
         const step = () => {
-          const f = frameRef?.current
+          const f = hasTraffic ? frameRef?.current : null
           if (f) r.applyFrame(f)
-          return r.draw(1)
+          return r.draw(modeRef.current)
         }
 
         const tick = () => {
@@ -134,7 +143,7 @@ export default function PixelScene({ frameRef }) {
       alive = false
       if (raf) cancelAnimationFrame(raf)
     }
-  }, [frameRef])
+  }, [frameRef, district, hasTraffic])
 
   // ---- camera: drag to pan, wheel to zoom ------------------------------
   useEffect(() => {
