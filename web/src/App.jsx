@@ -28,6 +28,7 @@ export default function App() {
   const [chrome, setChrome] = useState(true)
   const [district, setDistrict] = useState('barcelona')
   const [twins, setTwins] = useState(null)
+  const [twin, setTwin] = useState('ai')
 
   // Live metrics for the impact panel. Skipped entirely in replay builds --
   // there is no server to poll, and a retry loop against a 404 would run for
@@ -65,6 +66,22 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [chrome, tab])
 
+  // The tab title said "Barcelona" whatever district was on screen, which is
+  // the one label a viewer sees without looking at the page at all.
+  useEffect(() => {
+    let alive = true
+    const base = import.meta.env?.VITE_REPLAY_ONLY === '1' ? './' : '/'
+    fetch(`${base}districts.json`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive) return
+        const hit = d.districts?.find((x) => x.key === district)
+        document.title = hit ? `MainstreetAi · ${hit.label}` : 'MainstreetAi'
+      })
+      .catch(() => { /* the title is not worth failing the page over */ })
+    return () => { alive = false }
+  }, [district])
+
   const onSelectDistrict = useCallback((key) => {
     setDistrict(key)
     setTab('home')
@@ -80,7 +97,8 @@ export default function App() {
       <div className="scene-layer" style={{ opacity: showScene ? 1 : 0,
                                             pointerEvents: showScene ? 'auto' : 'none' }}>
         {REPLAY_ONLY
-          ? <ReplayScene lighting={mode} district={district} />
+          ? <ReplayScene lighting={mode} district={district} twin={twin}
+                          onStats={setTwins} />
           : <PixelScene frameRef={frameRef} mode={mode} district={district} />}
       </div>
 
@@ -94,7 +112,7 @@ export default function App() {
         <>
           <aside className="rail">
             <ImpactPanel twins={twins} />
-            <AiToggle compact />
+            <AiToggle compact onFocusChange={setTwin} />
           </aside>
           {!REPLAY_ONLY && <div className="masthead-live"><LiveCity /></div>}
           {!chrome && (

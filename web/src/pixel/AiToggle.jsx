@@ -17,6 +17,12 @@ import { useCallback, useEffect, useState } from 'react'
 
 const POLL_MS = 2500
 
+// On a static host there is no Python server behind these calls. Without this
+// the panel retried /api/twins every 2.5s for as long as the page stayed open,
+// and the twin switch POSTed to a /api/control that answers 404 -- so the one
+// control the whole demo turns on quietly did nothing once deployed.
+const REPLAY_ONLY = import.meta.env?.VITE_REPLAY_ONLY === '1'
+
 export default function AiToggle({ onFocusChange, compact = false }) {
   const [focus, setFocus] = useState('ai')
   const [twins, setTwins] = useState(null)
@@ -36,6 +42,7 @@ export default function AiToggle({ onFocusChange, compact = false }) {
   }, [])
 
   useEffect(() => {
+    if (REPLAY_ONLY) return
     let alive = true
     let timer = null
     const poll = async () => {
@@ -54,9 +61,12 @@ export default function AiToggle({ onFocusChange, compact = false }) {
 
   const choose = async (next) => {
     if (busy || next === focus) return
-    setBusy(true)
     setFocus(next)
     onFocusChange?.(next)
+    // Replay swaps which recording is drawn, locally and instantly. There is
+    // no request to wait on, so there is nothing to disable the buttons for.
+    if (REPLAY_ONLY) return
+    setBusy(true)
     await post({ action: 'focus', value: next })
     // Speed is a REQUEST, not a guarantee. The server paces itself to the
     // simulation it can actually compute, and at high density SUMO already
@@ -102,8 +112,9 @@ export default function AiToggle({ onFocusChange, compact = false }) {
       </div>
 
       <div className="ai-note">
-        Both twins run continuously on identical demand. This switches which one
-        the map draws.
+        {REPLAY_ONLY
+          ? 'Two pre-recorded twins on identical demand. This switches which recording plays; nothing is being decided live.'
+          : 'Both twins run continuously on identical demand. This switches which one the map draws.'}
       </div>
 
       {twins && !compact ? (

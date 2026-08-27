@@ -68,6 +68,11 @@ web/public/replay/
 
 # Pages build output.
 web/dist-pages/
+# The deploy builds write to the REPO ROOT, because vite's --outDir is relative
+# to web/. Only the web/-prefixed paths were ignored, so a 24 MB build output
+# landed in a source commit.
+/dist-pages/
+/dist-vercel/
 
 # Vercel prebuilt output.
 web/dist-vercel/

@@ -15,7 +15,7 @@ import { loadReplay } from './replay.js'
  * PRE-RECORDED twins rather than re-deciding anything, and the page says so
  * rather than letting a viewer assume the AI is thinking while they watch.
  */
-export default function ReplayScene({ lighting = 'night', district = 'barcelona' }) {
+export default function ReplayScene({ lighting = 'night', district = 'barcelona', twin = 'ai', onStats }) {
   // `mode` in this component already means which TWIN is on screen. The
   // lighting axis is separate and is named separately -- reusing `mode` for
   // both silently shadowed the twin selector.
@@ -27,18 +27,18 @@ export default function ReplayScene({ lighting = 'night', district = 'barcelona'
   const canvasRef = useRef(null)
   const rendererRef = useRef(null)
   const replayRef = useRef(null)
-  const modeRef = useRef('ai')
+  const modeRef = useRef(twin)
 
   const [status, setStatus] = useState('loading recording…')
-  const [mode, setMode] = useState('ai')
   const [stats, setStats] = useState(null)
   const [meta, setMeta] = useState(null)
   useEffect(() => { lightRef.current = lighting }, [lighting])
 
-  const choose = useCallback((next) => {
-    modeRef.current = next
-    setMode(next)
-  }, [])
+  // The sidebar switch owns this now, so the scene follows the prop rather
+  // than holding a second copy of the same state that could disagree with it.
+  useEffect(() => { modeRef.current = twin }, [twin])
+
+  const choose = useCallback((next) => { modeRef.current = next }, [])
 
   useEffect(() => {
     let alive = true
@@ -65,6 +65,7 @@ export default function ReplayScene({ lighting = 'night', district = 'barcelona'
         })
         rendererRef.current = r
         setMeta(replay ? { ...replay.stats, recordedAt: replay.recordedAt } : null)
+        onStats?.(replay ? replay.stats : null)
 
         // Frame the simulated extent, not the square render: its corners lie
         // outside the simulation and would show city with no traffic in it.
@@ -131,7 +132,7 @@ export default function ReplayScene({ lighting = 'night', district = 'barcelona'
     })()
 
     return () => { alive = false; if (raf) cancelAnimationFrame(raf) }
-  }, [choose, district, hasTraffic])
+  }, [choose, district, hasTraffic, onStats])
 
   // Drag to pan, wheel to zoom.
   useEffect(() => {
@@ -174,19 +175,6 @@ export default function ReplayScene({ lighting = 'night', district = 'barcelona'
     }
   }, [])
 
-  const pct = (a, b, up) => {
-    if (a == null || b == null || !b) return null
-    const d = ((a - b) / Math.abs(b)) * 100
-    return { d, good: up ? d > 0 : d < 0 }
-  }
-  const A = meta?.ai
-  const B = meta?.baseline
-  const rows = [
-    ['Network speed', pct(A?.avg_speed_kmh, B?.avg_speed_kmh, true), B?.avg_speed_kmh, A?.avg_speed_kmh],
-    ['Bus speed', pct(A?.bus_avg_speed_kmh, B?.bus_avg_speed_kmh, true), B?.bus_avg_speed_kmh, A?.bus_avg_speed_kmh],
-    ['Time lost stopped', pct(A?.stopped_veh_hours, B?.stopped_veh_hours, false), B?.stopped_veh_hours, A?.stopped_veh_hours],
-  ]
-
   return (
     <div className="pixel-scene">
       <canvas ref={canvasRef} className="pixel-canvas" />
@@ -195,38 +183,15 @@ export default function ReplayScene({ lighting = 'night', district = 'barcelona'
         <div className="pixel-stats">{stats.drawn}/{stats.vehicles} veh · {stats.fps} fps</div>
       )}
 
-      <div className="ai-toggle glass">
-        <div className="ai-switch">
-          {['baseline', 'ai'].map((k) => (
-            <button key={k} className={`ai-btn ${mode === k ? 'on' : ''}`}
-                    onClick={() => choose(k)}>
-              {k === 'ai' ? 'AI-adaptive' : 'Fixed-time'}
-            </button>
-          ))}
-        </div>
-        <div className="ai-note">
-          <b>Recording, not live.</b> Both twins were run on identical demand and
-          captured; this switches between the two recordings. The live version
-          needs a Python server running SUMO, which static hosting cannot do.
-        </div>
-        {meta && (
-          <div className="ai-stats">
-            {rows.map(([label, d, b, a]) => (
-              <div className="ai-row" key={label}>
-                <span className="ai-label">{label}</span>
-                <span className="ai-pair">
-                  <b className="base">{b == null ? '–' : b.toFixed(1)}</b>
-                  <i>→</i>
-                  <b className="ai">{a == null ? '–' : a.toFixed(1)}</b>
-                </span>
-                <span className={`ai-delta ${d ? (d.good ? 'good' : 'bad') : ''}`}>
-                  {d ? `${d.d > 0 ? '+' : ''}${d.d.toFixed(1)}%` : '–'}
-                </span>
-              </div>
-            ))}
-            <div className="ai-drift">recorded {meta.recordedAt}</div>
-          </div>
-        )}
+      {/* The twin switch and the numbers moved to the sidebar. Two switches
+          for one piece of state can disagree with each other, and the second
+          copy of the stats had nothing the first did not. What stays is the
+          disclosure, because it has to be next to the thing it qualifies. */}
+      <div className="replay-note glass">
+        <b>Recording, not live.</b> Both twins were run on identical demand and
+        captured; the switch changes which recording plays. The live version
+        needs a Python server running SUMO, which static hosting cannot do.
+        {meta?.recordedAt ? ` Recorded ${meta.recordedAt}.` : ''}
       </div>
     </div>
   )

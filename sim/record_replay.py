@@ -192,9 +192,14 @@ async def main() -> None:
         "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         # The comparison the page quotes, taken at record time so the replay
         # cannot drift from the numbers printed beside it.
+        # co2_kg and p95_wait_s are here because the deployed impact panel
+        # quotes them. Leaving them out meant two of its four figures rendered
+        # as an em dash on the static build while looking fine locally, where
+        # the live API supplies them.
         "stats": {m: {k: twins[m].get(k) for k in
                       ("avg_speed_kmh", "bus_avg_speed_kmh",
-                       "stopped_veh_hours", "completed", "sim_time")}
+                       "stopped_veh_hours", "completed", "sim_time",
+                       "co2_kg", "p95_wait_s")}
                   for m in ("ai", "baseline") if m in twins},
     }
     (OUT / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")

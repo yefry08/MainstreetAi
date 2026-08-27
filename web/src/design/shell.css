@@ -525,3 +525,34 @@
   top: auto; right: auto;
 }
 .ai-toggle.compact .ai-note { margin-bottom: 0; }
+
+/* The replay disclosure, which sits over the scene rather than in the rail.
+   It has to stay next to the picture it qualifies: a viewer who reads "AI"
+   under a moving map and finds the caveat two panels away has already drawn
+   the wrong conclusion. */
+.replay-note {
+  position: absolute;
+  left: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 3;
+  max-width: 34ch;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--r-md);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-100);
+}
+
+.replay-note b { color: var(--ink-50); }
+
+@media (max-width: 860px) {
+  /* On a phone the note would cover most of the map, so it yields the corner
+     and shrinks rather than overlaying the thing it is describing. */
+  .replay-note {
+    left: var(--space-3);
+    right: var(--space-3);
+    bottom: var(--space-3);
+    max-width: none;
+    font-size: 11px;
+  }
+}
