@@ -13,6 +13,7 @@ import PixelScene from './pixel/PixelScene'
 import ReplayScene from './pixel/ReplayScene'
 import AiToggle from './pixel/AiToggle'
 import { useSimSocket } from './data/useSimSocket'
+import { useReplayFrames } from './data/useReplayFrames'
 
 /**
  * Two renderers, two jobs.
@@ -58,7 +59,14 @@ export default function App() {
   const onMapReady = useCallback((m) => setMap(m), [])
   const onBasemapStatus = useCallback((s) => setBasemap(s), [])
 
-  const { frameRef, header, status } = useSimSocket({ enabled: !REPLAY_ONLY })
+  const { frameRef: liveRef, header, status } = useSimSocket({ enabled: !REPLAY_ONLY })
+
+  // On a static host the 3D hero has no socket to draw from. The Barcelona
+  // recording is in the identical frame shape, so it drives the same ref and
+  // the scene never learns the difference.
+  const { frameRef: recordedRef, meta: recordedMeta } =
+    useReplayFrames({ enabled: REPLAY_ONLY, district: 'barcelona', twin })
+  const frameRef = REPLAY_ONLY ? recordedRef : liveRef
 
   // Live metrics for the impact panel. Skipped in replay builds -- there is no
   // server to poll, and a retry loop against a 404 would run for as long as the
@@ -175,7 +183,7 @@ export default function App() {
       {isHome && (
         <>
           <aside className="rail">
-            <ImpactPanel twins={twins} />
+            <ImpactPanel twins={REPLAY_ONLY ? recordedMeta?.stats : twins} />
             <AiToggle compact onFocusChange={setTwin} />
           </aside>
           {!REPLAY_ONLY && (
