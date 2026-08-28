@@ -30,13 +30,23 @@ export const ROTATIONS = 32
 // Palette. Warm body colours read against the prettymaps cream streets; the
 // bus is deliberately the most saturated thing on the map because the whole
 // transit-priority argument is about buses being visible.
+//
+// Each vehicle now carries four tones rather than two: a lit roof, the body,
+// a shaded flank, and glass. Three-value shading is what separates pixel art
+// from coloured rectangles -- with a single flat fill the silhouette is the
+// only information in the sprite, and at these sizes the silhouette alone is
+// not enough to tell a hatchback from a van.
 const PALETTE = {
-  car: { body: '#d9d2c5', trim: '#8a8272', glass: '#3d4a57' },
-  bus: { body: '#d97757', trim: '#a8563a', glass: '#2f3a45' },
-  bike: { body: '#4fd8e8', trim: '#2f9aa8', glass: '#2f3a45' },
-  truck: { body: '#8a94a6', trim: '#5d6675', glass: '#2f3a45' },
-  moto: { body: '#f0c14b', trim: '#b08a2e', glass: '#2f3a45' },
+  car:   { lit: '#f2ece1', body: '#d9d2c5', shade: '#a89f8e', trim: '#6f6759', glass: '#39434f' },
+  bus:   { lit: '#f09a72', body: '#d97757', shade: '#a8563a', trim: '#7d3f2a', glass: '#2f3a45' },
+  bike:  { lit: '#8ae8f2', body: '#4fd8e8', shade: '#2f9aa8', trim: '#1f6b76', glass: '#2f3a45' },
+  truck: { lit: '#aab3c2', body: '#8a94a6', shade: '#5d6675', trim: '#414957', glass: '#2f3a45' },
+  moto:  { lit: '#ffd97a', body: '#f0c14b', shade: '#b08a2e', trim: '#7d611f', glass: '#2f3a45' },
   stopped: '#f0454f',
+  // Brake lights read at a glance where a body-colour change does not: a
+  // stopped queue becomes a line of red points rather than a subtly different
+  // shade of the same traffic.
+  brake: '#ff5a4f',
   // A diorama reads as a diorama because things sit ON something. This is the
   // contact shadow that puts each vehicle on the road surface instead of
   // floating above it. Kept translucent so overlapping traffic in a queue does
@@ -45,28 +55,66 @@ const PALETTE = {
 }
 
 /**
- * Body plans in sprite pixels, drawn nose-UP (heading 0 = north).
+ * Body plans in art pixels, drawn nose-UP (heading 0 = north).
  * Each entry: [x, y, w, h, colourKey].
+ *
+ * PROPORTIONS ARE REAL, AND THAT IS THE POINT
+ * Every plan is laid out at ART_PX_PER_M, so a sprite's shape is its vehicle's
+ * actual footprint rather than whatever looked right in isolation. The old car
+ * was 6 x 10 -- an aspect of 0.60 against a real car's 1.8 m / 4.5 m = 0.40 --
+ * so once sprites were sized correctly by LENGTH they still came out half again
+ * too wide and sat across the lane markings. Deriving both axes from metres
+ * makes that class of mistake impossible rather than merely fixed.
+ *
+ *   car    1.8 x 4.5 m      bus   2.55 x 12 m
+ *   truck  2.4 x 7.5 m      bike  0.6 x 1.8 m      moto  0.8 x 2.1 m
  */
+export const ART_PX_PER_M = 10 / 4.5   // a 4.5 m car is 10 art px long
+
 const PLANS = {
-  car: { w: 6, h: 10, parts: [
-    [1, 0, 4, 10, 'body'], [0, 2, 6, 6, 'body'],
-    [1, 2, 4, 3, 'glass'], [1, 7, 4, 2, 'trim'],
+  // 4 x 10. Roof lit, flanks shaded, glass front and rear, brake bar at the
+  // tail -- the smallest set of parts that still reads as a specific car.
+  car: { w: 4, h: 10, parts: [
+    [0, 1, 4, 8, 'shade'],      // body sides
+    [1, 0, 2, 10, 'body'],      // centre spine, slightly proud of the flanks
+    [1, 1, 2, 2, 'glass'],      // windscreen
+    [1, 4, 2, 3, 'lit'],        // roof catching the light
+    [1, 8, 2, 1, 'glass'],      // rear window
+    [0, 9, 4, 1, 'brake'],      // tail lights
   ] },
-  bus: { w: 7, h: 20, parts: [
-    [0, 0, 7, 20, 'body'],
-    [1, 2, 5, 4, 'glass'], [1, 8, 5, 3, 'glass'], [1, 13, 5, 3, 'glass'],
-    [0, 18, 7, 2, 'trim'],
+  // 6 x 27. A bus is genuinely enormous next to a car and should look it --
+  // that contrast is the transit-priority argument made visually.
+  bus: { w: 6, h: 27, parts: [
+    [0, 0, 6, 27, 'shade'],
+    [1, 0, 4, 27, 'body'],
+    [1, 1, 4, 3, 'glass'],      // windscreen
+    [1, 6, 4, 4, 'glass'],      // window bays
+    [1, 12, 4, 4, 'glass'],
+    [1, 18, 4, 4, 'glass'],
+    [1, 5, 4, 1, 'lit'],        // roof ribs
+    [1, 17, 4, 1, 'lit'],
+    [0, 26, 6, 1, 'brake'],
   ] },
-  bike: { w: 3, h: 6, parts: [
-    [1, 0, 1, 6, 'body'], [0, 2, 3, 2, 'body'],
+  // 5 x 17. Cab and box, which is the silhouette that says "delivery" at a
+  // glance and is most of why vans read differently from cars in traffic.
+  truck: { w: 5, h: 17, parts: [
+    [0, 0, 5, 17, 'shade'],
+    [1, 0, 3, 5, 'body'],       // cab
+    [1, 1, 3, 2, 'glass'],
+    [0, 5, 5, 11, 'trim'],      // box body, deliberately duller than the cab
+    [1, 6, 3, 9, 'lit'],        // box roof
+    [0, 16, 5, 1, 'brake'],
   ] },
-  truck: { w: 7, h: 16, parts: [
-    [0, 0, 7, 5, 'body'], [1, 1, 5, 2, 'glass'],
-    [0, 5, 7, 11, 'trim'],
+  // 2 x 4 and 2 x 5. At this size a rider is two pixels; the useful signal is
+  // the bright body colour, not any internal detail.
+  bike: { w: 2, h: 4, parts: [
+    [0, 0, 2, 4, 'body'],
+    [0, 1, 2, 1, 'lit'],
   ] },
-  moto: { w: 3, h: 7, parts: [
-    [1, 0, 1, 7, 'body'], [0, 3, 3, 2, 'body'],
+  moto: { w: 2, h: 5, parts: [
+    [0, 0, 2, 5, 'body'],
+    [0, 1, 2, 1, 'lit'],
+    [0, 4, 2, 1, 'brake'],
   ] },
 }
 
@@ -91,7 +139,17 @@ function drawPlan(ctx, name, scale, stopped, shadowOnly = false) {
     // A stopped vehicle recolours only its BODY. Recolouring the glass too
     // turned the sprite into a solid red lozenge at small sizes, which read as
     // a different vehicle type rather than as the same one halted.
-    ctx.fillStyle = stopped && key === 'body' ? PALETTE.stopped : pal[key]
+    //
+    // Shared colours (brake) live at the top of PALETTE, not per vehicle, so
+    // the lookup falls through to it. Without that fallback fillStyle is set
+    // to undefined, which canvas ignores -- it silently keeps the PREVIOUS
+    // colour, so the part is drawn in whatever the last rectangle used and
+    // nothing reports an error.
+    const colour = stopped && key === 'body'
+      ? PALETTE.stopped
+      : pal[key] ?? PALETTE[key]
+    if (!colour) continue
+    ctx.fillStyle = colour
     ctx.fillRect(x * scale, y * scale, w * scale, h * scale)
   }
 }

@@ -83,6 +83,30 @@ const OFFLINE_STYLE = {
 // draws is expressed in metres from here — see three/geo.js for why.
 const ORIGIN = [2.1662, 41.3925]
 
+/**
+ * Features that can actually be drawn.
+ *
+ * The lamps were built with `gj.features.map(f => f.geometry.coordinates)`,
+ * which throws on the first feature with a null geometry or missing
+ * properties. That throw is caught, so nothing appears in the console -- and
+ * the catch discards the ENTIRE result. One malformed feature out of 3,230
+ * silently costs every traffic light in the city.
+ *
+ * A bad feature should cost one lamp.
+ */
+function usableFeatures(gj) {
+  const feats = Array.isArray(gj?.features) ? gj.features : []
+  const ok = feats.filter((f) => {
+    const c = f?.geometry?.coordinates
+    return Array.isArray(c) && c.length >= 2 &&
+           Number.isFinite(c[0]) && Number.isFinite(c[1]) && f.properties
+  })
+  if (ok.length !== feats.length) {
+    console.warn(`[signals] skipped ${feats.length - ok.length} unusable of ${feats.length}`)
+  }
+  return ok
+}
+
 export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
@@ -254,7 +278,7 @@ export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
               // the same fallback, so the two ends agree either way.
               fetch('/data/signal_approaches.geojson')
                 .then((r) => (r.ok ? r.json() : Promise.reject(new Error('no approaches'))))
-                .then((gj) => gj.features.map((f) => ({
+                .then((gj) => usableFeatures(gj).map((f) => ({
                   pos: f.geometry.coordinates,
                   id: f.properties.tls,
                   label: f.properties.tls,
@@ -263,7 +287,7 @@ export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
                 })))
                 .catch(() => fetch('/data/signals.geojson')
                   .then((r) => r.json())
-                  .then((gj) => gj.features.map((f) => ({
+                  .then((gj) => usableFeatures(gj).map((f) => ({
                     pos: f.geometry.coordinates,
                     id: f.properties.id,
                     label: f.properties.label,

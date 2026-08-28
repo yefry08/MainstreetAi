@@ -93,6 +93,28 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [chrome])
 
+  const isHome = tab === 'home'
+  const isCity = tab === 'city'
+
+  // The tab title follows what is actually on screen: Barcelona on Home, the
+  // selected district under Try your city. Rewriting App.jsx for the 3D
+  // restore dropped this effect, so the title sat on whatever index.html
+  // shipped with regardless of the city being shown.
+  useEffect(() => {
+    if (isHome) { document.title = 'MainstreetAi · Barcelona' ; return }
+    let alive = true
+    const base = REPLAY_ONLY ? './' : '/'
+    fetch(`${base}districts.json`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive) return
+        const hit = d.districts?.find((x) => x.key === district)
+        document.title = hit ? `MainstreetAi · ${hit.label}` : 'MainstreetAi'
+      })
+      .catch(() => { /* a title is not worth failing the page over */ })
+    return () => { alive = false }
+  }, [district, isHome])
+
   // Picking a district shows it in the pixel view, which lives on this tab. It
   // used to jump to Home, which now belongs to the 3D scene instead.
   const onSelectDistrict = useCallback((key) => setDistrict(key), [])
@@ -112,9 +134,6 @@ export default function App() {
     }
     setTab(next)
   }, [tab, map])
-
-  const isHome = tab === 'home'
-  const isCity = tab === 'city'
 
   return (
     <div className={`app ${chrome ? '' : 'bare'}`}>

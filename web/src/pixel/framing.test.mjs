@@ -16,8 +16,12 @@ const check = (ok, label, detail = '') => {
   if (!ok) fail++
 }
 
-// A car sprite is 6 art px wide, drawn at sprite scale 2.
-const carCssPx = (scale, dpr) => (6 * 2 * scale) / dpr
+// Mirrors renderer.js: sprites are sized from real metres now, not from the
+// sprite's own pixel count.
+const CAR_LEN_M = 4.5
+const CAR_EXAGGERATION = 1.7
+const carLenDevicePx = (scale, pxPerM) => CAR_LEN_M * CAR_EXAGGERATION * pxPerM * scale
+const laneDevicePx = (scale, pxPerM) => 3.0 * pxPerM * scale
 
 const makeToPx = (meta) => {
   const { kx, ky } = meta.lonlat_to_px
@@ -41,14 +45,23 @@ for (const key of ['barcelona', 'shibuya']) {
   const toPx = makeToPx(meta)
   const v = openingView(meta, null, DEV_W, DEV_H, toPx)
   const span = DEV_W / v.scale / meta.px_per_m
-  const car = carCssPx(v.scale, DPR)
+  const car = carLenDevicePx(v.scale, meta.px_per_m)
+  const lane = laneDevicePx(v.scale, meta.px_per_m)
 
   console.log(`\n${key}: scale ${v.scale.toFixed(3)}, ${Math.round(span)} m across, ` +
-              `car ${car.toFixed(1)} css px`)
+              `car ${car.toFixed(1)} device px long, lane ${lane.toFixed(1)} px`)
 
-  // The number that actually matters. At the old full-extent framing this was
-  // 3.3 px and every bit of sprite detail was invisible.
-  check(car >= 8, 'a car is at least 8 css px wide', `${car.toFixed(1)} px`)
+  // Readable: below this the silhouette stops separating into roof and glass.
+  check(car >= 14, 'a car is long enough for its silhouette to read',
+        `${car.toFixed(1)} device px`)
+
+  // Proportionate: a car must not be wider than the lane it drives in. This is
+  // the regression that made the scene read as toys on a map -- sprites used to
+  // cover 20 basemap px of ground against a real car's 2.25.
+  const carWidth = car * (4 / 10)   // sprite aspect: 4 art px wide, 10 long -- real 1.8/4.5
+  check(carWidth <= lane * 1.15,
+        'a car fits within its lane',
+        `car ${carWidth.toFixed(1)} px vs lane ${lane.toFixed(1)} px`)
 
   const ext = meta.sim_extent
   const [x0, y1] = toPx(ext[0], ext[1])

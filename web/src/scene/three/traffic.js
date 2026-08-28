@@ -153,6 +153,7 @@ export function createTraffic({ scene, proj }) {
   let stopped = new Uint8Array(0)
   let tickAt = 0
   let lastSimTime = -1
+  let lastDropped = 0
 
   // Heading is INTERPOLATED, position is not.
   //
@@ -218,31 +219,59 @@ export function createTraffic({ scene, proj }) {
       const n = Math.min(v.length / STRIDE, CAPACITY.car + CAPACITY.bus + CAPACITY.bike)
       grow(n)
 
+      // Read index i, WRITE index w. A vehicle that fails validation is
+      // dropped rather than written, so the packed arrays stay dense and
+      // nothing downstream has to know a gap could exist.
+      //
+      // WHY VALIDATE AT ALL
+      // A NaN longitude does not throw here. It becomes a NaN scene position,
+      // then a NaN in an instance matrix, and three.js will happily upload
+      // that to the GPU -- at which point the mesh's bounding sphere is NaN,
+      // frustum culling stops working, and the whole draw call can vanish.
+      // One bad byte on the wire takes out every vehicle of that kind, with
+      // nothing in the console to say why. Cheaper to check six floats.
+      let w = 0
+      let dropped = 0
       for (let i = 0; i < n; i++) {
         const o = i * STRIDE
-        const p = proj.toScene(v[o], v[o + 1], 0)
-        px[i] = p.x
-        py[i] = p.y
+        const lon = v[o]
+        const lat = v[o + 1]
+        const ang = v[o + 2]
+        const s = v[o + 4]
+        if (!Number.isFinite(lon) || !Number.isFinite(lat) ||
+            !Number.isFinite(ang) || !Number.isFinite(s)) {
+          dropped++
+          continue
+        }
+        const p = proj.toScene(lon, lat, 0)
+        if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) {
+          dropped++
+          continue
+        }
+        px[w] = p.x
+        py[w] = p.y
         // SUMO reports degrees CLOCKWISE FROM NORTH. Scene +Y is north, so the
         // unit heading is (sin, cos) — not the usual (cos, sin).
-        const a = v[o + 2] * (Math.PI / 180)
-        dx[i] = Math.sin(a)
-        dy[i] = Math.cos(a)
-        const s = v[o + 4]
-        spd[i] = s
-        knd[i] = v[o + 3] | 0
-        stopped[i] = s < STOPPED_MS ? 1 : 0
+        const a = ang * (Math.PI / 180)
+        dx[w] = Math.sin(a)
+        dy[w] = Math.cos(a)
+        spd[w] = s
+        knd[w] = v[o + 3] | 0
+        stopped[w] = s < STOPPED_MS ? 1 : 0
 
         // Heading is clockwise from north; scene rotation about +Z is
         // counter-clockwise, hence the negation.
-        yaw[i] = -a
+        yaw[w] = -a
         // How far this vehicle turned over the last tick, carried per-VEHICLE
         // on the wire. It cannot be derived here: the array is repacked every
         // tick and slot i holds the same vehicle only ~36% of the time, so
         // anything remembered per slot belongs to a different car.
-        yawRate[i] = -(v[o + 5] * (Math.PI / 180))
+        const yr = v[o + 5]
+        yawRate[w] = Number.isFinite(yr) ? -(yr * (Math.PI / 180)) : 0
+        w++
       }
-      count = n
+      count = w
+      lastDropped = dropped
 
       const now = performance.now()
       if (tickAt) {
@@ -313,6 +342,18 @@ export function createTraffic({ scene, proj }) {
         // what that slot last held, not against the vehicle.
         const kind = knd[i]
         const st = stopped[i]
+        // Each mesh pool is allocated to its own capacity, but the frame cap
+        // above is on the TOTAL. A frame whose mix skews hard toward one kind
+        // -- a bus-heavy corridor, a depot emptying -- can overrun a single
+        // pool while staying under the total, and setMatrixAt past the
+        // allocated instance count writes off the end of the buffer. Skip the
+        // overflow instead: a few missing buses beats corrupt GPU memory.
+        if (kind === KIND_BUS && nBus >= CAPACITY.bus) continue
+        if (kind === KIND_BIKE && nBike >= CAPACITY.bike) continue
+        if (kind === KIND_TRUCK && nTruck >= CAPACITY.truck) continue
+        if (kind === KIND_MOTO && nMoto >= CAPACITY.moto) continue
+        if (kind !== KIND_BUS && kind !== KIND_BIKE &&
+            kind !== KIND_TRUCK && kind !== KIND_MOTO && nCar >= CAPACITY.car) continue
         if (kind === KIND_BUS) {
           busMesh.setMatrixAt(nBus, mat)
           busGlow.setMatrixAt(nBus, mat)
@@ -382,6 +423,10 @@ export function createTraffic({ scene, proj }) {
 
     stats: () => ({
       vehicles: count,
+      // Non-finite vehicles silently discarded on the last frame. Reported so
+      // a wire-format regression shows up as a number rather than as traffic
+      // that mysteriously thins out.
+      dropped: lastDropped,
       cars: carMesh.count,
       buses: busMesh.count,
       bikes: bikeMesh.count,

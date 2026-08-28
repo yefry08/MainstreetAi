@@ -19,11 +19,20 @@
  * when you switch between them.
  */
 
-// Roughly two and a half kilometres across. Chosen as the balance point: far
-// enough in that a car is ~12 px and reads as a car, far enough out that a few
-// dozen vehicles are on screen at once. Closer looks better in a screenshot and
-// emptier in motion, which is the wrong trade for a traffic demo.
-export const TARGET_SPAN_M = 2400
+// About 1.2 km across.
+//
+// This number is set by the vehicles, not by the map. Once sprites are sized
+// from real metres (see renderer.js) a car covers 3.8 basemap px, so how many
+// SCREEN pixels of car you get is purely a function of how far in the camera
+// is. Proportionate and readable pull in opposite directions: at 2.4 km a
+// correctly-sized car is 8 px and its silhouette is mush; at 600 m it is
+// beautiful and there are four cars on screen.
+//
+// 1.2 km puts a car at ~16 device px -- enough for the roof, glass and shadow
+// to separate -- while keeping a couple of dozen vehicles in frame. That is
+// also the "fewer, better-looking vehicles" trade made deliberately rather
+// than by accident.
+export const TARGET_SPAN_M = 1200
 
 /**
  * @param {object} meta      basemap sidecar (needs px_per_m and sim_extent)

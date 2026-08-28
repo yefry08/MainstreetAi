@@ -54,6 +54,24 @@ const CAR_LEN_ART = 10      // car sprite length in art pixels, see sprites.js
 const SPRITE_SCALE = 2      // art pixels -> sprite pixels, see buildSpriteSheet
 const MAX_EXAGGERATION = 6
 
+/**
+ * How big a car actually is, and how much bigger we draw it.
+ *
+ * Sprite pixels used to map straight onto basemap pixels, so a car covered
+ * CAR_LEN_ART * SPRITE_SCALE = 20 basemap px of ground. At 0.5 px/m that is
+ * forty metres of street per car, against a real 4.5 m -- roughly nine times
+ * oversized, on a basemap where a 3 m lane is 1.5 px wide. Every car was
+ * several lanes wide, which is what made the scene read as toys on a map
+ * rather than traffic on streets.
+ *
+ * Sizing from real metres fixes the proportion. The exaggeration that remains
+ * is deliberate and small: at true size a car is a couple of pixels and the
+ * pixel art has nothing left to show, so 1.7x buys back a readable silhouette
+ * while still sitting inside its lane.
+ */
+const CAR_LEN_M = 4.5
+const CAR_EXAGGERATION = 1.7
+
 const SIGNAL_COLOUR = ['#f0454f', '#fbbf24', '#4ade80']  // red, amber, green
 
 export function createRenderer(canvas, { basemapMeta, basemapImage, signals }) {
@@ -74,6 +92,20 @@ export function createRenderer(canvas, { basemapMeta, basemapImage, signals }) {
     g.addColorStop(0, 'rgba(255,240,200,0.95)')
     g.addColorStop(0.35, 'rgba(255,214,140,0.45)')
     g.addColorStop(1, 'rgba(255,200,120,0)')
+    d.fillStyle = g
+    d.fillRect(0, 0, 64, 64)
+  }
+
+  // Tail lights get their own dot: reusing the warm one at low alpha reads as
+  // a dim headlight facing the wrong way, not as a brake light.
+  const tail = document.createElement('canvas')
+  tail.width = tail.height = 64
+  {
+    const d = tail.getContext('2d')
+    const g = d.createRadialGradient(32, 32, 0, 32, 32, 32)
+    g.addColorStop(0, 'rgba(255,90,79,0.95)')
+    g.addColorStop(0.4, 'rgba(220,50,45,0.38)')
+    g.addColorStop(1, 'rgba(190,40,35,0)')
     d.fillStyle = g
     d.fillRect(0, 0, 64, 64)
   }
@@ -197,11 +229,21 @@ export function createRenderer(canvas, { basemapMeta, basemapImage, signals }) {
     gctx.clearRect(0, 0, glow.width, glow.height)
     const gs = 1 / GLOW_DIV
 
-    // Keep vehicles legible as the view pulls back. At city scale a real car
-    // is about 2 px and the streets look empty; see MIN_CAR_PX.
-    const carPx = CAR_LEN_ART * SPRITE_SCALE * s
+    // Sprite pixels per basemap pixel, derived from how long a car really is
+    // rather than from the sprite's own pixel count.
+    const pxPerM = basemapMeta?.px_per_m || 0.5
+    // Basemap px per ART px, then per SPRITE px. SPRITE_SCALE is already baked
+    // into the sprite canvas, so the sprite-space figure has to divide it back
+    // out -- multiplying by it again draws every vehicle at double size.
+    const worldPerArt = (CAR_LEN_M * CAR_EXAGGERATION * pxPerM) / CAR_LEN_ART
+    const worldPerSprite = worldPerArt / SPRITE_SCALE
+
+    // The floor still applies when the camera pulls back: below MIN_CAR_PX a
+    // correctly-proportioned car is a smudge, and an empty-looking street is
+    // worse than a slightly large one. It is a floor now, not the basis.
+    const carPx = CAR_LEN_ART * worldPerArt * s
     const exaggerate = Math.max(1, Math.min(MAX_EXAGGERATION, MIN_CAR_PX / carPx))
-    const spriteScale = s * exaggerate
+    const spriteScale = s * worldPerSprite * exaggerate
 
     for (let i = 0; i < vehCount; i++) {
       const o = i * STRIDE
@@ -263,12 +305,34 @@ export function createRenderer(canvas, { basemapMeta, basemapImage, signals }) {
       // highlight rather than a light source.
       if (!stopped && kind !== KIND.bike && nightness > 0.05) {
         const big = kind === KIND.bus || kind === KIND.truck
-        const ahead = (big ? 7 : 4) * spriteScale
+        // Beam geometry in METRES, like the sprites. It used to be expressed
+        // in sprite pixels, so correcting the vehicle scale shrank every
+        // headlight by the same factor and the night scene lost its lights
+        // along with its oversized cars -- a change to one thing quietly
+        // breaking another because they shared a unit that meant nothing.
+        const aheadM = big ? 7.5 : 4.5
+        const radiusM = big ? 7 : 5
+        const perM = pxPerM * s
+        const ahead = aheadM * perM
         const hx = (sx + Math.cos(rad) * ahead) * gs
         const hy = (sy + Math.sin(rad) * ahead) * gs
-        const r = (big ? 7 : 5) * spriteScale * gs
-        gctx.globalAlpha = 0.22 * nightness
+        const r = Math.max(1.5, radiusM * perM) * gs
+        // Still restrained, for the reason above: the buffer is additive, so
+        // alpha that looks right on one car turns a queue into fog. Brightness
+        // comes from the beams overlapping, not from any single one.
+        gctx.globalAlpha = 0.26 * nightness
         gctx.drawImage(dot, hx - r, hy - r, r * 2, r * 2)
+
+        // A red pinpoint behind, so a queue seen from behind is a line of tail
+        // lights. Much tighter and dimmer than the headlight -- it marks the
+        // vehicle rather than lighting the road.
+        if (nightness > 0.5) {
+          const bx = (sx - Math.cos(rad) * (2.2 * perM)) * gs
+          const by = (sy - Math.sin(rad) * (2.2 * perM)) * gs
+          const br = Math.max(1, 2.2 * perM) * gs
+          gctx.globalAlpha = 0.20 * nightness
+          gctx.drawImage(tail, bx - br, by - br, br * 2, br * 2)
+        }
       }
     }
 
