@@ -556,3 +556,21 @@
     font-size: 11px;
   }
 }
+
+/* The pixel view sits over the 3D hero while Try your city is open. The hero
+   stays mounted underneath -- tearing down MapLibre and every three.js buffer
+   on a tab change is a visible stall -- so this needs to cover it opaquely
+   rather than blend with it. */
+.pixel-layer {
+  z-index: 2;
+  background: var(--ink-900, #14110d);
+}
+
+/* The district picker floats over its own scene rather than replacing it, so
+   the map is visible behind the card you are about to choose. */
+.city-layer {
+  z-index: 4;
+  pointer-events: none;
+}
+
+.city-layer > * { pointer-events: auto; }
