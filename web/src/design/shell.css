@@ -48,7 +48,33 @@
   padding: 0 var(--space-4);
 }
 
-.nav-brand { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+/* A button by element, a wordmark by appearance: it has to be reachable by
+   keyboard and announced as a control, without picking up the browser's
+   default button chrome. */
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.nav-brand:hover .nav-name { color: var(--ink-50); }
+.nav-brand:hover .nav-mark { transform: scale(1.25); }
+.nav-mark { transition: transform var(--t-fast) var(--ease-out); }
+
+/* Keyboard users need to see where they are; mouse users should not get a
+   ring on every click. */
+.nav-brand:focus-visible {
+  outline: 2px solid var(--terracota-500);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
 
 .nav-mark {
   width: 9px; height: 9px;

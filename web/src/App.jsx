@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import Scene from './scene/Scene'
+import { PRESETS } from './scene/cameraPresets'
 import Atmosphere from './ui/Atmosphere'
 import Bezel from './ui/Bezel'
 import CameraControls from './ui/CameraControls'
@@ -96,6 +97,22 @@ export default function App() {
   // used to jump to Home, which now belongs to the 3D scene instead.
   const onSelectDistrict = useCallback((key) => setDistrict(key), [])
 
+  // Home from another tab navigates. Home while ALREADY home flies the camera
+  // back to the opening shot, because a control that does nothing when you are
+  // stood on its destination is indistinguishable from a broken one -- which is
+  // how it got reported. After panning across the city, "take me back" is the
+  // thing people actually want from it.
+  const onTab = useCallback((next) => {
+    if (next === 'home' && tab === 'home' && map) {
+      const p = PRESETS.eixample
+      map.easeTo({
+        center: p.center, zoom: p.zoom, pitch: p.pitch, bearing: p.bearing,
+        duration: 900,
+      })
+    }
+    setTab(next)
+  }, [tab, map])
+
   const isHome = tab === 'home'
   const isCity = tab === 'city'
 
@@ -131,7 +148,7 @@ export default function App() {
       )}
 
       <Navbar
-        tab={tab} onTab={setTab}
+        tab={tab} onTab={onTab}
         mode={mode} onMode={setMode}
         chrome={chrome} onChrome={setChrome}
       />

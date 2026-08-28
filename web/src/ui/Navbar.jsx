@@ -36,10 +36,18 @@ export default function Navbar({
           <span /><span /><span />
         </button>
 
-        <div className="nav-brand">
+        {/* The wordmark was a div. Everyone expects the logo to take them
+            home and clicks it, so it needs to be a real button -- keyboard
+            reachable and announced -- rather than decoration that silently
+            ignores the click. */}
+        <button
+          className="nav-brand"
+          onClick={() => onTab?.('home')}
+          title="Back to the Barcelona scene"
+        >
           <span className="nav-mark" />
           <span className="nav-name">MainstreetAi</span>
-        </div>
+        </button>
 
         <nav className={`nav-tabs ${open ? 'open' : ''}`}>
           {TABS.map((t) => (
