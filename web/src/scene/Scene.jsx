@@ -5,6 +5,7 @@ import { pruneUnusableSources } from './pruneStyle'
 import { HOME } from '../ui/CameraControls'
 import { createThreeLayer } from './three/ThreeLayer'
 import { createTraffic } from './three/traffic'
+import { assetUrl } from '../data/assetUrl'
 import { createSignals } from './three/signals'
 
 // Free, key-less vector tiles serving the OpenMapTiles schema, which carries
@@ -276,7 +277,7 @@ export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
               // sim/build_signal_approaches.py. Falls back to the old junction
               // lamps if that file has not been generated; the server applies
               // the same fallback, so the two ends agree either way.
-              fetch('/data/signal_approaches.geojson')
+              fetch(assetUrl('data/signal_approaches.geojson'))
                 .then((r) => (r.ok ? r.json() : Promise.reject(new Error('no approaches'))))
                 .then((gj) => usableFeatures(gj).map((f) => ({
                   pos: f.geometry.coordinates,
@@ -285,7 +286,7 @@ export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
                   bearing: f.properties.bearing,
                   links: f.properties.links,
                 })))
-                .catch(() => fetch('/data/signals.geojson')
+                .catch(() => fetch(assetUrl('data/signals.geojson'))
                   .then((r) => r.json())
                   .then((gj) => usableFeatures(gj).map((f) => ({
                     pos: f.geometry.coordinates,

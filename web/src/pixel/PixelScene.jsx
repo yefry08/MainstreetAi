@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createRenderer } from './renderer.js'
 import { loadImage } from './decodeImage.js'
+import { assetUrl } from '../data/assetUrl'
 import { hasTraffic as districtHasTraffic, signalsPath } from './districtAssets.js'
 import { openingView } from './framing.js'
 
@@ -43,7 +44,7 @@ export default function PixelScene({ frameRef, mode = 'night', district = 'barce
     const load = async () => {
       try {
         const [metaRes, sigRes] = await Promise.all([
-          fetch(`/data/basemap_${district}.json`),
+          fetch(assetUrl(`data/basemap_${district}.json`)),
           hasTraffic ? fetch(signalsPath(district, '/'))
                      : Promise.resolve({ ok: false }),
         ])
@@ -57,7 +58,7 @@ export default function PixelScene({ frameRef, mode = 'night', district = 'barce
         }
 
         setStatus(`decoding ${meta.width_px}×${meta.height_px} basemap…`)
-        const { img, decodeTimedOut } = await loadImage(`/data/${meta.png}`)
+        const { img, decodeTimedOut } = await loadImage(assetUrl(`data/${meta.png}`))
         if (decodeTimedOut) {
           console.warn('[pixel] pre-decode timed out; drawing anyway')
         }
