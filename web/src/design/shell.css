@@ -600,3 +600,156 @@
 }
 
 .city-layer > * { pointer-events: auto; }
+
+/* =========================================================================
+   RESEARCH — precedent cards
+   Cards rather than prose on purpose: this is context a reader skims on the
+   way to the demo, not a paper they sit down with.
+   ========================================================================= */
+
+.research {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: calc(var(--space-4) * 5) var(--space-4) calc(var(--space-4) * 4);
+}
+
+.research-head { max-width: 62ch; margin-bottom: calc(var(--space-4) * 2); }
+
+.research-eyebrow {
+  font-family: var(--font-data);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--terracota-500);
+  margin: 0 0 var(--space-2);
+}
+
+.research h1 {
+  font-size: clamp(26px, 3.4vw, 38px);
+  line-height: 1.15;
+  margin: 0 0 var(--space-3);
+  color: var(--ink-50);
+}
+
+.research-lede {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-100);
+  margin: 0 0 var(--space-4);
+}
+
+/* The one claim on this page that must not be skimmed past, so it is given
+   the accent border rather than being folded into the lede. */
+.research-disclaimer {
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--terracota-500);
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-100);
+  margin: 0;
+}
+
+.research-disclaimer strong { color: var(--ink-50); }
+
+.research-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--space-4);
+}
+
+.research-card {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  transition: transform var(--t-fast) var(--ease-out),
+              border-color var(--t-fast) var(--ease-out);
+}
+
+.research-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--terracota-500);
+}
+
+.research-kind {
+  font-family: var(--font-data);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--terracota-400);
+}
+
+.research-name {
+  font-size: 17px;
+  line-height: 1.25;
+  margin: 0;
+  color: var(--ink-50);
+}
+
+.research-what {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-100);
+  margin: 0;
+}
+
+.research-why {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-300);
+  margin: 0;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--glass-edge);
+}
+
+.research-why-label {
+  display: block;
+  font-family: var(--font-data);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  /* One step dimmer than the sentence it introduces, so the label reads as a
+     label rather than competing with the text. */
+  color: var(--ink-400);
+  margin-bottom: 4px;
+}
+
+.research-link {
+  margin-top: auto;
+  padding-top: var(--space-2);
+  font-family: var(--font-data);
+  font-size: 11.5px;
+  color: var(--terracota-400);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.research-link:hover { color: var(--terracota-500); text-decoration: underline; }
+
+/* A gap that looks like a gap. Styled as clearly unfinished so it reads as
+   "to add" rather than as a link that failed to render. */
+.research-link.missing {
+  color: var(--ink-300);
+  font-style: italic;
+  border: 1px dashed var(--glass-edge);
+  border-radius: 4px;
+  padding: 3px 8px;
+  align-self: flex-start;
+  margin-top: auto;
+}
+
+.research-foot {
+  margin: calc(var(--space-4) * 2) 0 0;
+  max-width: 68ch;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-300);
+}
+
+@media (max-width: 860px) {
+  .research { padding: calc(var(--space-4) * 4) var(--space-3) var(--space-4); }
+  .research-grid { grid-template-columns: 1fr; }
+}

@@ -7,6 +7,7 @@ import CameraControls from './ui/CameraControls'
 import Navbar from './ui/Navbar'
 import ImpactPanel from './ui/ImpactPanel'
 import Contact from './ui/Contact'
+import Research from './ui/Research'
 import TryCity from './ui/TryCity'
 import LiveCity from './ui/LiveCity'
 import PixelScene from './pixel/PixelScene'
@@ -109,7 +110,14 @@ export default function App() {
   // restore dropped this effect, so the title sat on whatever index.html
   // shipped with regardless of the city being shown.
   useEffect(() => {
-    if (isHome) { document.title = 'MainstreetAi · Barcelona' ; return }
+    if (isHome) { document.title = 'MainstreetAi · Barcelona'; return }
+    // The reading tabs are not about a city, so they must not inherit whichever
+    // district happened to be selected before.
+    if (!isCity) {
+      document.title = tab === 'research'
+        ? 'MainstreetAi · Research' : 'MainstreetAi · Contact'
+      return
+    }
     let alive = true
     const base = REPLAY_ONLY ? './' : '/'
     fetch(`${base}districts.json`)
@@ -121,7 +129,7 @@ export default function App() {
       })
       .catch(() => { /* a title is not worth failing the page over */ })
     return () => { alive = false }
-  }, [district, isHome])
+  }, [district, isHome, isCity, tab])
 
   // Picking a district shows it in the pixel view, which lives on this tab. It
   // used to jump to Home, which now belongs to the 3D scene instead.
@@ -210,6 +218,12 @@ export default function App() {
       {isCity && (
         <div className="page-layer city-layer">
           <TryCity current={district} onSelect={onSelectDistrict} />
+        </div>
+      )}
+
+      {tab === 'research' && (
+        <div className="page-layer">
+          <Research />
         </div>
       )}
 
