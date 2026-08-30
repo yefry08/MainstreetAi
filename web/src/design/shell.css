@@ -897,3 +897,112 @@
   color: var(--ink-300);
   text-align: center;
 }
+
+/* =========================================================================
+   TRY YOUR CITY — traffic strip and open-source credits
+   ========================================================================= */
+
+/* A few cars crossing the foot of the card. Present only on districts that
+   have a SUMO network: the movement says "this one actually simulates", and
+   the stillness of the others says the opposite faster than the label does.
+   CSS-only -- no JS, no timers, no work when the tab is hidden. */
+.try-traffic {
+  position: relative;
+  height: 14px;
+  margin-top: var(--space-3);
+  overflow: hidden;
+}
+
+.try-road {
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  height: 1px;
+  background: var(--glass-edge);
+}
+
+.try-car {
+  position: absolute;
+  top: calc(50% - 3px);
+  width: 9px;
+  height: 5px;
+  border-radius: 1px;
+  background: var(--terracota-500);
+  animation: try-drive 5.5s linear infinite;
+}
+
+/* Staggered starts and slightly different speeds, so it reads as traffic
+   rather than as a marquee. */
+.try-car.c2 {
+  background: var(--ink-300);
+  width: 13px;
+  animation-duration: 7s;
+  animation-delay: -2.2s;
+}
+
+.try-car.c3 {
+  background: var(--terracota-400);
+  width: 7px;
+  animation-duration: 4.4s;
+  animation-delay: -3.6s;
+}
+
+@keyframes try-drive {
+  from { transform: translateX(-14px); }
+  to   { transform: translateX(calc(100% + 340px)); }
+}
+
+/* A card the pointer is over gets busier, which makes the hover feel like it
+   is about to take you somewhere moving. */
+.try-card:hover .try-car { animation-duration: 2.6s; }
+.try-card:hover .try-car.c2 { animation-duration: 3.4s; }
+.try-card:hover .try-car.c3 { animation-duration: 2.1s; }
+
+/* Motion here is decorative reinforcement of a label that is already there in
+   words, so it is the first thing to go. */
+@media (prefers-reduced-motion: reduce) {
+  .try-car { animation: none; }
+  .try-car.c1 { left: 12%; }
+  .try-car.c2 { left: 45%; }
+  .try-car.c3 { left: 74%; }
+}
+
+.try-oss { margin-top: calc(var(--space-4) * 2); max-width: 78ch; }
+
+.try-oss h2 {
+  font-size: 15px;
+  margin: 0 0 var(--space-3);
+  color: var(--ink-50);
+}
+
+.try-oss-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+
+.try-oss-list li {
+  display: grid;
+  grid-template-columns: 150px 118px 1fr;
+  gap: var(--space-3);
+  align-items: baseline;
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--glass-edge);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.try-oss-list a { color: var(--terracota-400); text-decoration: none; font-weight: 500; }
+.try-oss-list a:hover { text-decoration: underline; }
+
+.try-oss-role {
+  font-family: var(--font-data);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-400);
+}
+
+/* Marked differently because it is not part of the build. */
+.try-oss-list li.adjacent .try-oss-role { color: var(--terracota-500); }
+
+.try-oss-what { color: var(--ink-300); }
+
+@media (max-width: 860px) {
+  .try-oss-list li { grid-template-columns: 1fr; gap: 2px; }
+}
