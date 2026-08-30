@@ -753,3 +753,138 @@
   .research { padding: calc(var(--space-4) * 4) var(--space-3) var(--space-4); }
   .research-grid { grid-template-columns: 1fr; }
 }
+
+/* =========================================================================
+   PIPELINE DIAGRAM — the architecture, as markup
+   Numbered phases stacked vertically, blocks flowing inside each. On a phone
+   the blocks stack too, which a raster diagram cannot do.
+   ========================================================================= */
+
+.pipeline { margin: calc(var(--space-4) * 3) 0 0; padding: 0; }
+
+.pipeline-cap { max-width: 62ch; margin-bottom: var(--space-4); }
+
+.pipeline-cap h2 {
+  font-size: clamp(20px, 2.4vw, 26px);
+  margin: 0 0 var(--space-2);
+  color: var(--ink-50);
+}
+
+.pipeline-cap p {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-100);
+  margin: 0;
+}
+
+.pipeline-phases {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* The connector between phases. A pseudo-element rather than a drawn arrow so
+   it cannot fall out of step with the number of phases. */
+.pipeline-phase { position: relative; }
+
+.pipeline-phase + .pipeline-phase::before {
+  content: '';
+  position: absolute;
+  top: calc(var(--space-4) * -1);
+  left: 18px;
+  width: 2px;
+  height: var(--space-4);
+  background: linear-gradient(to bottom, transparent, var(--terracota-500));
+}
+
+.pipeline-phase-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.pipeline-num {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--terracota-500);
+  color: #fff;
+  font-family: var(--font-data);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pipeline-phase-head h3 {
+  margin: 0;
+  font-size: 17px;
+  color: var(--ink-50);
+}
+
+.pipeline-blocks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--space-3);
+  margin-left: calc(38px + var(--space-3));
+}
+
+.pipeline-block {
+  padding: var(--space-3) var(--space-4);
+  border-top: 2px solid var(--ink-500);
+}
+
+/* One accent per block so the phases read as distinct without introducing a
+   second palette. */
+.pipeline-block.tone-teal { border-top-color: #2f9aa8; }
+.pipeline-block.tone-amber { border-top-color: #c98a2e; }
+.pipeline-block.tone-violet { border-top-color: #8b7bb8; }
+.pipeline-block.tone-terracota { border-top-color: var(--terracota-500); }
+
+.pipeline-block h4 {
+  margin: 0 0 var(--space-2);
+  font-size: 14px;
+  color: var(--ink-50);
+}
+
+.pipeline-block ul {
+  margin: 0;
+  padding: 0 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pipeline-block li {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-100);
+}
+
+.pipeline-note {
+  margin: var(--space-2) 0 0;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--glass-edge);
+  font-size: 11.5px;
+  line-height: 1.45;
+  font-style: italic;
+  color: var(--ink-300);
+}
+
+.pipeline-foot {
+  margin: var(--space-4) 0 0;
+  max-width: 68ch;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-300);
+}
+
+@media (max-width: 860px) {
+  .pipeline-blocks { grid-template-columns: 1fr; margin-left: 0; }
+  .pipeline-phase + .pipeline-phase::before { left: 18px; }
+}

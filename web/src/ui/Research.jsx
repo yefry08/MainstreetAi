@@ -21,6 +21,8 @@
  * visibly missing one: nobody checks a URL that looks right.
  */
 
+import PipelineDiagram from './PipelineDiagram'
+
 const PRECEDENTS = [
   {
     name: 'Simile',
@@ -111,6 +113,11 @@ export default function Research() {
         demand, differing only in who controls the traffic lights. The agent work
         above informs how that question is framed; it does not run underneath it.
       </p>
+
+      {/* The architecture sits under the precedents on purpose. Read in that
+          order it settles the question the cards raise -- what, concretely, is
+          this thing? -- and shows there is no language model anywhere in it. */}
+      <PipelineDiagram />
     </section>
   )
 }
