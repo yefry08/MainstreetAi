@@ -31,6 +31,9 @@ NET = NET_DIR / "barcelona.net.xml"
 CYCLE = {
     "barcelona": dict(green="40", yellow="4"),   # ~88 s, matches the city
     "shibuya":   dict(green="55", yellow="4"),   # ~118 s, typical for central Tokyo
+    # Midtown runs a 90 s cycle, which is what the avenue green waves are
+    # timed against -- the coordination this district exists to demonstrate.
+    "manhattan": dict(green="41", yellow="4"),   # ~90 s
 }
 DEFAULT_CYCLE = dict(green="40", yellow="4")
 

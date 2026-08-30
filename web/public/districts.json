@@ -73,7 +73,7 @@
       "radius_m": 1391,
       "why": "A near-perfect rectangular grid with avenue-length green waves -- the textbook case for signal coordination.",
       "has_basemap": true,
-      "has_network": false
+      "has_network": true
     },
     {
       "key": "sf_downtown",

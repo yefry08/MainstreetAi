@@ -11,7 +11,7 @@
  * others are basemaps, and the scene draws them with no traffic rather than
  * borrowing another city's.
  */
-const WITH_TRAFFIC = new Set(['barcelona', 'shibuya'])
+const WITH_TRAFFIC = new Set(['barcelona', 'shibuya', 'manhattan'])
 
 export const hasTraffic = (district) => WITH_TRAFFIC.has(district)
 
