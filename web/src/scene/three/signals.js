@@ -1,4 +1,7 @@
-import * as THREE from 'three'
+import {
+  AdditiveBlending, BoxGeometry, Color, Group, InstancedMesh, Matrix4,
+  MeshBasicMaterial, MeshLambertMaterial, Quaternion, Vector3,
+} from 'three'
 
 /**
  * Traffic signals as 3D objects with live state.
@@ -24,42 +27,42 @@ const STATE_COLOR = [RED, AMBER, GREEN]
 
 export function createSignals({ scene, proj, signals }) {
   const n = signals.length
-  const group = new THREE.Group()
+  const group = new Group()
   group.name = 'signals'
 
   // ---- geometry ---------------------------------------------------------
   // Mast: a thin post. Built with its base at z=0 and its length along +Z.
-  const mastGeo = new THREE.BoxGeometry(0.16, 0.16, 3.4)
+  const mastGeo = new BoxGeometry(0.16, 0.16, 3.4)
   mastGeo.translate(0, 0, 1.7)
 
   // Head: the lit lamp, sitting on top of the mast.
-  const headGeo = new THREE.BoxGeometry(0.62, 0.42, 0.92)
+  const headGeo = new BoxGeometry(0.62, 0.42, 0.92)
   headGeo.translate(0, 0, 3.75)
 
   // Halo: a larger, additively blended shell around the head. This is what
   // makes a signal read as a LIGHT rather than a coloured cube — at night a
   // lamp bleeds into the air around it, and without that the heads look like
   // confetti scattered over the city.
-  const haloGeo = new THREE.BoxGeometry(1.9, 1.9, 2.2)
+  const haloGeo = new BoxGeometry(1.9, 1.9, 2.2)
   haloGeo.translate(0, 0, 3.75)
 
-  const mastMesh = new THREE.InstancedMesh(
+  const mastMesh = new InstancedMesh(
     mastGeo,
-    new THREE.MeshLambertMaterial({ color: 0x2b3038 }),
+    new MeshLambertMaterial({ color: 0x2b3038 }),
     n
   )
   // Unlit: a signal lamp emits, it is not lit by the scene.
-  const headMesh = new THREE.InstancedMesh(
+  const headMesh = new InstancedMesh(
     headGeo,
-    new THREE.MeshBasicMaterial({ toneMapped: false }),
+    new MeshBasicMaterial({ toneMapped: false }),
     n
   )
-  const haloMesh = new THREE.InstancedMesh(
+  const haloMesh = new InstancedMesh(
     haloGeo,
-    new THREE.MeshBasicMaterial({
+    new MeshBasicMaterial({
       transparent: true,
       opacity: 0.16,
-      blending: THREE.AdditiveBlending,
+      blending: AdditiveBlending,
       depthWrite: false,
       toneMapped: false,
     }),
@@ -88,11 +91,11 @@ export function createSignals({ scene, proj, signals }) {
 
   scene.add(group)
 
-  const mat = new THREE.Matrix4()
-  const pos = new THREE.Vector3()
-  const quat = new THREE.Quaternion()
-  const scl = new THREE.Vector3(1, 1, 1)
-  const col = new THREE.Color()
+  const mat = new Matrix4()
+  const pos = new Vector3()
+  const quat = new Quaternion()
+  const scl = new Vector3(1, 1, 1)
+  const col = new Color()
 
   let lastScale = -1
   // A copy of the last state we painted, so a repaint touches only the lamps

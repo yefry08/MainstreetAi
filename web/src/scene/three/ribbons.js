@@ -1,4 +1,6 @@
-import * as THREE from 'three'
+import {
+  BufferAttribute, BufferGeometry, FrontSide, MeshBasicMaterial,
+} from 'three'
 
 /**
  * Road/lane networks as a single merged ribbon mesh.
@@ -93,12 +95,12 @@ export function buildRibbons(features, proj, { width, z = 0.5 } = {}) {
     ranges[fi * 2 + 1] = v - ranges[fi * 2]
   }
 
-  const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new BufferAttribute(positions, 3))
   // itemSize 4 so alpha rides along with the colour; three exposes it as
   // vColor.a when the material is transparent.
-  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 4))
-  geometry.setIndex(new THREE.BufferAttribute(indices, 1))
+  geometry.setAttribute('color', new BufferAttribute(colors, 4))
+  geometry.setIndex(new BufferAttribute(indices, 1))
   geometry.computeBoundingSphere()
 
   return { geometry, ranges, vertexCount, segCount }
@@ -125,7 +127,7 @@ export function setFeatureColor(geometry, ranges, fi, r, g, b, a) {
  * street happens to run.
  */
 export function ribbonMaterial({ opacity = 1 } = {}) {
-  return new THREE.MeshBasicMaterial({
+  return new MeshBasicMaterial({
     vertexColors: true,
     transparent: true,
     opacity,
@@ -137,6 +139,6 @@ export function ribbonMaterial({ opacity = 1 } = {}) {
     // are pure waste. ribbons.test.mjs asserts every triangle winds CCW from
     // above, which is what makes this safe — get it backwards and the entire
     // road network silently vanishes.
-    side: THREE.FrontSide,
+    side: FrontSide,
   })
 }

@@ -1,4 +1,7 @@
-import * as THREE from 'three'
+import {
+  AmbientLight, Camera, DirectionalLight, Matrix4, SRGBColorSpace,
+  Scene, WebGLRenderer,
+} from 'three'
 import { createProjection, lngLatToMercator, mercatorScaleDenominator } from './geo'
 
 /**
@@ -52,18 +55,18 @@ export function createThreeLayer({ id = 'mst-three', origin, onInit, onFrame }) 
 
     onAdd(_map, gl) {
       map = _map
-      scene = new THREE.Scene()
+      scene = new Scene()
       // A bare Camera: we overwrite projectionMatrix every frame, so any
       // intrinsics it might have had would be discarded anyway.
-      camera = new THREE.Camera()
+      camera = new Camera()
 
-      renderer = new THREE.WebGLRenderer({
+      renderer = new WebGLRenderer({
         canvas: map.getCanvas(),
         context: gl,
         antialias: true,
       })
       renderer.autoClear = false
-      renderer.outputColorSpace = THREE.SRGBColorSpace
+      renderer.outputColorSpace = SRGBColorSpace
       // No shadow maps. On the target hardware (Intel N100, integrated
       // graphics) a shadow pass over a few thousand instanced vehicles costs
       // far more than it returns. Vehicles get a baked contact shadow instead.
@@ -77,7 +80,7 @@ export function createThreeLayer({ id = 'mst-three', origin, onInit, onFrame }) 
       // subtle enough to miss on a dark basemap.
       const o = lngLatToMercator(origin[0], origin[1], 0)
       const u = 1 / mercatorScaleDenominator(origin[1]) // Mercator units per metre
-      modelMatrix = new THREE.Matrix4().set(
+      modelMatrix = new Matrix4().set(
         u, 0, 0, o.x,
         0, -u, 0, o.y,
         0, 0, u, o.z,
@@ -92,7 +95,7 @@ export function createThreeLayer({ id = 'mst-three', origin, onInit, onFrame }) 
       if (disposed || !renderer) return
       onFrame?.()
 
-      camera.projectionMatrix = new THREE.Matrix4()
+      camera.projectionMatrix = new Matrix4()
         .fromArray(matrix)
         .multiply(modelMatrix)
 
@@ -125,19 +128,18 @@ export function createThreeLayer({ id = 'mst-three', origin, onInit, onFrame }) 
  * only warm thing on screen — which is the entire basis of the colour system.
  */
 function addLights(scene) {
-  scene.add(new THREE.AmbientLight(0x93a3bd, 1.5))
+  scene.add(new AmbientLight(0x93a3bd, 1.5))
 
   // Key light from the north-west, high enough to leave readable shading on
   // vehicle roofs (which is nearly all you see from a map camera).
-  const key = new THREE.DirectionalLight(0xffffff, 2.2)
+  const key = new DirectionalLight(0xffffff, 2.2)
   key.position.set(-0.45, 0.6, 1).normalize()
   scene.add(key)
 
   // Cool bounce from the opposite side so the shadowed flank never goes to
   // pure black against a dark basemap.
-  const fill = new THREE.DirectionalLight(0x7d93b8, 0.9)
+  const fill = new DirectionalLight(0x7d93b8, 0.9)
   fill.position.set(0.6, -0.4, 0.35).normalize()
   scene.add(fill)
 }
 
-export { THREE }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import Scene from './scene/Scene'
 import { PRESETS } from './scene/cameraPresets'
 import Atmosphere from './ui/Atmosphere'
@@ -6,15 +6,28 @@ import Bezel from './ui/Bezel'
 import CameraControls from './ui/CameraControls'
 import Navbar from './ui/Navbar'
 import ImpactPanel from './ui/ImpactPanel'
-import Contact from './ui/Contact'
-import Research from './ui/Research'
-import TryCity from './ui/TryCity'
+
+
 import LiveCity from './ui/LiveCity'
-import PixelScene from './pixel/PixelScene'
-import ReplayScene from './pixel/ReplayScene'
+
 import AiToggle from './pixel/AiToggle'
 import { useSimSocket } from './data/useSimSocket'
 import { useReplayFrames } from './data/useReplayFrames'
+
+/**
+ * Split out of the Home bundle.
+ *
+ * Home is the 3D scene, and it already has to parse three.js and MapLibre
+ * before it can draw. The pixel renderer, the district picker and the two
+ * reading pages are not on that path -- none of them render until a tab is
+ * clicked -- so making Home wait for them to download and parse is pure cost.
+ * They arrive on demand, by which point the scene is already running.
+ */
+const Contact = lazy(() => import('./ui/Contact'))
+const Research = lazy(() => import('./ui/Research'))
+const TryCity = lazy(() => import('./ui/TryCity'))
+const PixelScene = lazy(() => import('./pixel/PixelScene'))
+const ReplayScene = lazy(() => import('./pixel/ReplayScene'))
 
 /**
  * Two renderers, two jobs.
@@ -174,11 +187,13 @@ export default function App() {
           animation loop off the Home tab. */}
       {isCity && (
         <div className="scene-layer pixel-layer">
+          <Suspense fallback={null}>
           {REPLAY_ONLY
             ? <ReplayScene lighting={mode} district={district} twin={twin}
                            onStats={setTwins} />
             : <PixelScene frameRef={frameRef} mode={mode} district={district}
                           liveDistrict={header?.district ?? null} />}
+          </Suspense>
         </div>
       )}
 
@@ -217,19 +232,25 @@ export default function App() {
 
       {isCity && (
         <div className="page-layer city-layer">
-          <TryCity current={district} onSelect={onSelectDistrict} />
+          <Suspense fallback={null}>
+            <TryCity current={district} onSelect={onSelectDistrict} />
+          </Suspense>
         </div>
       )}
 
       {tab === 'research' && (
         <div className="page-layer">
-          <Research />
+          <Suspense fallback={<p className="page-loading">Loading…</p>}>
+            <Research />
+          </Suspense>
         </div>
       )}
 
       {tab === 'contact' && (
         <div className="page-layer">
-          <Contact />
+          <Suspense fallback={<p className="page-loading">Loading…</p>}>
+            <Contact />
+          </Suspense>
         </div>
       )}
     </div>

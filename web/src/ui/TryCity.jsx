@@ -20,6 +20,49 @@ import { useEffect, useState } from 'react'
  * no traffic. That is reported as "map only", because an empty city presented
  * as a quiet one is the kind of thing a demo should never do.
  */
+const OSS = [
+  {
+    name: 'GeoLibre',
+    href: 'https://github.com/opengeos/GeoLibre',
+    role: 'adjacent',
+    what: 'A cloud-native GIS platform for exploring geospatial data in the ' +
+          'browser, on desktop and in notebooks. Built on MapLibre, the same ' +
+          'renderer as the 3D scene here — a good starting point for anyone ' +
+          'wanting to work with their own city’s data.',
+    used: false,
+  },
+  {
+    name: 'SUMO',
+    href: 'https://eclipse.dev/sumo/',
+    role: 'simulation',
+    what: 'Eclipse SUMO runs both twins — the vehicle-following model, the ' +
+          'signal programs and every metric quoted on this site.',
+    used: true,
+  },
+  {
+    name: 'OpenStreetMap',
+    href: 'https://www.openstreetmap.org/copyright',
+    role: 'street data',
+    what: 'Every street, lane count, one-way rule and signal position comes ' +
+          'from OSM, via Overpass. © OpenStreetMap contributors, ODbL.',
+    used: true,
+  },
+  {
+    name: 'prettymaps',
+    href: 'https://github.com/marceloprates/prettymaps',
+    role: 'illustrated basemap',
+    what: 'Bakes the flat-colour maps the pixel districts are drawn over.',
+    used: true,
+  },
+  {
+    name: 'MapLibre GL JS',
+    href: 'https://maplibre.org/',
+    role: 'basemap rendering',
+    what: 'Carries the 3D scene’s basemap and camera.',
+    used: true,
+  },
+]
+
 export default function TryCity({ current, onSelect }) {
   const [reg, setReg] = useState(null)
   const [err, setErr] = useState(null)
@@ -79,6 +122,18 @@ export default function TryCity({ current, onSelect }) {
                 {d.km[0].toFixed(1)} × {d.km[1].toFixed(1)} km · {d.area_km2} km²
               </div>
               <p className="try-why">{d.why}</p>
+
+              {/* Traffic runs on the card only where traffic actually exists.
+                  Animating the map-only districts would look better and say
+                  something false -- the stillness is the honest signal, and it
+                  reads faster than the label does. */}
+              {state === 'ready' && (
+                <div className="try-traffic" aria-hidden="true">
+                  <span className="try-road" />
+                  <i className="try-car c1" /><i className="try-car c2" />
+                  <i className="try-car c3" />
+                </div>
+              )}
             </button>
           )
         })}
@@ -90,6 +145,25 @@ export default function TryCity({ current, onSelect }) {
         traffic side is a separate multi-minute pipeline per district — it is
         not something that can happen while you wait.
       </p>
+
+      {/* Credit, not a dependency list. Only tools this pipeline genuinely
+          uses are named as such; GeoLibre is flagged as adjacent, because
+          claiming it as a component of a build it has no part in would be the
+          same misrepresentation the Research page is careful to avoid. */}
+      <section className="try-oss">
+        <h2>Open source behind this</h2>
+        <ul className="try-oss-list">
+          {OSS.map((o) => (
+            <li key={o.name} className={o.used ? 'used' : 'adjacent'}>
+              <a href={o.href} target="_blank" rel="noopener noreferrer">
+                {o.name}
+              </a>
+              <span className="try-oss-role">{o.role}</span>
+              <span className="try-oss-what">{o.what}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
     </div>
   )
 }

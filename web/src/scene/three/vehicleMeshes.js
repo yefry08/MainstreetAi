@@ -1,4 +1,7 @@
-import * as THREE from 'three'
+import {
+  BoxGeometry, BufferAttribute, BufferGeometry, MeshBasicMaterial,
+  MeshLambertMaterial,
+} from 'three'
 
 /**
  * Procedural low-poly vehicle geometry.
@@ -21,7 +24,7 @@ import * as THREE from 'three'
 /** Merge a set of boxes into one BufferGeometry. */
 function boxes(specs) {
   const geoms = specs.map(({ size, at }) => {
-    const g = new THREE.BoxGeometry(size[0], size[1], size[2])
+    const g = new BoxGeometry(size[0], size[1], size[2])
     g.translate(at[0], at[1], at[2])
     return g
   })
@@ -53,9 +56,9 @@ function mergeGeometries(geoms) {
     g.dispose()
   }
 
-  const out = new THREE.BufferGeometry()
-  out.setAttribute('position', new THREE.BufferAttribute(position, 3))
-  out.setAttribute('normal', new THREE.BufferAttribute(normal, 3))
+  const out = new BufferGeometry()
+  out.setAttribute('position', new BufferAttribute(position, 3))
+  out.setAttribute('normal', new BufferAttribute(normal, 3))
   out.computeBoundingSphere()
   return out
 }
@@ -147,7 +150,7 @@ export function motoGeometry() {
  * specular detail it will never resolve.
  */
 export function vehicleMaterial(color, { emissive = 0x000000, emissiveIntensity = 0 } = {}) {
-  return new THREE.MeshLambertMaterial({
+  return new MeshLambertMaterial({
     color,
     emissive,
     emissiveIntensity,
@@ -156,5 +159,5 @@ export function vehicleMaterial(color, { emissive = 0x000000, emissiveIntensity 
 
 /** Emissive material for the bus windows — unlit, so it reads at any distance. */
 export function glowMaterial(color) {
-  return new THREE.MeshBasicMaterial({ color, toneMapped: false })
+  return new MeshBasicMaterial({ color, toneMapped: false })
 }

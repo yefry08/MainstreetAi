@@ -29,10 +29,20 @@ export function createReplay(manifest, buffers) {
   const spanLat = N - S
 
   const twins = {}
-  for (const mode of Object.keys(manifest.twins)) {
+
+  // Built per twin rather than in one pass, so a twin whose bytes arrive later
+  // can be spliced in. Only one twin is ever on screen; loading both before the
+  // first frame doubles the download for a comparison the viewer has not asked
+  // for yet.
+  const addTwin = (mode) => {
+    if (twins[mode]) return true
+    const vbuf = buffers[`${mode}.veh`]
+    const sbuf = buffers[`${mode}.sig`]
+    if (!vbuf || !sbuf) return false
+
     const counts = manifest.frame_counts[mode]
-    const veh = new Uint8Array(buffers[`${mode}.veh`])
-    const sig = new Uint8Array(buffers[`${mode}.sig`])
+    const veh = new Uint8Array(vbuf)
+    const sig = new Uint8Array(sbuf)
     const nSig = manifest.twins[mode].n_sig
     const sigBytes = Math.ceil(nSig / 4)
 
@@ -43,7 +53,10 @@ export function createReplay(manifest, buffers) {
       vehOff[i + 1] = vehOff[i] + counts[i] * STRIDE_IN
     }
     twins[mode] = { counts, veh, sig, nSig, sigBytes, vehOff }
+    return true
   }
+
+  for (const mode of Object.keys(manifest.twins)) addTwin(mode)
 
   // Reused across frames: at ~5,000 vehicles and 4 Hz, allocating a fresh
   // Float32Array per frame would churn 120 KB a second for no reason.
@@ -96,26 +109,61 @@ export function createReplay(manifest, buffers) {
   return {
     frame,
     frameCount,
-    modes: Object.keys(twins),
+    modes: Object.keys(manifest.twins),
+    // frame() already returns null for a twin that is not present, and every
+    // caller guards on that, so a not-yet-loaded twin degrades to "keep showing
+    // the current frame" rather than to an error.
+    addTwin,
+    has: (mode) => !!twins[mode],
     hz: manifest.hz ?? 4,
     stats: manifest.stats ?? null,
     recordedAt: manifest.recorded_at ?? null,
   }
 }
 
-/** Fetch the manifest and every binary it names. */
-export async function loadReplay(base = '/replay') {
+/**
+ * Fetch the manifest and the twin that is about to be shown; fetch the rest
+ * afterwards.
+ *
+ * Both twins used to be awaited before the first frame could draw. For
+ * Barcelona that is 872 KB on the critical path when only 437 KB of it is
+ * about to be looked at -- the other twin exists for a comparison the viewer
+ * makes later, if at all.
+ *
+ * The remainder still loads immediately, just without blocking: by the time
+ * anyone reaches for the switch it is almost always there, and if they are
+ * faster than the network, frame() returns null for that twin and the scene
+ * holds its current frame instead of failing.
+ */
+export async function loadReplay(base = '/replay', { first = 'ai' } = {}) {
   const manifest = await (await fetch(`${base}/manifest.json`)).json()
+  const modes = Object.keys(manifest.twins)
+  const lead = modes.includes(first) ? first : modes[0]
   const buffers = {}
-  await Promise.all(
-    Object.keys(manifest.twins).flatMap((mode) => ([
-      fetch(`${base}/${mode}.veh.bin`).then(async (r) => {
-        buffers[`${mode}.veh`] = await r.arrayBuffer()
-      }),
-      fetch(`${base}/${mode}.sig.bin`).then(async (r) => {
-        buffers[`${mode}.sig`] = await r.arrayBuffer()
-      }),
-    ])),
+
+  const fetchTwin = async (mode) => {
+    const [v, s] = await Promise.all([
+      fetch(`${base}/${mode}.veh.bin`).then((r) => r.arrayBuffer()),
+      fetch(`${base}/${mode}.sig.bin`).then((r) => r.arrayBuffer()),
+    ])
+    buffers[`${mode}.veh`] = v
+    buffers[`${mode}.sig`] = s
+  }
+
+  await fetchTwin(lead)
+  const replay = createReplay(manifest, buffers)
+
+  // Not awaited. Failures here cost the comparison, not the scene.
+  replay.rest = Promise.all(
+    modes.filter((m) => m !== lead).map(async (m) => {
+      try {
+        await fetchTwin(m)
+        replay.addTwin(m)
+      } catch {
+        /* the switch will simply have nothing to switch to */
+      }
+    }),
   )
-  return createReplay(manifest, buffers)
+
+  return replay
 }
