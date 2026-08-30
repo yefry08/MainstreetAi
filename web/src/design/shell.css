@@ -888,3 +888,12 @@
   .pipeline-blocks { grid-template-columns: 1fr; margin-left: 0; }
   .pipeline-phase + .pipeline-phase::before { left: 18px; }
 }
+
+/* Shown only while a lazily-loaded page chunk is in flight. */
+.page-loading {
+  padding: calc(var(--space-4) * 5) var(--space-4);
+  font-family: var(--font-data);
+  font-size: 12px;
+  color: var(--ink-300);
+  text-align: center;
+}

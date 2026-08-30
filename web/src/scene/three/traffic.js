@@ -1,4 +1,6 @@
-import * as THREE from 'three'
+import {
+  Color, Group, InstancedMesh, Matrix4, Quaternion, Vector3,
+} from 'three'
 import {
   bikeGeometry,
   busGeometry,
@@ -96,25 +98,25 @@ function metresPerPixel(zoom, lat) {
  * at city zoom is invisible.
  */
 export function createTraffic({ scene, proj }) {
-  const group = new THREE.Group()
+  const group = new Group()
   group.name = 'traffic'
 
-  const carMesh = new THREE.InstancedMesh(
+  const carMesh = new InstancedMesh(
     carGeometry(), vehicleMaterial(COLOR.car), CAPACITY.car
   )
-  const busMesh = new THREE.InstancedMesh(
+  const busMesh = new InstancedMesh(
     busGeometry(), vehicleMaterial(COLOR.bus), CAPACITY.bus
   )
-  const busGlow = new THREE.InstancedMesh(
+  const busGlow = new InstancedMesh(
     busWindowGeometry(), glowMaterial(COLOR.bus), CAPACITY.bus
   )
-  const bikeMesh = new THREE.InstancedMesh(
+  const bikeMesh = new InstancedMesh(
     bikeGeometry(), vehicleMaterial(COLOR.bike), CAPACITY.bike
   )
-  const truckMesh = new THREE.InstancedMesh(
+  const truckMesh = new InstancedMesh(
     truckGeometry(), vehicleMaterial(COLOR.truck), CAPACITY.truck
   )
-  const motoMesh = new THREE.InstancedMesh(
+  const motoMesh = new InstancedMesh(
     motoGeometry(), vehicleMaterial(COLOR.moto), CAPACITY.moto
   )
 
@@ -193,13 +195,13 @@ export function createTraffic({ scene, proj }) {
     yawRate = new Float32Array(cap)
   }
 
-  const mat = new THREE.Matrix4()
-  const pos = new THREE.Vector3()
-  const quat = new THREE.Quaternion()
-  const scl = new THREE.Vector3(1, 1, 1)
+  const mat = new Matrix4()
+  const pos = new Vector3()
+  const quat = new Quaternion()
+  const scl = new Vector3(1, 1, 1)
   let lastScale = 1
-  const zAxis = new THREE.Vector3(0, 0, 1)
-  const col = new THREE.Color()
+  const zAxis = new Vector3(0, 0, 1)
+  const col = new Color()
 
   return {
     group,

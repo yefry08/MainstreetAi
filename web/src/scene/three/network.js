@@ -1,4 +1,6 @@
-import * as THREE from 'three'
+import {
+  Group, Mesh,
+} from 'three'
 import { buildRibbons, ribbonMaterial, setFeatureColor } from './ribbons'
 import { congestionRGBA } from '../congestion'
 
@@ -9,7 +11,7 @@ import { congestionRGBA } from '../congestion'
  * Two meshes, two draw calls, for ~4,400 features.
  */
 export function createNetwork({ scene, proj, roads, bikeLanes }) {
-  const group = new THREE.Group()
+  const group = new Group()
   group.name = 'network'
 
   // ---- simulated road network -------------------------------------------
@@ -20,7 +22,7 @@ export function createNetwork({ scene, proj, roads, bikeLanes }) {
     ({ arterial: 3.4, distributor: 2.6, local: 2.0 }[f.tier] ?? 2.0) * (f.w || 2)
 
   const road = buildRibbons(roads, proj, { width: roadWidth, z: 0.5 })
-  const roadMesh = new THREE.Mesh(road.geometry, ribbonMaterial())
+  const roadMesh = new Mesh(road.geometry, ribbonMaterial())
   roadMesh.name = 'roads'
   roadMesh.renderOrder = 1
   roadMesh.frustumCulled = false
@@ -38,7 +40,7 @@ export function createNetwork({ scene, proj, roads, bikeLanes }) {
   let bike = null
   if (bikeLanes?.length) {
     bike = buildRibbons(bikeLanes, proj, { width: 2.6, z: 1.0 })
-    const bikeMesh = new THREE.Mesh(bike.geometry, ribbonMaterial())
+    const bikeMesh = new Mesh(bike.geometry, ribbonMaterial())
     bikeMesh.name = 'bike-lanes'
     bikeMesh.renderOrder = 2
     bikeMesh.frustumCulled = false
