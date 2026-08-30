@@ -64,12 +64,18 @@ POLICY_SCHEMA = {
     "properties": {
         "min_green": {
             "type": "number",
-            "description": "Seconds of green that can never be truncated, 6-20.",
+            "description": "Seconds of green that can never be truncated, 6-20. "
+                           "Must stay well below max_green_base -- roughly a "
+                           "third of it or less -- or the fairness cap becomes "
+                           "unreachable and the controller stops adapting.",
         },
         "max_green_base": {
             "type": "number",
             "description": "Base fairness cap on green time before forcing a "
-                           "phase change, 25-90 s. Scaled by time-of-day demand.",
+                           "phase change, 25-90 s. Scaled by time-of-day demand "
+                           "as max_green_base * (0.62 + 0.55 * demand), so its "
+                           "effective value at low demand is about 0.62x this. "
+                           "Keep it at least 3x min_green.",
         },
         "imbalance": {
             "type": "number",
@@ -123,8 +129,18 @@ cross-street waits. Raise it under heavy load, lower it when the network is ligh
 side streets and hurts arterial throughput.
 - Widening bus_detect_m grants priority earlier, which helps buses and costs \
 cross traffic. Widen it when transit delay is high.
-- min_green is a safety floor. Only raise it; never propose a reduction to buy \
-throughput.
+- min_green is a safety floor, and 6 s is the pedestrian clearance minimum. \
+Raise it only for a stated safety reason, and lower it back once that reason \
+has passed — it is not a ratchet.
+
+CRITICAL — min_green and max_green_base are not independent. The effective \
+fairness cap is max_green_base * (0.62 + 0.55 * demand), so at low demand it \
+falls to about 0.62 * max_green_base. If that lands at or below min_green, the \
+cap can never fire, every phase runs exactly min_green, and the controller \
+stops adapting altogether. Keep max_green_base at least three times min_green. \
+A high floor with a low cap is the single worst policy available to you: \
+measured against the defaults it cost 17.5 points of network speed and \
+completed 89 fewer trips.
 
 You will be given the current network state and the recent effect of your last \
 change. Prefer small adjustments — large swings make the network oscillate, and \

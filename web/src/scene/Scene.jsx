@@ -5,6 +5,7 @@ import { pruneUnusableSources } from './pruneStyle'
 import { HOME } from '../ui/CameraControls'
 import { createThreeLayer } from './three/ThreeLayer'
 import { createTraffic } from './three/traffic'
+import { assetUrl } from '../data/assetUrl'
 import { createSignals } from './three/signals'
 
 // Free, key-less vector tiles serving the OpenMapTiles schema, which carries
@@ -49,6 +50,30 @@ const RASTER_FALLBACK = {
 }
 
 /**
+ * Last resort: a style that needs no network at all.
+ *
+ * The two fallbacks above both fetch from somewhere. If the venue's wifi is
+ * dead rather than merely slow, both fail and the map is left with an empty
+ * style — and the buildings and traffic go with it, even though both are
+ * LOCAL and would have rendered perfectly well. Losing the whole city because
+ * the basemap could not be reached is precisely the failure the raster
+ * fallback exists to prevent, arrived at one step later.
+ *
+ * A bare background is enough. `ensureCity` attaches our own extruded
+ * buildings and the three.js traffic layer on top of whatever style is
+ * current, so with this in place the demo still shows a 3D Barcelona with
+ * live traffic on a completely offline machine. It loses the ground texture,
+ * which is the least important thing on screen.
+ */
+const OFFLINE_STYLE = {
+  version: 8,
+  sources: {},
+  layers: [
+    { id: 'bg', type: 'background', paint: { 'background-color': '#0b0e15' } },
+  ],
+}
+
+/**
  * The empty 3D city.
  *
  * Deliberately just the basemap, the extruded buildings and a free camera —
@@ -58,6 +83,30 @@ const RASTER_FALLBACK = {
 // Scene origin, near the middle of the simulated extract. Everything three.js
 // draws is expressed in metres from here — see three/geo.js for why.
 const ORIGIN = [2.1662, 41.3925]
+
+/**
+ * Features that can actually be drawn.
+ *
+ * The lamps were built with `gj.features.map(f => f.geometry.coordinates)`,
+ * which throws on the first feature with a null geometry or missing
+ * properties. That throw is caught, so nothing appears in the console -- and
+ * the catch discards the ENTIRE result. One malformed feature out of 3,230
+ * silently costs every traffic light in the city.
+ *
+ * A bad feature should cost one lamp.
+ */
+function usableFeatures(gj) {
+  const feats = Array.isArray(gj?.features) ? gj.features : []
+  const ok = feats.filter((f) => {
+    const c = f?.geometry?.coordinates
+    return Array.isArray(c) && c.length >= 2 &&
+           Number.isFinite(c[0]) && Number.isFinite(c[1]) && f.properties
+  })
+  if (ok.length !== feats.length) {
+    console.warn(`[signals] skipped ${feats.length - ok.length} unusable of ${feats.length}`)
+  }
+  return ok
+}
 
 export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
   const containerRef = useRef(null)
@@ -148,9 +197,29 @@ export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
         usingFallback = true
         onBasemapStatus?.('fallback')
         map.setStyle(RASTER_FALLBACK)
-        // Give the raster host its own chance before declaring defeat.
+        // Give the raster host its own chance before declaring defeat, then
+        // drop to a style that cannot fail. Without this last step a dead
+        // network leaves the map with an empty style and takes the buildings
+        // and traffic down with it — both of which are local files that never
+        // needed the network in the first place.
         fallbackWatchdog = setTimeout(() => {
-          if (!everLoaded) onBasemapStatus?.('offline')
+          if (everLoaded) return
+          onBasemapStatus?.('offline')
+          try {
+            map.setStyle(OFFLINE_STYLE)
+            // Rebuild the city EXPLICITLY rather than waiting for a
+            // `styledata` event to do it. Rebuilding is normally event-driven
+            // and that is fine in the ordinary case, but this branch runs
+            // precisely when the network is behaving badly, and a swap made
+            // mid-load can leave the map settled with no event still to come.
+            // Calling it directly is idempotent -- ensureCity returns early
+            // if the buildings are already there -- so the worst case is a
+            // wasted call, against a best case of not losing the city.
+            setTimeout(ensureCity, 250)
+            setTimeout(ensureCity, 1500)
+          } catch {
+            /* nothing further to fall back to */
+          }
         }, 12000)
       } else {
         onBasemapStatus?.('offline')
@@ -202,17 +271,32 @@ export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
               trafficRef.current = createTraffic({ scene, proj })
               // Signal geometry is fixed, so it can be built as soon as the
               // positions arrive — state colours stream in separately.
-              fetch('/data/signals.geojson')
-                .then((r) => r.json())
-                .then((gj) => {
-                  const pts = gj.features.map((f) => ({
+              // One lamp per APPROACH, not per junction. The server emits one
+              // state byte per feature of signal_approaches.geojson in file
+              // order, so these two must stay in lockstep — regenerate with
+              // sim/build_signal_approaches.py. Falls back to the old junction
+              // lamps if that file has not been generated; the server applies
+              // the same fallback, so the two ends agree either way.
+              fetch(assetUrl('data/signal_approaches.geojson'))
+                .then((r) => (r.ok ? r.json() : Promise.reject(new Error('no approaches'))))
+                .then((gj) => usableFeatures(gj).map((f) => ({
+                  pos: f.geometry.coordinates,
+                  id: f.properties.tls,
+                  label: f.properties.tls,
+                  bearing: f.properties.bearing,
+                  links: f.properties.links,
+                })))
+                .catch(() => fetch(assetUrl('data/signals.geojson'))
+                  .then((r) => r.json())
+                  .then((gj) => usableFeatures(gj).map((f) => ({
                     pos: f.geometry.coordinates,
                     id: f.properties.id,
                     label: f.properties.label,
                     links: f.properties.links,
                     phases: f.properties.phases,
                     corridor: f.properties.corridor,
-                  }))
+                  }))))
+                .then((pts) => {
                   signalDataRef.current = pts
                   signalsRef.current = createSignals({ scene, proj, signals: pts })
                 })
@@ -235,7 +319,27 @@ export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
           })
           threeRef.current = layer
           map.addLayer(layer)
+        } else if (!map.getLayer('mst-three')) {
+          // A style swap can drop the custom layer entirely. The three.js
+          // scene object survives in threeRef, so re-attach that rather than
+          // rebuilding it — rebuilding would throw away every vehicle mesh
+          // and the signal geometry along with them.
+          map.addLayer(threeRef.current)
         }
+
+        // The traffic scene has to be painted AFTER the basemap and the
+        // buildings, and a fallback style swap does not preserve that: the
+        // replacement style's `bg` and `base` layers are inserted ON TOP of
+        // the surviving custom layer. The failure is silent and thoroughly
+        // misleading — the layer still renders every frame at full rate with
+        // the right instance counts and the right positions, and an opaque
+        // background is then painted straight over the top of it. It reads as
+        // "the traffic simulation is broken" when nothing about the traffic
+        // is broken at all. moveLayer with no beforeId lifts it back to the
+        // top. Vehicles are not thereby drawn through walls: renderingMode
+        // '3d' shares MapLibre's depth buffer, so fill-extrusion still
+        // occludes anything behind it.
+        if (map.getLayer('mst-three')) map.moveLayer('mst-three')
 
         onMapReady?.(map)
       } catch (err) {

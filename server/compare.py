@@ -111,11 +111,17 @@ def main() -> None:
 
     row("vehicles completed", "completed", better="up")
     row("avg trip time (s)", "avg_trip_time_s")
-    row("mean network speed (km/h)", "mean_speed_kmh", better="up")
+    # Time-integrated speeds (distance / vehicle-seconds), not the
+    # instantaneous means. The instantaneous pair is a single-tick sample of
+    # two independently seeded twins and swings wildly -- it reported bus
+    # speed as +131.9% on the same run where the integrated figure, and four
+    # seed-varied runs, agree on about +70%. Quoting the volatile one would
+    # flatter the result and would not reproduce.
+    row("network speed (km/h)", "avg_speed_kmh", better="up")
     row("vehicles halted (now)", "halting")
     row("stopped-vehicle hours", "stopped_veh_hours")
     row("bus stopped hours", "bus_stopped_hours")
-    row("bus mean speed (km/h)", "bus_mean_speed_kmh", better="up")
+    row("bus speed (km/h)", "bus_avg_speed_kmh", better="up")
     row("CO2 (kg)", "co2_kg")
     row("NOx (kg)", "nox_kg")
     row("fuel (l)", "fuel_l")

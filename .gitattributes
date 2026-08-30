@@ -1,0 +1,25 @@
+# Normalise line endings in the repository.
+#
+# Every commit in this project so far has been made on Windows, and git has
+# warned "LF will be replaced by CRLF" on essentially every file. Without this
+# file the working tree's endings leak into the index, so the first person to
+# clone on Linux or macOS sees whole files rewritten in the diff and cannot
+# tell a real change from an invisible one.
+#
+# `text=auto eol=lf` stores everything as LF and checks out native, which is
+# what the tooling here expects: SUMO's XML, the Python server, the Node test
+# scripts and the shell snippets in the README all read the same either way,
+# but the diffs stay honest.
+* text=auto eol=lf
+
+# Binary, never touched.
+*.png binary
+*.jpg binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
+
+# Generated data. Large, machine-written, and not something to review as text
+# even when it is technically UTF-8.
+*.geojson -diff
+sim/net/*.xml -diff

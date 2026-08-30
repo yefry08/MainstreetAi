@@ -386,7 +386,7 @@ body,
   font-size: 9px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--ink-700);
+  color: var(--ink-400);
   text-align: right;
   line-height: 1.7;
   pointer-events: none;
@@ -409,7 +409,7 @@ body,
 }
 
 .maplibregl-ctrl-attrib a {
-  color: var(--ink-700) !important;
+  color: var(--ink-400) !important;
 }
 
 .maplibregl-ctrl-bottom-right {

@@ -5,7 +5,7 @@ Wire format on /ws is one binary frame per tick:
 
     uint32  headerLen           (little-endian, header is padded to 4 bytes)
     bytes   headerLen           UTF-8 JSON: metrics for BOTH twins, clock, events
-    float32 n_veh * 5           lon, lat, angle, kind, speed   (focused twin only)
+    float32 n_veh * 6           lon, lat, angle, kind, speed, turn (focused twin)
     uint8   n_sig               0=red 1=yellow 2=green, in signals.geojson order
     uint8   n_edge              speed/limit ratio * 255, in roads.geojson order
 
@@ -21,6 +21,7 @@ import json
 import multiprocessing as mp
 import queue
 import struct
+import sys
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -31,14 +32,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from sim_worker import run_worker
+from sim_worker import DISTRICT, run_worker
 
 # The two AI roles. Both are inert without their key, and the simulation runs
 # its validated rules-based policy in that state, so importing this can never
 # break a run.
 from ai import Emulator, Orchestrator
 from ai import summary as ai_summary
-from controllers import DOW_NAMES, PROFILE, PROFILE_SOURCE, peaks_for
+from controllers import (DOW_NAMES, NETWORK_CAPACITY, PROFILE, PROFILE_SOURCE,
+                         peaks_for)
 from weather import WeatherFeed
 
 HERE = Path(__file__).resolve().parent
@@ -74,6 +76,7 @@ class Engine:
         # Live Barcelona weather. Real conditions drive real driving behaviour.
         self.weather = WeatherFeed()
         self._weather_applied: str | None = None
+        self.manual_scale = None     # congestion pressure override
         self.day = "Friday"          # the busiest day in the measured data
         self.hour = 8.0              # the measured morning peak
 
@@ -215,6 +218,12 @@ class Engine:
         fsnap, veh, sig, cong = foc
 
         header = {
+            # Which city these vehicles belong to. The client draws them over a
+            # basemap it chose independently, and had no way to tell that the
+            # server was simulating somewhere else -- so running the server on
+            # one district while viewing another put real traffic on the wrong
+            # city's streets, which looks entirely plausible and is false.
+            "district": DISTRICT,
             "clock": fsnap["clock"],
             "day": fsnap.get("day", self.day),
             "sim_time": fsnap["metrics"]["sim_time"],
@@ -295,6 +304,41 @@ async def health():
     }
 
 
+@app.get("/api/twins")
+async def twins():
+    """Both twins' latest metrics, for calibration and scripted checks."""
+    out = {}
+    for m in MODES:
+        item = engine.latest.get(m)
+        if item is None:
+            continue
+        snap = item[0]
+        out[m] = {**snap["metrics"], "step_ms": snap["step_ms"]}
+    out["scale"] = engine.manual_scale
+
+    # The twins are separate OS processes stepping at slightly different rates,
+    # so their simulated clocks drift apart -- measured at a stable ~195 s,
+    # about 1% of elapsed. Every cumulative metric (CO2, fuel, stopped hours,
+    # trips) accrues with time, so comparing them at unequal clocks is not
+    # quite like for like, and anyone quoting these numbers should be able to
+    # see by how much.
+    #
+    # The bias runs AGAINST the AI twin, which is the safe direction: it is
+    # usually the one further ahead, so it has had longer to accumulate the
+    # emissions and delay it is being credited with reducing. A reported
+    # -10.0% on CO2 is really about -11%. Left uncorrected rather than
+    # adjusted, because a hand-applied correction to a headline number is
+    # exactly the kind of thing nobody can audit later.
+    if "ai" in out and "baseline" in out:
+        drift = out["ai"]["sim_time"] - out["baseline"]["sim_time"]
+        elapsed = max(out["ai"]["sim_time"], 1.0)
+        out["sim_time_drift_s"] = round(drift, 1)
+        out["sim_time_drift_pct"] = round(100.0 * abs(drift) / elapsed, 2)
+        out["drift_favours"] = ("baseline" if drift > 0
+                                else "ai" if drift < 0 else "neither")
+    return out
+
+
 @app.get("/api/profile")
 async def profile():
     """
@@ -306,6 +350,72 @@ async def profile():
     if not PROFILE:
         return JSONResponse({"error": "traffic profile not built"}, status_code=404)
     return PROFILE
+
+
+@app.get("/api/feeds")
+async def feeds():
+    """
+    Provenance for the two optional live feeds.
+
+    Deliberately reports what is CONFIGURED without touching the network, so
+    the UI can label data honestly on every frame without a fetch. An
+    unconfigured feed reads `not_configured` / `simulated`, which is the whole
+    point: nothing on screen should claim to be live traffic unless it is.
+    """
+    try:
+        from feeds import feed_status
+    except Exception as exc:
+        return JSONResponse({"error": f"feeds unavailable: {exc}"}, status_code=500)
+    return {"feeds": feed_status(), "capacity": NETWORK_CAPACITY,
+            "district": DISTRICT}
+
+
+@app.get("/api/feeds/bcn")
+async def bcn_traffic():
+    """
+    Barcelona's own live congestion state: 532 instrumented sections, the
+    city's real measurement, refreshed every few minutes.
+
+    Unlike /api/feeds this DOES hit the network, behind a 3-minute TTL. The
+    per-section payload is dropped -- the panel wants the summary, and shipping
+    532 rows on a polling endpoint to render one percentage would be waste.
+
+    Sections whose detector is down report state 0 and are excluded from every
+    percentage, so `congested_pct` is a share of what is actually measuring,
+    not of the whole network.
+    """
+    try:
+        from feeds import live
+        from feeds.bcn import summary
+    except Exception as exc:
+        return JSONResponse({"error": f"feeds unavailable: {exc}"}, status_code=500)
+
+    res = live.fetch("bcn_traffic")
+    if res.status not in ("ok", "stale") or not res.data:
+        return {"status": res.status, "error": res.error, "source": "unavailable"}
+    return {"status": res.status, **summary(res.data)}
+
+
+@app.get("/api/cities")
+async def cities():
+    """
+    Which cities the pipeline has actually baked, and what the others need.
+
+    The selector reads this rather than offering a free-text box. Only one
+    stage of the pipeline is fast: a basemap is a 25-60 minute Overpass-bound
+    render and a SUMO network is a multi-minute build, so a city that is not
+    already on disk cannot be made ready inside a page load. Listing the
+    missing artefacts by name lets the UI say so instead of appearing to work
+    and then hanging in front of an audience.
+    """
+    try:
+        sys.path.insert(0, str(HERE.parent / "sim"))
+        import cities as city_registry
+
+        return city_registry.registry()
+    except Exception as exc:
+        return JSONResponse({"error": f"registry unavailable: {exc}"},
+                            status_code=500)
 
 
 @app.get("/api/ai/policy")
@@ -363,6 +473,13 @@ async def control(payload: dict):
         engine.send({"type": "speed", "value": engine.speed})
     elif action == "focus":
         engine.set_focus(payload.get("value", "ai"))
+    elif action == "scale":
+        # Congestion pressure. Sent to BOTH twins — the comparison is only
+        # meaningful if they are carrying the same load.
+        v = payload.get("value")
+        engine.manual_scale = None if v is None else float(v)
+        engine.send({"type": "scale", "value": engine.manual_scale})
+        return {"ok": True, "scale": engine.manual_scale}
     elif action == "clock":
         # Pick a day and an hour. Both twins move together — the comparison
         # only means anything if they are living in the same moment.

@@ -95,7 +95,14 @@ export function createSignals({ scene, proj, signals }) {
   const col = new THREE.Color()
 
   let lastScale = -1
-  let lastStateKey = ''
+  // A copy of the last state we painted, so a repaint touches only the lamps
+  // that actually changed. The previous version sampled four indices of the
+  // array (0, n/3, n/2, n-1) and skipped the repaint when those four matched
+  // -- which silently discarded 81% of real state changes (219 of 270 over
+  // 340 measured ticks) and left stale colours on the map. Comparing the
+  // whole array is both correct AND cheaper than the full repaint it
+  // replaces: n byte compares, then setColorAt only where it differs.
+  const painted = new Uint8Array(n).fill(255)
 
   return {
     group,
@@ -129,28 +136,35 @@ export function createSignals({ scene, proj, signals }) {
 
       if (!state || state.length < n) return { scale, repainted: 0 }
 
-      // Repainting 1,151 instance colours every frame is wasted work — signal
-      // state changes at most once a second. A cheap sample of the array tells
-      // us whether anything actually changed.
-      const key = `${state[0]}${state[(n / 3) | 0]}${state[(n / 2) | 0]}${state[n - 1]}${state.length}`
-      if (key === lastStateKey) return { scale, repainted: 0 }
-      lastStateKey = key
-
+      let repainted = 0
       for (let i = 0; i < n; i++) {
-        const c = STATE_COLOR[state[i]] ?? RED
-        headMesh.setColorAt(i, col.setHex(c))
-        haloMesh.setColorAt(i, col.setHex(c))
+        const s = state[i]
+        if (s === painted[i]) continue
+        painted[i] = s
+        col.setHex(STATE_COLOR[s] ?? RED)
+        headMesh.setColorAt(i, col)
+        haloMesh.setColorAt(i, col)
+        repainted++
       }
-      if (headMesh.instanceColor) headMesh.instanceColor.needsUpdate = true
-      if (haloMesh.instanceColor) haloMesh.instanceColor.needsUpdate = true
-      return { scale, repainted: n }
+      if (repainted && headMesh.instanceColor) headMesh.instanceColor.needsUpdate = true
+      if (repainted && haloMesh.instanceColor) haloMesh.instanceColor.needsUpdate = true
+      return { scale, repainted }
     },
 
     setVisible(on) {
       group.visible = on !== false
     },
 
-    /** Nearest signal to a lng/lat, for click-to-inspect. */
+    /**
+     * Nearest lamp to a lng/lat, for click-to-inspect.
+     *
+     * Returns one APPROACH, not a junction — there are typically two to four
+     * lamps per junction now, so a click near an intersection resolves to
+     * whichever approach is closest. `id` carries the junction (the SUMO
+     * traffic-light id), so grouping back up to the junction is a filter on
+     * that. Callers written against the old one-lamp-per-junction shape
+     * should note that `phases` and `corridor` are no longer present.
+     */
     nearest(lng, lat, maxMetres = 90) {
       const p = proj.toScene(lng, lat, 0)
       let best = -1
@@ -167,7 +181,26 @@ export function createSignals({ scene, proj, signals }) {
       return best < 0 ? null : { index: best, ...signals[best], metres: Math.sqrt(bestD) }
     },
 
-    stats: () => ({ signals: n, drawCalls: 3, headScale: +lastScale.toFixed(2) }),
+    stats: () => {
+      // Colour mix of what is currently on screen — the quickest way to tell
+      // a live signal network from a frozen one.
+      let red = 0
+      let amber = 0
+      let green = 0
+      for (let i = 0; i < n; i++) {
+        if (painted[i] === 2) green++
+        else if (painted[i] === 1) amber++
+        else if (painted[i] === 0) red++
+      }
+      return {
+        signals: n,
+        drawCalls: 3,
+        headScale: +lastScale.toFixed(2),
+        red,
+        amber,
+        green,
+      }
+    },
 
     dispose() {
       for (const m of meshes) {

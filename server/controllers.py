@@ -54,6 +54,7 @@ from dataclasses import dataclass, field
 # built. It is the old hand-written curve and is clearly worse; the code says
 # which one is in use so the distinction never gets lost.
 import json as _json
+import os as _os
 from pathlib import Path as _Path
 
 _FALLBACK_HOURLY = {
@@ -97,6 +98,63 @@ def demand_curve(day: str | int = "Friday") -> list:
     return [_FALLBACK_HOURLY[h] for h in range(24)]
 
 
+# How much of the measured demand this network can actually clear.
+#
+# The profile in traffic_profile.json is a MEASURED shape and stays untouched;
+# this scales it. Without it the morning peak inserts more traffic than the
+# network can discharge, backlog accumulates over the run, and by three
+# simulated hours both twins are crawling -- 9.0 km/h fixed-time against
+# 11.1 km/h adaptive. The AI still wins every metric there, but two jams that
+# differ by 2 km/h is not a demo; you cannot SEE the difference.
+#
+# Calibration (fresh simulation pair per point, server/calibrate.py) put the
+# best operating point at scale 0.70: 1,409 vehicles, 16.5 km/h fixed-time
+# against 20.4 km/h adaptive. The measured Friday peak is 0.885, so
+# 0.70 / 0.885 = 0.79 maps the real curve onto that point while preserving
+# its shape -- the three peaks stay where the data put them, they just stop
+# overflowing the network.
+#
+# Raise it for a more congested picture, lower it for free-flow. Override with
+# MAINSTREET_CAPACITY without editing this file.
+#
+# THIS IS CALIBRATED FOR A SHORT RUN, and drifts over a long one. Measured on
+# one continuous session:
+#
+#     0.5 h    ~1,400 vehicles    31% halting    +38% network speed
+#     3.0 h    ~3,400 vehicles    69% halting    +23%
+#     4.2 h    ~3,100 vehicles    73% halting    +16.5%
+#
+# Insertion still slightly exceeds what the network clears, so vehicles
+# accumulate and the advantage narrows as the jam deepens. Step time grows with
+# it -- at 4.2 h the simulation runs at 0.47x realtime, so the clock visibly
+# crawls. Restart before showing it; a fresh run sits at the calibrated point.
+#
+# The obvious fix -- feed `running` back into the scale so insertion eases off
+# as the network fills -- MUST NOT be done. Both twins are scaled from the
+# clock alone, which is the only reason they carry identical demand and the
+# A/B means anything. Load feedback would insert more into whichever twin is
+# less congested, and that is always the AI twin, so the adaptive controller
+# would be handed extra throughput and the comparison would quietly measure
+# the feedback loop instead of the policy.
+# Lowered from 0.79 to 0.5 for the demo build.
+#
+# 0.79 was calibrated to maximise the MEASURED advantage, and it does: ~1,400
+# vehicles at the operating point. But it is also where the network is closest
+# to saturating, which is where the long-run drift bites hardest and where a
+# screenshot reads as a wall of sprites rather than as traffic. The brief for
+# the demo is legibility and stability over density, and the AI gain is
+# famously flat across this range -- the calibration sweep measured +16% to
+# +25% from 231 vehicles all the way to 1,859 -- so most of the density buys
+# very little argument.
+NETWORK_CAPACITY = float(_os.environ.get("MAINSTREET_CAPACITY", "0.5"))
+
+# The fairness cap must sit at least this many times above the minimum green,
+# or there is no range for the controller to act within. 1.5 is deliberately
+# modest: it is enough to keep rule 4 reachable at every demand level without
+# second-guessing an otherwise legal policy. See AdaptiveController.apply_policy.
+MIN_GREEN_BAND_RATIO = 1.5
+
+
 def demand_factor(sim_time: float, start_hour: float = 7.0,
                   day: str | int = "Friday") -> float:
     """Smoothly interpolated demand multiplier for the current simulated clock."""
@@ -105,7 +163,7 @@ def demand_factor(sim_time: float, start_hour: float = 7.0,
     lo = int(math.floor(hour)) % 24
     hi = (lo + 1) % 24
     frac = hour - math.floor(hour)
-    return curve[lo] * (1 - frac) + curve[hi] * frac
+    return (curve[lo] * (1 - frac) + curve[hi] * frac) * NETWORK_CAPACITY
 
 
 def peaks_for(day: str | int = "Friday") -> dict:
@@ -395,6 +453,36 @@ class AdaptiveController:
                 continue
             setattr(self, key, v)
             applied[key] = v
+
+        # ---- the parameters must also be legal TOGETHER --------------------
+        # Every bound above is validated on its own, and none of them is wrong.
+        # Their INTERACTION was unconstrained, and that is enough to produce a
+        # controller that cannot adapt at all: max_green is derived as
+        # max_green_base * (0.62 + 0.55 * demand), so picking the ceiling of
+        # min_green (20) with the floor of max_green_base (25) yields a cap of
+        # 16.9 s at low demand -- BELOW the 20 s floor. Rule 4 then never fires,
+        # every phase runs exactly min_green, and the adaptive twin degenerates
+        # into fixed-time control wearing an adaptive badge.
+        #
+        # That is not hypothetical. The orchestrator settled on exactly that
+        # pair, and measured against the defaults on identical seed and demand
+        # it cost 17.5 points of network speed (+20.7% vs +38.2%), 89 completed
+        # trips, and 42% more teleports. See server/policy_ab.py.
+        #
+        # min_green is the parameter that gives way, never max_green_base:
+        # raising the cap would lengthen reds beyond what has been validated,
+        # whereas lowering the floor only restores headroom. The 6 s pedestrian
+        # clearance minimum is never crossed -- if the band cannot be opened
+        # without breaching it, the floor stays and the band stays narrow.
+        worst_max_green = self.max_green_base * 0.62      # at zero demand
+        floor_lo = limits["min_green"][0]
+        needed = worst_max_green / MIN_GREEN_BAND_RATIO
+        if self.min_green > needed:
+            adjusted = max(floor_lo, needed)
+            if adjusted < self.min_green:
+                self.min_green = adjusted
+                applied["min_green"] = adjusted
+                applied["min_green_reduced_for_band"] = True
 
         self.policy_source = source
         self.policy_rationale = str(rationale)[:240]

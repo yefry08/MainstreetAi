@@ -32,20 +32,48 @@ Both twins run to t = 1800 s — half an hour of simulated morning peak, from
 
 | metric | fixed-time | AI-adaptive | change |
 |---|---:|---:|---:|
-| Vehicle-hours lost at a standstill | 475.2 | 263.6 | **−44.5 %** |
-| Vehicles queued at the final tick | 1 960 | 1 002 | **−48.9 %** |
-| Average trip time | 789 s | 671 s | **−14.9 %** |
-| Mean network speed | 10.8 km/h | 16.9 km/h | **+56.4 %** |
-| Bus hours lost at a standstill | 29.3 | 11.1 | **−62.3 %** |
-| Mean bus speed | 12.4 km/h | 22.8 km/h | **+83.0 %** |
-| Trips completed in the window | 1 527 | 2 199 | **+44.0 %** |
-| CO₂ | 6 636 kg | 5 922 kg | **−10.8 %** |
-| NOₓ | 24.62 kg | 20.87 kg | **−15.2 %** |
-| Fuel | 2 830 l | 2 525 l | **−10.8 %** |
-| Teleports (SUMO's gridlock escape hatch) | 1 615 | 845 | **−47.7 %** |
+| Vehicle-hours lost at a standstill | 154.3 | 75.6 | **−51.0 %** |
+| Vehicles at a standstill, final tick | 658 | 271 | **−58.8 %** |
+| Average trip time | 751 s | 629 s | **−16.3 %** |
+| Network speed | 15.6 km/h | 21.6 km/h | **+38.2 %** |
+| Bus hours lost at a standstill | 4.93 | 1.58 | **−68.0 %** |
+| Bus speed | 15.9 km/h | 26.9 km/h | **+69.6 %** |
+| Trips completed in the window | 615 | 860 | **+39.8 %** |
+| CO₂ | 2 384 kg | 2 211 kg | **−7.3 %** |
+| NOₓ | 7.35 kg | 6.39 kg | **−13.0 %** |
+| Fuel | 1 016 l | 942 l | **−7.3 %** |
+| Teleports (SUMO's gridlock escape hatch) | 895 | 494 | **−44.8 %** |
 
-The emissions figures cross-check: 6 636 kg CO₂ at 2.31 kg per litre of petrol
-implies 2 873 l, against the 2 830 l SUMO reports independently — 1.5 % apart.
+Both speed rows are **time-integrated** — total distance covered divided by
+total vehicle-seconds in the network — not SUMO's instantaneous mean sampled
+at the final tick. On this very run the instantaneous figure put bus speed at
++131.9 %; the integrated one says +69.6 %, and four seed-varied runs agree
+with the integrated one. The volatile number is the flattering number, which
+is exactly why it is not the one quoted.
+
+The emissions figures cross-check: 2 384 kg CO₂ at 2.31 kg per litre of petrol
+implies 1 032 l, against the 1 016 l SUMO reports independently — 1.6 % apart.
+
+### The two clocks drift, and it counts against the AI
+
+The twins are separate OS processes stepping at slightly different rates, so
+their simulated clocks pull apart — measured at a stable **~195 s, about 1% of
+elapsed**, not growing. Every cumulative metric accrues with time, so the live
+panel is not comparing exactly equal durations.
+
+The direction is the reassuring part. The AI twin is normally the one *ahead*,
+so it has had **longer** to accumulate the emissions and delay it is being
+credited with reducing. A live reading of −10.0% on CO₂ is really nearer −11%.
+The on-screen figure understates the case rather than flattering it.
+
+It is left uncorrected. Nudging a headline number by a hand-applied factor is
+precisely the kind of adjustment nobody can audit afterwards, so `/api/twins`
+reports `sim_time_drift_s`, `sim_time_drift_pct` and `drift_favours` instead
+and lets anyone check the size and sign for themselves.
+
+The headless harnesses do not have this problem: `compare.py` and
+`validate_seeds.py` run each twin until it reaches the same `sim_time` before
+reading anything, so the numbers quoted above are measured like for like.
 
 ### Read the emissions number late, not early
 
@@ -69,22 +97,30 @@ measurements from Barcelona's streets. See "Honesty" below.
 
 ### Does it hold up, or did we get a lucky seed?
 
-`python server/validate_seeds.py 1200 4` re-runs the entire paired experiment
+`python server/validate_seeds.py 1800 4` re-runs the entire paired experiment
 four times, varying **both** SUMO's driver-behaviour seed **and** the underlying
-trip demand (two independently generated demand sets). It reports the *worst*
-case across runs, not the mean:
+trip demand (two independently generated demand sets — seeds 42/1337 on set A,
+42/2026 on set B). It reports the *worst* case across runs, not the mean:
 
 | metric | mean Δ | best | worst | |
 |---|---:|---:|---:|---|
-| Vehicle-hours lost stopped | −44.2 % | −45.0 % | −43.1 % | every run |
-| Average trip time | −6.2 % | −7.4 % | −4.7 % | every run |
-| Network speed | +3.2 % | +4.9 % | +0.6 % | every run |
-| Bus hours lost stopped | −64.3 % | −66.0 % | −62.9 % | every run |
-| Bus mean speed | +40.1 % | +52.3 % | +23.0 % | every run |
-| Trips completed | +71.8 % | +72.7 % | +71.1 % | every run |
-| CO₂ | −2.9 % | −3.6 % | −2.5 % | every run |
-| NOₓ | −6.2 % | −6.9 % | −5.6 % | every run |
-| Teleports | −46.1 % | −50.4 % | −42.1 % | every run |
+| Vehicle-hours lost stopped | −52.6 % | −54.7 % | −51.0 % | every run |
+| Average trip time | −16.4 % | −17.8 % | −15.1 % | every run |
+| Network speed | +39.3 % | +41.7 % | +38.2 % | every run |
+| Bus hours lost stopped | −72.2 % | −77.1 % | −68.0 % | every run |
+| Bus speed | +70.1 % | +78.7 % | +60.5 % | every run |
+| Trips completed | +40.1 % | +40.4 % | +39.8 % | every run |
+| CO₂ | −7.9 % | −8.9 % | −7.2 % | every run |
+| NOₓ | −13.9 % | −15.0 % | −13.0 % | every run |
+| Teleports | −40.7 % | −44.8 % | −36.7 % | every run |
+
+The network-speed row used to read +3.2 %. That was not a different result —
+it was a different *instrument*. The old figure came from SUMO's instantaneous
+mean speed, sampled at one arbitrary tick on each of two independently seeded
+twins; consecutive samples of it swung between +98 % and −4 % while the
+underlying advantage sat steady. The row above uses the time-integrated
+network speed (total distance ÷ total vehicle-seconds), which is what the
+metric was always meant to express.
 
 ### Equity: is the average bought at someone's expense?
 
@@ -92,16 +128,24 @@ The standard objection to adaptive signal control is that it improves the mean
 by abandoning somebody on a side street. So the same sweep measures the *tail*
 of the waiting-time distribution, not just the average:
 
-| metric | mean Δ | worst | |
-|---|---:|---:|---|
-| p95 vehicle wait | −25.3 % | −21.3 % | every run |
-| Worst wait in the network | −4.4 % | −3.3 % | every run |
-| Vehicles waiting > 5 min | −68.6 % | −66.6 % | every run |
+| metric | mean Δ | best | worst | |
+|---|---:|---:|---:|---|
+| p95 vehicle wait | −40.2 % | −50.9 % | −33.8 % | every run |
+| Vehicles waiting > 5 min | −76.0 % | −77.6 % | −72.1 % | every run |
+| Worst wait in the network | −3.4 % | −11.3 % | **+0.3 %** | **MIXED** |
 
-The tail improves too. The fairness cap in rule 4 is doing its job: the policy
-is not trading side streets for arterials, it is removing standstill time from
-both. In a single 600 s run the effect on the worst-off is stark — vehicles that
-had been waiting more than five minutes fell from 91 to 4.
+The bulk of the tail improves substantially: the 95th percentile wait falls by
+at least a third on every run, and the number of vehicles stuck for more than
+five minutes falls by at least 72 %. The fairness cap in rule 4 is doing its
+job — the policy is not trading side streets for arterials.
+
+**The single worst-off vehicle is the honest exception.** Across four runs it
+improved three times and got 0.3 % worse once, so the correct claim is that
+adaptive control does *not reliably* help the very worst case, only the shape
+of the distribution behind it. That row is left in the table rather than
+dropped: a metric that refuses to confirm the thesis is the most useful one on
+the page, and an earlier version of this README reported it as "every run" on
+the strength of a smaller sweep that happened not to contain a counterexample.
 
 ### By corridor
 
@@ -203,6 +247,26 @@ the **amplitude** is rescaled, with the transform stated in the profile JSON
 itself (`derivation.formula`). Congestion state is not traffic volume, and
 conflating them would be a fabrication wearing real data's clothes.
 
+**The 3D city is smaller than the simulation.** Signals and traffic span about
+8.0 × 6.4 km; the building extract covers 2.7 × 3.1 km — **17% of that
+footprint**. Pull the camera back and the 3D city visibly stops while traffic
+carries on over flat basemap. It is a deliberate trade for browser performance,
+and it is adjustable with measured numbers rather than guesswork:
+
+| extent | area | buildings | file | coverage |
+|---|---|---|---:|---:|
+| default | 2.7 × 3.1 km | 10,425 | 3.8 MB | 17% |
+| `--expand 2` | 6.1 × 5.3 km | 29,991 | 11.1 MB | 63% |
+
+```bash
+python sim/fetch_buildings.py --expand 2
+```
+
+Judge it on the target machine, not the download — the file is served from
+localhost, so its size costs nothing on the wire. What it costs is parse time
+and GPU load for ~30k extruded polygons, and the stated target is an Intel
+N100. The default stays because that cost has not been measured there.
+
 **Wanted but not available:**
 - TMB does not publish an open GTFS feed on the municipal portal, so bus routes
   are not real line geometries.
@@ -211,7 +275,68 @@ conflating them would be a fabrication wearing real data's clothes.
   `BCN_OPENDATA_TOKEN`). Without a token the layer is simply absent — we do not
   substitute invented stations.
 
+**Live, on by default, no key:** Barcelona's *current* traffic state. The
+Ajuntament republishes the congestion of all 532 instrumented sections every
+few minutes, CC BY 4.0, no registration — the same `trams` feed the demand
+profile was measured from, read live instead of historically. It appears in
+the masthead as `BCN live · N% congested`, the one non-simulated figure on
+screen, and on `/api/feeds/bcn`. See `server/feeds/bcn.py`.
+
+Three things about that feed are traps, and all three are handled:
+
+- **Only one of its ~100 resources is current.** The rest are monthly CSV
+  archives; the newest is last month's. Pointing at one produces a convincing
+  "live" panel showing traffic from weeks ago. CKAN's own metadata misleads
+  here too — it reports the live file's `last_modified` as 2023, because the
+  file is overwritten in place rather than replaced.
+- **Timestamps are Barcelona local with no offset marker.** Parsed naively
+  from another timezone they read hours in the future, which either looks like
+  a clock bug or, worse, makes a staleness check accept old data.
+- **State `0` means "detector down", not "clear".** Averaging it in as a low
+  number reports broken sensors as free-flowing traffic. It is excluded from
+  every aggregate, so the percentage is a share of what is actually measuring
+  — which is why the denominator moves between polls.
+
+**Optional live feeds (off by default):** two further external sources can be
+plugged in — Barcelona traffic control data, and vehicle data — via
+`server/feeds/`.
+Both are inert until a key *and* a URL are supplied in `.env`, and there is
+deliberately **no default endpoint in the source**: a plausible-looking URL
+invented here would be a fabricated data source that appears to work. An
+unconfigured feed reports `not_configured` and the UI keeps labelling that
+data simulated. `/api/feeds` exposes the provenance without touching the
+network, and without ever returning the credential.
+
+Before any parsing is written against a feed, `python server/feeds/probe.py`
+reports what the endpoint actually returns — shape, record counts, candidate
+coordinate/time/state fields — so the integration is built against the real
+payload rather than an assumption about it.
+
 No data source is claimed that is not actually used. Nothing is fabricated.
+
+---
+
+## Demand amplitude
+
+The measured profile says *when* Barcelona is busy. How much of that this
+network can actually clear is a separate question, and getting it wrong
+destroys the demo in one of two directions: too little traffic and both twins
+flow, so there is nothing to see; too much and both gridlock, so there is
+still nothing to see.
+
+Calibration (`server/calibrate.py`, a **fresh simulation pair per point** —
+gridlock is absorbing, so sweeping demand against one long-running server
+measures nothing) puts the usable operating point at 0.79 of measured peak:
+
+| vehicles | stopped | fixed-time | AI | gain | bus gain |
+|---:|---:|---:|---:|---:|---:|
+| 1,044 | 31% | 16.0 km/h | 22.3 km/h | +39% | +65% |
+| 1,174 | 35% | 15.0 km/h | 20.9 km/h | +39% | +82% |
+| 1,209 | 39% | 14.6 km/h | 20.4 km/h | +40% | +86% |
+
+Dense enough to look congested, with the adaptive twin visibly clearing it.
+Tune with `MAINSTREET_CAPACITY` — the measured *shape* is never altered, only
+its amplitude.
 
 ---
 
@@ -245,8 +370,14 @@ python sim/fetch_osm.py          # Overpass -> OSM extract          (real)
 python sim/build_net.py          # netconvert -> SUMO network       (real)
 python sim/build_demand.py       # randomTrips -> route files  (synthetic)
 python sim/export_geo.py         # SUMO net -> GeoJSON for the map
+python sim/build_signal_approaches.py   # per-approach signal lamps
 python sim/fetch_bcn_opendata.py # Open Data BCN cycle network      (real)
 ```
+
+Rerun `build_signal_approaches.py` whenever the network is rebuilt. Both ends
+fall back to one lamp per junction if the file is missing, so a stale or absent
+file does not crash anything — it just quietly gives you the worse display,
+which is the harder failure to notice.
 
 **Demo mode — one process, one port.** Build the web app once, then the Python
 server serves it directly alongside the WebSocket:
@@ -258,6 +389,20 @@ python server/app.py
 
 Open **http://127.0.0.1:8000**. Nothing else needs to be running, which is what
 you want on a conference projector.
+
+> **Restart it before you present.** The demand level is calibrated for a fresh
+> run and drifts over a long one — insertion slightly exceeds what the network
+> clears, so vehicles accumulate:
+>
+> | simulated time | vehicles | halting | AI advantage |
+> |---|---:|---:|---:|
+> | 0.5 h | ~1,400 | 31% | **+38%** |
+> | 3.0 h | ~3,400 | 69% | +23% |
+> | 4.2 h | ~3,100 | 73% | +16.5% |
+>
+> Step time grows with the jam — by 4.2 h the simulation runs at 0.47× realtime
+> and the clock visibly crawls. At the default 5× speed you have roughly half an
+> hour of wall clock before it softens. A restart takes seconds.
 
 **Dev mode — hot reload.** Run the Vite dev server against the same backend; it
 proxies `/api` and `/ws` to port 8000:
@@ -281,13 +426,21 @@ python server/compare.py 1800
 **Repeat the experiment across seeds and demand sets:**
 
 ```bash
-python sim/build_demand.py --end 3600 --seed 909 --tag _b   # second demand set
-python server/validate_seeds.py 1200 4
+python sim/build_demand.py --seed 909 --tag _b   # second demand set, 24 h
+python server/validate_seeds.py 1800 4
 ```
 
 This re-runs the whole paired experiment while varying both SUMO's
 driver-behaviour seed and the underlying trips, then reports the **worst** case
 across runs rather than the mean — which is the number worth defending.
+
+**Rebuild `_b` whenever the demand pipeline changes.** A stale set fails at
+`libsumo.start` with *"Another vehicle type (or distribution) with the id
+'car_electric' exists"* — route files generated before vTypes moved into
+`vtypes.add.xml` still declare their own. Those runs are dropped, and the
+summary then reports "improved on every run" over however many survived, so
+the footer prints the surviving run count and lists any failures. Check it: a
+four-run verdict backed by two runs is a weaker claim than it looks.
 
 ---
 
@@ -312,6 +465,11 @@ server/
   profile_step.py         per-phase timing of the simulation loop
   smoke_test.py           run one twin and print what it emits
 
+server/feeds/         external data, with honest provenance
+  bcn.py              Barcelona's live traffic state (real, keyless, on)
+  live.py             fetch + TTL + stale/error states, never leaks a key
+  probe.py            report what an endpoint returns before parsing it
+
 server/ai/            the two AI roles — inert without keys
   config.py           separate keys per role, loaded from .env
   orchestrator.py     LLM sets signal POLICY; rules execute it
@@ -323,19 +481,49 @@ web/
   src/scene/buildings.js    extruded OSM footprints, raised on load
   src/scene/three/geo.js    WGS84 <-> Mercator <-> scene metres (tested)
   src/scene/three/traffic.js    instanced 3D vehicles, dead-reckoned
-  src/scene/three/signals.js    1,151 signal masts with live state
+  src/scene/three/signals.js    3,230 approach lamps with live state (tested)
   src/ui/Bezel.jsx          instrument readouts + bearing tape
+  src/ui/LiveCity.jsx       real Barcelona congestion, live, in the masthead
   src/data/useSimSocket.js  binary frame decoder
 ```
+
+**Tests** — no framework, no runner; each is a plain script that exits non-zero.
+
+```bash
+node web/src/scene/three/geo.test.mjs        # projection round-trips
+node web/src/scene/three/ribbons.test.mjs    # triangle winding
+node web/src/scene/three/signals.test.mjs    # signal repaint correctness
+node web/src/scene/three/traffic.test.mjs    # per-vehicle heading
+node web/src/design/tokens.test.mjs          # no undefined CSS variables
+python server/test_feeds.py                  # feed states + BCN parser
+```
+
+Each exists because something failed silently once. The token test is the
+clearest case: an undefined custom property does not error, and used as a
+`background` it resolves to transparent — which is how the split meter's
+fixed-time bar, half of the comparison the whole demo rests on, came to render
+as nothing at all while panels.css carried a careful comment about which shade
+of grey it should be.
 
 ### The front end
 
 A dark control-room view of the city: real extruded OSM buildings, GPU-instanced
-3D vehicles, and 1,151 traffic signals with live red/amber/green state, all over
-a free camera (drag pan, scroll zoom, right-drag orbit, pitch to 85°).
+3D vehicles, and live red/amber/green signals over a free camera (drag pan,
+scroll zoom, right-drag orbit, pitch to 85°).
 
-The whole dynamic scene costs **7 draw calls** — 4 for the fleet, 3 for the
+The whole dynamic scene costs **9 draw calls** — 6 for the fleet, 3 for the
 signals — regardless of how many vehicles are on screen.
+
+**Signals are per APPROACH, not per junction.** Barcelona's 1,151 signalised
+junctions carry 3,230 approach lamps, each coloured by the links arriving from
+that approach. This matters more than it sounds: a junction-level lamp has to
+answer "is anything green here", and the answer is almost always yes. Measured
+on this network, 94% of samples at multi-approach junctions have approaches in
+DIFFERENT states, and one junction cycles 17 distinct phases that all collapse
+to a single green byte. Opposing approaches now visibly differ, which is the
+only way a signal reads as a signal. See `sim/build_signal_approaches.py` —
+regenerate it and the wire format together, since the server emits one state
+byte per feature in that file's order.
 
 Vehicles are **dead-reckoned** between simulation ticks. The wire format carries
 no vehicle IDs, so vehicles cannot be matched frame-to-frame and therefore
@@ -343,6 +531,21 @@ cannot be interpolated; instead each one advances along its reported heading at
 its reported speed until the next tick corrects it. Data arrives at ~5 Hz and
 the scene renders at display rate, so traffic flows continuously rather than
 stepping.
+
+**Nothing may be remembered per instance slot**, and this is sharper than it
+sounds. The array is repacked every tick: measured on the real network, a given
+slot holds the same vehicle only **36.4%** of the time. An earlier attempt at
+smooth cornering eased each vehicle from `yawTarget[i]` — the heading of
+whatever last occupied that slot — and so rendered a rotation more than 15°
+wrong on **55.2%** of slot-ticks, median error **95°**. It read as vehicles
+gliding gracefully the wrong way round, which is worse than the snapping it
+replaced, and no screenshot would have caught it.
+
+The fix is to carry each vehicle's own **turn rate** as a sixth float on the
+wire, so heading extrapolates forward from measured per-vehicle state exactly
+as position extrapolates from speed. `traffic.test.mjs` pins it: a slot whose
+occupant changes must render the new vehicle's heading, not a blend with the
+old one's.
 
 Buildings come from our own OSM extract (`sim/fetch_buildings.py`), not the
 basemap. Only the OpenMapTiles schema carries per-building height and its one
@@ -379,10 +582,13 @@ One binary frame per tick, rather than JSON:
 ```
 uint32   headerLen        (header padded so the float block stays 4-byte aligned)
 bytes    headerLen        UTF-8 JSON: metrics for BOTH twins, clock, events
-float32  n_veh * 5        lon, lat, angle, kind, speed  (focused twin only)
-uint8    n_sig            0=red 1=yellow 2=green
+float32  n_veh * 6        lon, lat, angle, kind, speed, turn  (focused twin)
+uint8    n_sig            0=red 1=yellow 2=green, in signal_approaches.geojson order
 uint8    n_edge           mean speed / speed limit, * 255
 ```
+
+`n_sig` rides in the JSON header, so the approach split (1,151 -> 3,230 lamps)
+cost no format change — just 2 KB more per frame.
 
 ~52 KB per frame at 2 300 vehicles. The browser builds typed-array views
 directly onto the socket buffer with no copying and no per-object allocation.

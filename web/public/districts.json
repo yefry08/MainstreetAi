@@ -1,0 +1,155 @@
+{
+  "districts": [
+    {
+      "key": "barcelona",
+      "city": "Barcelona",
+      "name": "Eixample",
+      "label": "Barcelona \u2014 Eixample",
+      "bbox": [
+        41.3635,
+        2.1142,
+        41.4212,
+        2.2107
+      ],
+      "centre": [
+        2.1624499999999998,
+        41.39235
+      ],
+      "km": [
+        8.06,
+        6.42
+      ],
+      "area_km2": 51.8,
+      "radius_m": 4029,
+      "why": "The reference build. Cerd\u00e0's grid is the densest signalised network in the set.",
+      "has_basemap": true,
+      "has_network": true
+    },
+    {
+      "key": "shibuya",
+      "city": "Tokyo",
+      "name": "Shibuya",
+      "label": "Tokyo \u2014 Shibuya",
+      "bbox": [
+        35.652,
+        139.69,
+        35.672,
+        139.713
+      ],
+      "centre": [
+        139.7015,
+        35.662
+      ],
+      "km": [
+        2.08,
+        2.23
+      ],
+      "area_km2": 4.6,
+      "radius_m": 1113,
+      "why": "One of the most heavily signalised pedestrian-vehicle conflicts anywhere; the scramble crossing is the point.",
+      "has_basemap": true,
+      "has_network": true
+    },
+    {
+      "key": "manhattan",
+      "city": "New York",
+      "name": "Midtown Manhattan",
+      "label": "New York \u2014 Midtown Manhattan",
+      "bbox": [
+        40.743,
+        -74.0,
+        40.768,
+        -73.97
+      ],
+      "centre": [
+        -73.985,
+        40.7555
+      ],
+      "km": [
+        2.53,
+        2.78
+      ],
+      "area_km2": 7.0,
+      "radius_m": 1391,
+      "why": "A near-perfect rectangular grid with avenue-length green waves -- the textbook case for signal coordination.",
+      "has_basemap": true,
+      "has_network": true
+    },
+    {
+      "key": "sf_downtown",
+      "city": "San Francisco",
+      "name": "Downtown & SoMa",
+      "label": "San Francisco \u2014 Downtown & SoMa",
+      "bbox": [
+        37.777,
+        -122.418,
+        37.798,
+        -122.39
+      ],
+      "centre": [
+        -122.404,
+        37.7875
+      ],
+      "km": [
+        2.46,
+        2.34
+      ],
+      "area_km2": 5.8,
+      "radius_m": 1232,
+      "why": "Chosen over Silicon Valley: a tight signalised grid with heavy transit, where Silicon Valley is 50 km of freeway sprawl with few city signals.",
+      "has_basemap": true,
+      "has_network": false
+    },
+    {
+      "key": "caba",
+      "city": "Buenos Aires",
+      "name": "Microcentro, CABA",
+      "label": "Buenos Aires \u2014 Microcentro, CABA",
+      "bbox": [
+        -34.618,
+        -58.398,
+        -34.595,
+        -58.366
+      ],
+      "centre": [
+        -58.382000000000005,
+        -34.6065
+      ],
+      "km": [
+        2.93,
+        2.56
+      ],
+      "area_km2": 7.5,
+      "radius_m": 1466,
+      "why": "Dense colonial grid with very short blocks, so junction density per km2 is among the highest here.",
+      "has_basemap": true,
+      "has_network": false
+    },
+    {
+      "key": "london_city",
+      "city": "London",
+      "name": "City & Westminster",
+      "label": "London \u2014 City & Westminster",
+      "bbox": [
+        51.503,
+        -0.14,
+        51.52,
+        -0.075
+      ],
+      "centre": [
+        -0.10750000000000001,
+        51.5115
+      ],
+      "km": [
+        4.5,
+        1.89
+      ],
+      "area_km2": 8.5,
+      "radius_m": 2252,
+      "why": "Central London core rather than Greater London: the congestion charge zone is roughly this, and it is where the signals are.",
+      "has_basemap": true,
+      "has_network": false
+    }
+  ],
+  "default": "barcelona"
+}

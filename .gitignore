@@ -11,6 +11,15 @@ sim/net/*.rou.alt.xml
 web/public/data/roads.geojson
 web/public/data/signals.geojson
 
+# Per-approach signal lamps (regenerate with sim/build_signal_approaches.py).
+# Must be rebuilt whenever the network changes: the server emits one state
+# byte per feature in this file's order, so a stale file silently mismatches
+# the wire.
+web/public/data/signal_approaches.geojson
+# Same artefacts for the other districts, which carry a "_<district>" suffix.
+web/public/data/signal_approaches_*.geojson
+web/public/data/signals_*.geojson
+
 # Real Open Data BCN layers (regenerate with sim/fetch_bcn_opendata.py)
 web/public/data/bike_lanes.geojson
 web/public/data/bicing.geojson
@@ -21,9 +30,53 @@ __pycache__/
 *.pyc
 .vite/
 
+# Knowledge-graph output (regenerate with /graphify). Entirely derived from the
+# source tree — graph.json, graph.html, GRAPH_REPORT.md and a 38-file AST cache,
+# ~1.5 MB in total. Two of the sidecars (.graphify_python, .graphify_root) also
+# record absolute paths to whichever machine produced them, which is worse than
+# merely redundant in a shared repo.
+graphify-out/
+
 # Building footprints (regenerate with sim/fetch_buildings.py)
 web/public/data/buildings.geojson
+
+# Real transit geometry (regenerate with sim/transit/build_transit.py).
+# The GTFS zip is 9 MB of someone else's data on a weekly release cycle, so it
+# is fetched rather than vendored; transit.geojson is derived from it.
+sim/transit/cache/
+web/public/data/transit.geojson
 
 # API keys — never commit. Copy .env.example to .env.
 .env
 .env.local
+
+# Illustrated base map (regenerate with sim/basemap/build_basemap.py).
+# A full-city render is a 25-60 minute Overpass-bound pre-bake producing an
+# 8000x8000 px image; both it and its transform sidecar are derived.
+web/public/data/basemap_*.png
+web/public/data/basemap_*.json
+
+# Pipeline env for city2graph + prettymaps. prettymaps needs Python >=3.12 and
+# the geo stack needs wheels, so both share one 3.13 env rather than two.
+.venv-pipeline/
+
+# osmnx writes its Overpass response cache to ./cache at the repo root when
+# prettymaps fetches. Leading slash so this matches only the root directory and
+# not, say, sim/transit/cache.
+/cache/
+
+# Static replay for GitHub Pages (regenerate with sim/bake_replay.py).
+# Recorded binaries, derived from a simulation run.
+web/public/replay/
+web/public/replay_*/
+
+# Pages build output.
+web/dist-pages/
+# The deploy builds write to the REPO ROOT, because vite's --outDir is relative
+# to web/. Only the web/-prefixed paths were ignored, so a 24 MB build output
+# landed in a source commit.
+/dist-pages/
+/dist-vercel/
+
+# Vercel prebuilt output.
+web/dist-vercel/

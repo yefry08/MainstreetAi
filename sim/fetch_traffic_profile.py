@@ -212,6 +212,14 @@ def main() -> None:
             "note": "Mean congestion index by day of week and hour, normalised "
                     "so the busiest measured hour of the week is 1.0. State 0 "
                     "('no data') is excluded rather than counted as free-flowing.",
+            # The divisor used for that normalisation, in raw STATE_INDEX
+            # units. Recorded because without it the curve cannot be compared
+            # against anything else measured on the same scale -- notably a
+            # LIVE reading from the same feed, which is the obvious question
+            # to ask of it ("is the city busier than usual right now?").
+            # Recovering it afterwards means re-streaming every observation.
+            "peak_raw": round(peak, 6),
+            "state_index": STATE_INDEX,
         },
         "derivation": {
             "congestion_is_not_volume": (

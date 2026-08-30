@@ -1,3 +1,4 @@
+import { assetUrl } from '../data/assetUrl'
 /**
  * 3D buildings: extruded OSM footprints, lit to read as volumes.
  *
@@ -41,7 +42,7 @@ const SOURCE_ID = 'mst-bldg'
  * happens; the simulation extract is larger, so buildings thin out at the far
  * edges of a wide zoom-out.
  */
-const SOURCE_URL = '/data/buildings.geojson'
+const SOURCE_URL = assetUrl('data/buildings.geojson')
 
 /**
  * Heights are drawn at 1.45x true.
