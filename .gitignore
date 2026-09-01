@@ -80,3 +80,6 @@ web/dist-pages/
 
 # Vercel prebuilt output.
 web/dist-vercel/
+
+# Generated media from generate.py (large binaries, regenerable from prompts).
+media/generated/

@@ -1,0 +1,7 @@
+# generate.py deliberately has no third-party dependencies -- it uses only the
+# Python standard library (urllib, json, argparse). One less thing to install
+# on a machine that is about to record a demo, and no supply chain to trust
+# for a script that handles API credentials.
+#
+# The simulation pipeline's own dependencies are installed separately; see
+# README.md. This file exists because the workflow notes call for it.
