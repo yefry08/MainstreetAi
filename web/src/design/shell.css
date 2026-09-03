@@ -594,13 +594,12 @@
 
 /* The district picker floats over its own scene rather than replacing it, so
    the map is visible behind the card you are about to choose. */
-.city-layer {
-  z-index: 4;
-  pointer-events: none;
-}
-
-.city-layer > * { pointer-events: auto; }
-
+/* .city-layer is gone. It carried `pointer-events: none` so drags would reach
+   the pixel scene behind it -- which also meant the WHEEL never reached the
+   scroll container, so the tab overflowed by 260px and could not be scrolled
+   at all. Try your city is a plain .page-layer now, scrolling exactly like
+   Research and Contact, with the app shell still the only thing pinned to the
+   viewport so no second scrollbar appears. */
 /* =========================================================================
    RESEARCH — precedent cards
    Cards rather than prose on purpose: this is context a reader skims on the

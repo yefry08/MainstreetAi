@@ -29,12 +29,16 @@ import CityIllustration from './CityIllustration'
 
 /** The cities this section presents, in this order.
  *
- *  Two, not five. Barcelona is the working demo; San Francisco is one
- *  illustration done properly rather than four done roughly. Shibuya,
- *  Manhattan, CABA and London stay in the registry -- three of them have real
- *  simulations behind them -- and come back to this grid when they have
- *  drawings worth showing. */
-const SHOWN = ['barcelona', 'sf_downtown']
+ *  San Francisco alone. Barcelona's card was removed: it duplicated the Home
+ *  hero, and selecting it was a no-op because Barcelona is already the default
+ *  district. Every other city stays in the registry -- Shibuya, Manhattan and
+ *  Barcelona have real simulations -- and returns to this grid when it has a
+ *  drawing worth showing.
+ *
+ *  The isDemo branch below is kept deliberately even though nothing takes it
+ *  today: it is how a city with a working simulation gets a live card instead
+ *  of an illustration, and it is the section's only path back to one. */
+const SHOWN = ['sf_downtown']
 const OSS = [
   {
     name: 'GeoLibre',
