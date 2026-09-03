@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import CityIllustration from './CityIllustration'
 
 /**
  * "Try your city": a fixed list of districts, not a free-text box.
@@ -16,10 +17,19 @@ import { useEffect, useState } from 'react'
  * screen is one the controller is actually orchestrating.
  *
  * WHAT IS HONEST HERE
- * A district with a basemap but no SUMO network renders the illustration and
- * no traffic. That is reported as "map only", because an empty city presented
- * as a quiet one is the kind of thing a demo should never do.
+ * Barcelona is the working demo and opens the pixel scene. Every other city is
+ * an illustrated card -- an isometric drawing of its character, not a map and
+ * not a simulation -- wearing a badge that says the real thing is still being
+ * built. A drawing that admits to being a drawing beats a map that half works.
+ *
+ * The live-map path (baked basemaps, GeoLibre links) is kept in the codebase
+ * but taken out of this render path deliberately; see the git history for the
+ * measurements that ruled it out.
  */
+
+/** The cities this section presents, in this order. SF Downtown stays in the
+ *  registry for the pipeline but is not shown here. */
+const SHOWN = ['barcelona', 'shibuya', 'manhattan', 'caba', 'london_city']
 const OSS = [
   {
     name: 'GeoLibre',
@@ -28,8 +38,8 @@ const OSS = [
     what: 'A browser GIS app — MapLibre, deck.gl and DuckDB-WASM — for ' +
           'exploring geospatial data. It does not fetch OpenStreetMap street ' +
           'graphs or run traffic, so it replaces nothing in this pipeline; it ' +
-          'is where to open a district’s street network and look around. The ' +
-          '“Explore” links on the cards do exactly that.',
+          'is a good place to open a district’s street network and look ' +
+          'around, and it is credited here for that, not used.',
     used: false,
   },
   {
@@ -118,20 +128,20 @@ export default function TryCity({ current, onSelect }) {
       </header>
 
       <div className="try-grid">
-        {reg.districts.map((d) => {
-          const state = d.has_network ? 'ready' : (d.has_basemap ? 'map' : 'unbuilt')
+        {SHOWN.map((k) => reg.districts.find((d) => d.key === k)).filter(Boolean).map((d) => {
+          const isDemo = d.key === 'barcelona'
+          const state = isDemo ? 'ready' : 'card'
           return (
             <div className="try-card-wrap" key={d.key}>
             <button
               className={`try-card ${current === d.key ? 'on' : ''} ${state}`}
-              onClick={() => (d.has_basemap ? onSelect?.(d.key) : null)}
-              disabled={!d.has_basemap}
+              onClick={() => (isDemo ? onSelect?.(d.key) : null)}
+              aria-disabled={!isDemo}
             >
               <div className="try-card-top">
                 <span className="try-city">{d.city}</span>
                 <span className={`try-state ${state}`}>
-                  {state === 'ready' ? 'traffic + map'
-                    : state === 'map' ? 'map only' : 'not built'}
+                  {isDemo ? 'traffic + map · live demo' : 'illustrated'}
                 </span>
               </div>
               <div className="try-name">{d.name}</div>
@@ -140,31 +150,18 @@ export default function TryCity({ current, onSelect }) {
               </div>
               <p className="try-why">{d.why}</p>
 
-              {/* Traffic runs on the card only where traffic actually exists.
-                  Animating the map-only districts would look better and say
-                  something false -- the stillness is the honest signal, and it
-                  reads faster than the label does. */}
-              {state === 'ready' && (
-                <div className="try-traffic" aria-hidden="true">
-                  <span className="try-road" />
-                  <i className="try-car c1" /><i className="try-car c2" />
-                  <i className="try-car c3" />
-                </div>
-              )}
+              {/* The drawing, where one exists. It is the card's content, not
+                  decoration: the city's character at a glance. */}
+              {!isDemo && <CityIllustration district={d.key} />}
             </button>
 
-            {/* Only where a street-graph export exists. A link that opens an
-                empty map would look like the pipeline failed. */}
-            {d.has_roads_geojson && (
-              <a
-                className="try-explore"
-                href={geolibreUrl(d)}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={`Open ${d.city}'s street network in GeoLibre (new tab)`}
-              >
-                Explore in GeoLibre ↗
-              </a>
+            {/* Not a modal, not a disabled overlay: a pill in the corner that
+                says plainly the simulation for this city is still being built.
+                The card should look intentional, not broken. */}
+            {!isDemo && (
+              <span className="try-badge">
+                <i aria-hidden="true" />In progress behind the scenes
+              </span>
             )}
             </div>
           )
@@ -172,10 +169,10 @@ export default function TryCity({ current, onSelect }) {
       </div>
 
       <p className="try-note">
-        “Map only” means the illustrated basemap is baked but the SUMO network
-        for that district is not, so it renders without traffic. Building the
-        traffic side is a separate multi-minute pipeline per district — it is
-        not something that can happen while you wait.
+        Barcelona runs the full simulation. The other cities are illustrated
+        cards for now — a drawing of each district's character, not a map —
+        while their networks are built. Each one is a multi-minute pipeline per
+        district, not something that can happen while you wait.
       </p>
 
       {/* Credit, not a dependency list. Only tools this pipeline genuinely

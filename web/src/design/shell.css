@@ -902,70 +902,6 @@
    TRY YOUR CITY — traffic strip and open-source credits
    ========================================================================= */
 
-/* A few cars crossing the foot of the card. Present only on districts that
-   have a SUMO network: the movement says "this one actually simulates", and
-   the stillness of the others says the opposite faster than the label does.
-   CSS-only -- no JS, no timers, no work when the tab is hidden. */
-.try-traffic {
-  position: relative;
-  height: 14px;
-  margin-top: var(--space-3);
-  overflow: hidden;
-}
-
-.try-road {
-  position: absolute;
-  left: 0; right: 0; top: 50%;
-  height: 1px;
-  background: var(--glass-edge);
-}
-
-.try-car {
-  position: absolute;
-  top: calc(50% - 3px);
-  width: 9px;
-  height: 5px;
-  border-radius: 1px;
-  background: var(--terracota-500);
-  animation: try-drive 5.5s linear infinite;
-}
-
-/* Staggered starts and slightly different speeds, so it reads as traffic
-   rather than as a marquee. */
-.try-car.c2 {
-  background: var(--ink-300);
-  width: 13px;
-  animation-duration: 7s;
-  animation-delay: -2.2s;
-}
-
-.try-car.c3 {
-  background: var(--terracota-400);
-  width: 7px;
-  animation-duration: 4.4s;
-  animation-delay: -3.6s;
-}
-
-@keyframes try-drive {
-  from { transform: translateX(-14px); }
-  to   { transform: translateX(calc(100% + 340px)); }
-}
-
-/* A card the pointer is over gets busier, which makes the hover feel like it
-   is about to take you somewhere moving. */
-.try-card:hover .try-car { animation-duration: 2.6s; }
-.try-card:hover .try-car.c2 { animation-duration: 3.4s; }
-.try-card:hover .try-car.c3 { animation-duration: 2.1s; }
-
-/* Motion here is decorative reinforcement of a label that is already there in
-   words, so it is the first thing to go. */
-@media (prefers-reduced-motion: reduce) {
-  .try-car { animation: none; }
-  .try-car.c1 { left: 12%; }
-  .try-car.c2 { left: 45%; }
-  .try-car.c3 { left: 74%; }
-}
-
 .try-oss { margin-top: calc(var(--space-4) * 2); max-width: 78ch; }
 
 .try-oss h2 {
@@ -1093,4 +1029,93 @@
 @media (max-width: 860px) {
   .replay-speed { top: auto; bottom: calc(var(--space-3) + 44px); right: var(--space-3); }
   .replay-speed-cap { display: none; }
+}
+
+/* =========================================================================
+   TRY YOUR CITY — illustrated cards
+   ========================================================================= */
+
+/* The drawing fills the card's width at a fixed 4:3, so five cards line up
+   whatever their text length. Pixel art must not be smoothed. */
+.try-art {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  margin-top: var(--space-3);
+  border-radius: 6px;
+  background: linear-gradient(180deg, #f6f1e8 0%, #ece5d8 100%);
+  image-rendering: pixelated;
+}
+
+.try-card.card { cursor: default; }
+.try-card.card:hover { transform: none; }
+
+/* A pill in the top-right corner. Glass over the drawing, terracotta text so
+   it reads as the site's own voice, and a slow pulse on the dot so "in
+   progress" looks like something is happening rather than something stalled. */
+.try-badge {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px 4px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--terracota-500);
+  background: rgba(20, 16, 14, 0.62);
+  backdrop-filter: blur(6px) saturate(130%);
+  -webkit-backdrop-filter: blur(6px) saturate(130%);
+  font-family: var(--font-data);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--terracota-400);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.try-badge i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--terracota-500);
+  animation: try-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes try-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.45; transform: scale(0.75); }
+}
+
+/* Illustration details: a neon flicker and a drifting cloud. Small on
+   purpose -- the card is a still that breathes, not an animation. */
+.try-neon { animation: try-neon 2.6s steps(2, end) infinite; }
+@keyframes try-neon {
+  0%, 84%  { opacity: 1; }
+  88%, 92% { opacity: 0.35; }
+  96%, 100% { opacity: 1; }
+}
+
+.try-cloud { animation: try-drift 28s linear infinite; }
+@keyframes try-drift {
+  from { transform: translateX(0); }
+  to   { transform: translateX(150px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .try-badge i, .try-neon, .try-cloud { animation: none; }
+}
+
+/* Aircraft-warning beacon on the Manhattan spire: a slow on/off, not the
+   neon's flicker, because a beacon is a pulse and a sign is a fault. */
+.try-beacon { animation: try-beacon 2s steps(1, end) infinite; }
+@keyframes try-beacon {
+  0%, 55%   { opacity: 1; }
+  56%, 100% { opacity: 0.15; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .try-beacon { animation: none; }
 }
