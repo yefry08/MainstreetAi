@@ -188,8 +188,12 @@ export default function App() {
       {isCity && (
         <div className="scene-layer pixel-layer">
           <Suspense fallback={null}>
+          {/* Fixed-time by default, on purpose. This tab shows a district's
+              baseline flow -- signals on a fixed programme, nothing adapting --
+              and does not share the Home rail's AI switch. The comparison is
+              Home's job; here the point is to see the city move at all. */}
           {REPLAY_ONLY
-            ? <ReplayScene lighting={mode} district={district} twin={twin}
+            ? <ReplayScene lighting={mode} district={district} twin="baseline"
                            onStats={setTwins} />
             : <PixelScene frameRef={frameRef} mode={mode} district={district}
                           liveDistrict={header?.district ?? null} />}
