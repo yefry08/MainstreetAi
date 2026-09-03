@@ -1,0 +1,25 @@
+{
+  "bbox": [
+    139.678788,
+    35.647738,
+    139.73651,
+    35.679813
+  ],
+  "center": [
+    139.707649,
+    35.663775
+  ],
+  "counts": {
+    "edges_total": 1938,
+    "edges_drawn": 715,
+    "junctions": 864,
+    "traffic_lights": 65,
+    "lane_km": 187.4
+  },
+  "corridors": {},
+  "source": {
+    "network": "OpenStreetMap via Overpass API (real)",
+    "demand": "randomTrips.py statistical demand (synthetic)",
+    "emissions": "SUMO HBEFA3 model (real model, synthetic traffic)"
+  }
+}
