@@ -25,10 +25,11 @@ const OSS = [
     name: 'GeoLibre',
     href: 'https://github.com/opengeos/GeoLibre',
     role: 'adjacent',
-    what: 'A cloud-native GIS platform for exploring geospatial data in the ' +
-          'browser, on desktop and in notebooks. Built on MapLibre, the same ' +
-          'renderer as the 3D scene here — a good starting point for anyone ' +
-          'wanting to work with their own city’s data.',
+    what: 'A browser GIS app — MapLibre, deck.gl and DuckDB-WASM — for ' +
+          'exploring geospatial data. It does not fetch OpenStreetMap street ' +
+          'graphs or run traffic, so it replaces nothing in this pipeline; it ' +
+          'is where to open a district’s street network and look around. The ' +
+          '“Explore” links on the cards do exactly that.',
     used: false,
   },
   {
@@ -62,6 +63,22 @@ const OSS = [
     used: true,
   },
 ]
+
+/**
+ * GeoLibre opens a plain GeoJSON by URL, so "explore this district" is a link,
+ * not an iframe. An iframe was measured and rejected: the viewer's entry
+ * scripts alone are 1.6 MB compressed -- nearly twice this site's whole first
+ * load -- before deck.gl and DuckDB-WASM arrive, and none of it can be made
+ * faster from here. A new tab costs the visitor nothing until they ask.
+ *
+ * The URL must be absolute: GeoLibre fetches it from its own origin.
+ */
+const roadsUrl = (d) => {
+  const file = d.key === 'barcelona' ? 'data/roads.geojson' : `data/roads_${d.key}.geojson`
+  return new URL(file, document.baseURI).href
+}
+const geolibreUrl = (d) =>
+  `https://web.geolibre.app/?data=${encodeURIComponent(roadsUrl(d))}&embed=maponly`
 
 export default function TryCity({ current, onSelect }) {
   const [reg, setReg] = useState(null)
@@ -104,8 +121,8 @@ export default function TryCity({ current, onSelect }) {
         {reg.districts.map((d) => {
           const state = d.has_network ? 'ready' : (d.has_basemap ? 'map' : 'unbuilt')
           return (
+            <div className="try-card-wrap" key={d.key}>
             <button
-              key={d.key}
               className={`try-card ${current === d.key ? 'on' : ''} ${state}`}
               onClick={() => (d.has_basemap ? onSelect?.(d.key) : null)}
               disabled={!d.has_basemap}
@@ -135,6 +152,21 @@ export default function TryCity({ current, onSelect }) {
                 </div>
               )}
             </button>
+
+            {/* Only where a street-graph export exists. A link that opens an
+                empty map would look like the pipeline failed. */}
+            {d.has_roads_geojson && (
+              <a
+                className="try-explore"
+                href={geolibreUrl(d)}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`Open ${d.city}'s street network in GeoLibre (new tab)`}
+              >
+                Explore in GeoLibre ↗
+              </a>
+            )}
+            </div>
           )
         })}
       </div>

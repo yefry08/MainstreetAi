@@ -1006,3 +1006,91 @@
 @media (max-width: 860px) {
   .try-oss-list li { grid-template-columns: 1fr; gap: 2px; }
 }
+
+/* =========================================================================
+   TRY YOUR CITY — playback speed, and the GeoLibre explore link
+   ========================================================================= */
+
+/* Top-right of the pixel scene: clear of the navbar above it, the disclosure
+   bottom-left, the fps readout bottom-right, and -- most of all -- nowhere
+   near the AI switch, which is not on this tab at all. */
+.replay-speed {
+  position: absolute;
+  top: calc(var(--space-4) + 56px);
+  right: var(--space-4);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--r-md);
+}
+
+.replay-speed-cap {
+  font-family: var(--font-data);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-400);
+}
+
+.replay-speed-btn {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 7px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--glass-edge);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink-50);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease-out),
+              border-color var(--t-fast) var(--ease-out);
+}
+
+.replay-speed-btn:hover { border-color: var(--terracota-500); }
+
+/* "On" is a state, not a mode: the accent says the playback is altered, and
+   the label already says by how much. */
+.replay-speed-btn.on {
+  background: var(--terracota-glow);
+  border-color: var(--terracota-500);
+}
+
+.replay-speed-btn:focus-visible {
+  outline: 2px solid var(--terracota-500);
+  outline-offset: 2px;
+}
+
+.try-card-wrap { position: relative; display: flex; }
+.try-card-wrap > .try-card { flex: 1; }
+
+/* Sits over the card's top-right corner. It is a separate element from the
+   card button (a link inside a button is not valid HTML), so clicking it opens
+   GeoLibre without also selecting the district. */
+.try-explore {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-family: var(--font-data);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--terracota-400);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid transparent;
+  text-decoration: none;
+  opacity: 0.85;
+}
+
+.try-explore:hover {
+  opacity: 1;
+  border-color: var(--terracota-500);
+  color: var(--terracota-500);
+}
+
+@media (max-width: 860px) {
+  .replay-speed { top: auto; bottom: calc(var(--space-3) + 44px); right: var(--space-3); }
+  .replay-speed-cap { display: none; }
+}

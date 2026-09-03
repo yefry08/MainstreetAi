@@ -20,7 +20,16 @@ from pathlib import Path
 import sumolib
 
 HERE = Path(__file__).resolve().parent
-NET = HERE / "net" / "barcelona.net.xml"
+import argparse as _argparse
+
+_ap = _argparse.ArgumentParser()
+_ap.add_argument("--district", default="barcelona")
+DISTRICT = _ap.parse_known_args()[0].district
+
+# Barcelona keeps the bare filenames the 3D scene and the live server have
+# always fetched; every other district gets a "_<district>" suffix.
+_sfx = "" if DISTRICT == "barcelona" else f"_{DISTRICT}"
+NET = HERE / "net" / f"{DISTRICT}.net.xml"
 OUT = HERE.parent / "web" / "public" / "data"
 
 # Which OSM classes we re-draw ourselves, and how thick they read on the map.
@@ -96,12 +105,12 @@ def main() -> None:
             },
         })
 
-    (OUT / "roads.geojson").write_text(
+    (OUT / f"roads{_sfx}.geojson").write_text(
         json.dumps({"type": "FeatureCollection", "features": features}, separators=(",", ":")),
         encoding="utf-8",
     )
-    print(f"  roads.geojson   {len(features):,} edges  "
-          f"({(OUT / 'roads.geojson').stat().st_size / 1e6:.1f} MB)")
+    print(f"  roads{_sfx}.geojson   {len(features):,} edges  "
+          f"({(OUT / f'roads{_sfx}.geojson').stat().st_size / 1e6:.1f} MB)")
 
     # ---------------- traffic lights ----------------
     sig_features = []
@@ -141,7 +150,7 @@ def main() -> None:
             },
         })
 
-    (OUT / "signals.geojson").write_text(
+    (OUT / f"signals{_sfx}.geojson").write_text(
         json.dumps({"type": "FeatureCollection", "features": sig_features}, separators=(",", ":")),
         encoding="utf-8",
     )
@@ -169,7 +178,7 @@ def main() -> None:
             "emissions": "SUMO HBEFA3 model (real model, synthetic traffic)",
         },
     }
-    (OUT / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    (OUT / f"meta{_sfx}.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
     print(f"  meta.json       corridors: " +
           ", ".join(f"{k}={len(v)}" for k, v in corridor_edges.items()))
     print(f"\n[ok] wrote to {OUT}")

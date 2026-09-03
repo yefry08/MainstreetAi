@@ -19,6 +19,10 @@ web/public/data/signal_approaches.geojson
 # Same artefacts for the other districts, which carry a "_<district>" suffix.
 web/public/data/signal_approaches_*.geojson
 web/public/data/signals_*.geojson
+# Street-graph and metadata exports per district (sim/export_geo.py). Same
+# rule as Barcelona's roads.geojson, which has never been tracked either.
+web/public/data/roads_*.geojson
+web/public/data/meta_*.json
 
 # Real Open Data BCN layers (regenerate with sim/fetch_bcn_opendata.py)
 web/public/data/bike_lanes.geojson

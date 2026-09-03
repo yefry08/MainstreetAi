@@ -23,7 +23,8 @@
       "radius_m": 4029,
       "why": "The reference build. Cerd\u00e0's grid is the densest signalised network in the set.",
       "has_basemap": true,
-      "has_network": true
+      "has_network": true,
+      "has_roads_geojson": true
     },
     {
       "key": "shibuya",
@@ -48,7 +49,8 @@
       "radius_m": 1113,
       "why": "One of the most heavily signalised pedestrian-vehicle conflicts anywhere; the scramble crossing is the point.",
       "has_basemap": true,
-      "has_network": true
+      "has_network": true,
+      "has_roads_geojson": true
     },
     {
       "key": "manhattan",
@@ -73,7 +75,8 @@
       "radius_m": 1391,
       "why": "A near-perfect rectangular grid with avenue-length green waves -- the textbook case for signal coordination.",
       "has_basemap": true,
-      "has_network": true
+      "has_network": true,
+      "has_roads_geojson": true
     },
     {
       "key": "sf_downtown",
@@ -98,7 +101,8 @@
       "radius_m": 1232,
       "why": "Chosen over Silicon Valley: a tight signalised grid with heavy transit, where Silicon Valley is 50 km of freeway sprawl with few city signals.",
       "has_basemap": true,
-      "has_network": false
+      "has_network": false,
+      "has_roads_geojson": false
     },
     {
       "key": "caba",
@@ -123,7 +127,8 @@
       "radius_m": 1466,
       "why": "Dense colonial grid with very short blocks, so junction density per km2 is among the highest here.",
       "has_basemap": true,
-      "has_network": false
+      "has_network": false,
+      "has_roads_geojson": false
     },
     {
       "key": "london_city",
@@ -148,7 +153,8 @@
       "radius_m": 2252,
       "why": "Central London core rather than Greater London: the congestion charge zone is roughly this, and it is where the signals are.",
       "has_basemap": true,
-      "has_network": false
+      "has_network": false,
+      "has_roads_geojson": false
     }
   ],
   "default": "barcelona"

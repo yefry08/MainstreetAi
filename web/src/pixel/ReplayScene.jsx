@@ -35,6 +35,15 @@ export default function ReplayScene({ lighting = 'night', district = 'barcelona'
   const [status, setStatus] = useState('loading recording…')
   const [stats, setStats] = useState(null)
   const [meta, setMeta] = useState(null)
+
+  // Playback speed of the RECORDING. This is a multiplier on how fast frames
+  // are advanced, and nothing else: it does not touch which twin plays, does
+  // not ask a controller to do anything, and is deliberately kept apart from
+  // the AI switch on the Home rail so the two are never confused. 1x plays at
+  // the rate the simulation was recorded; 2x advances frames twice as fast.
+  const [rate, setRate] = useState(1)
+  const rateRef = useRef(1)
+  useEffect(() => { rateRef.current = rate }, [rate])
   useEffect(() => { lightRef.current = lighting }, [lighting])
 
   // The sidebar switch owns this now, so the scene follows the prop rather
@@ -97,7 +106,10 @@ export default function ReplayScene({ lighting = 'night', district = 'barcelona'
         const tick = () => {
           if (!alive) return
           const now = performance.now()
-          if (now - last >= period) {
+          // Dividing the period, not multiplying the index: at 2x a frame is
+          // advanced every 125 ms instead of 250, so dead-reckoning between
+          // frames stays smooth rather than skipping every other one.
+          if (now - last >= period / rateRef.current) {
             last = now
             idx += 1
             const f = replay?.frame(modeRef.current, idx)
@@ -107,7 +119,9 @@ export default function ReplayScene({ lighting = 'night', district = 'barcelona'
           if (now - lastStats > 500) { lastStats = now; setStats(s) }
           raf = requestAnimationFrame(tick)
         }
-        const f0 = replay?.frame('ai', 0)
+        // Was hard-coded to 'ai', so a scene asked to open on the fixed-time
+        // twin drew one AI frame first. Follow the twin actually requested.
+        const f0 = replay?.frame(modeRef.current, 0)
         if (f0) r.applyFrame(f0)
         raf = requestAnimationFrame(tick)
 
@@ -123,6 +137,7 @@ export default function ReplayScene({ lighting = 'night', district = 'barcelona'
             return s
           },
           setMode: choose,
+          setRate: (n) => { rateRef.current = n; setRate(n) },
           setView: (v) => r.setView(v),
         }
       } catch (err) {
@@ -186,10 +201,31 @@ export default function ReplayScene({ lighting = 'night', district = 'barcelona'
           for one piece of state can disagree with each other, and the second
           copy of the stats had nothing the first did not. What stays is the
           disclosure, because it has to be next to the thing it qualifies. */}
+      {/* The speed control is on its own, top-right, with the AI switch
+          nowhere on this tab. Same panel, adjacent buttons, and someone would
+          read "2x" as "AI on". */}
+      {hasTraffic && !status && (
+        <div className="replay-speed glass" role="group" aria-label="Playback speed">
+          <span className="replay-speed-cap">Playback speed · not the AI switch</span>
+          <button
+            className={`replay-speed-btn ${rate !== 1 ? 'on' : ''}`}
+            onClick={() => setRate((v) => (v === 1 ? 2 : 1))}
+            aria-pressed={rate !== 1}
+            title={rate === 1 ? 'Play the recording at twice the recorded rate'
+                              : 'Back to the recorded rate'}
+          >
+            {rate === 1 ? 'See it flow faster · 2×' : 'Back to normal speed · 1×'}
+          </button>
+        </div>
+      )}
+
       <div className="replay-note glass">
-        <b>Recording, not live.</b> Both twins were run on identical demand and
-        captured; the switch changes which recording plays. The live version
-        needs a Python server running SUMO, which static hosting cannot do.
+        {twin === 'baseline'
+          ? <><b>Fixed-time signals, recorded.</b> Lights cycle on a fixed
+              programme; nothing adapts. This is the baseline the AI twin is
+              measured against — the comparison lives on the Home tab.</>
+          : <><b>Recording, not live.</b> The adaptive twin, played back; nothing
+              is being decided while you watch.</>}
         {meta?.recordedAt ? ` Recorded ${meta.recordedAt}.` : ''}
       </div>
     </div>
