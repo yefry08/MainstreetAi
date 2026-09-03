@@ -64,7 +64,7 @@ export default function App() {
   const [tab, setTab] = useState('home')
   const [mode, setMode] = useState('night')
   const [chrome, setChrome] = useState(true)
-  const [district, setDistrict] = useState('shibuya')
+  const [district, setDistrict] = useState('barcelona')
   const [twins, setTwins] = useState(null)
   const [twin, setTwin] = useState('ai')
 
@@ -185,7 +185,11 @@ export default function App() {
       {/* The pixel view, only under Try your city. Unlike the 3D scene this one
           is cheap to rebuild, and mounting it only when shown keeps a second
           animation loop off the Home tab. */}
-      {isCity && (
+      {/* The pixel scene mounts under Try your city for Barcelona only -- the
+          one district with a working demo. The others are illustrated cards
+          drawn by the page itself; mounting a map behind them was the thing
+          that could not be made to work, so it is out of this path. */}
+      {isCity && district === 'barcelona' && (
         <div className="scene-layer pixel-layer">
           <Suspense fallback={null}>
           {/* Fixed-time by default, on purpose. This tab shows a district's
