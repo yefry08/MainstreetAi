@@ -27,9 +27,14 @@ import CityIllustration from './CityIllustration'
  * measurements that ruled it out.
  */
 
-/** The cities this section presents, in this order. SF Downtown stays in the
- *  registry for the pipeline but is not shown here. */
-const SHOWN = ['barcelona', 'shibuya', 'manhattan', 'caba', 'london_city']
+/** The cities this section presents, in this order.
+ *
+ *  Two, not five. Barcelona is the working demo; San Francisco is one
+ *  illustration done properly rather than four done roughly. Shibuya,
+ *  Manhattan, CABA and London stay in the registry -- three of them have real
+ *  simulations behind them -- and come back to this grid when they have
+ *  drawings worth showing. */
+const SHOWN = ['barcelona', 'sf_downtown']
 const OSS = [
   {
     name: 'GeoLibre',
