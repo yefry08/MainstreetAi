@@ -26,8 +26,6 @@ import { useReplayFrames } from './data/useReplayFrames'
 const Contact = lazy(() => import('./ui/Contact'))
 const Research = lazy(() => import('./ui/Research'))
 const TryCity = lazy(() => import('./ui/TryCity'))
-const PixelScene = lazy(() => import('./pixel/PixelScene'))
-const ReplayScene = lazy(() => import('./pixel/ReplayScene'))
 
 /**
  * Two renderers, two jobs.
@@ -118,31 +116,18 @@ export default function App() {
   const isHome = tab === 'home'
   const isCity = tab === 'city'
 
-  // The tab title follows what is actually on screen: Barcelona on Home, the
-  // selected district under Try your city. Rewriting App.jsx for the 3D
-  // restore dropped this effect, so the title sat on whatever index.html
-  // shipped with regardless of the city being shown.
+  // The tab title follows what is actually on screen. Try your city used to
+  // fetch districts.json to name the selected district; it no longer selects
+  // one, and the title was still announcing "Barcelona - Eixample" over a page
+  // showing only San Francisco. Naming the section is both correct and one
+  // fewer request.
   useEffect(() => {
-    if (isHome) { document.title = 'MainstreetAi · Barcelona'; return }
-    // The reading tabs are not about a city, so they must not inherit whichever
-    // district happened to be selected before.
-    if (!isCity) {
-      document.title = tab === 'research'
-        ? 'MainstreetAi · Research' : 'MainstreetAi · Contact'
-      return
-    }
-    let alive = true
-    const base = REPLAY_ONLY ? './' : '/'
-    fetch(`${base}districts.json`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (!alive) return
-        const hit = d.districts?.find((x) => x.key === district)
-        document.title = hit ? `MainstreetAi · ${hit.label}` : 'MainstreetAi'
-      })
-      .catch(() => { /* a title is not worth failing the page over */ })
-    return () => { alive = false }
-  }, [district, isHome, isCity, tab])
+    document.title =
+      isHome ? 'MainstreetAi · Barcelona'
+      : isCity ? 'MainstreetAi · Try your city'
+      : tab === 'research' ? 'MainstreetAi · Research'
+      : 'MainstreetAi · Contact'
+  }, [isHome, isCity, tab])
 
   // Picking a district shows it in the pixel view, which lives on this tab. It
   // used to jump to Home, which now belongs to the 3D scene instead.
@@ -185,25 +170,10 @@ export default function App() {
       {/* The pixel view, only under Try your city. Unlike the 3D scene this one
           is cheap to rebuild, and mounting it only when shown keeps a second
           animation loop off the Home tab. */}
-      {/* The pixel scene mounts under Try your city for Barcelona only -- the
-          one district with a working demo. The others are illustrated cards
-          drawn by the page itself; mounting a map behind them was the thing
-          that could not be made to work, so it is out of this path. */}
-      {isCity && district === 'barcelona' && (
-        <div className="scene-layer pixel-layer">
-          <Suspense fallback={null}>
-          {/* Fixed-time by default, on purpose. This tab shows a district's
-              baseline flow -- signals on a fixed programme, nothing adapting --
-              and does not share the Home rail's AI switch. The comparison is
-              Home's job; here the point is to see the city move at all. */}
-          {REPLAY_ONLY
-            ? <ReplayScene lighting={mode} district={district} twin="baseline"
-                           onStats={setTwins} />
-            : <PixelScene frameRef={frameRef} mode={mode} district={district}
-                          liveDistrict={header?.district ?? null} />}
-          </Suspense>
-        </div>
-      )}
+      {/* Nothing renders behind Try your city any more. With Barcelona's card
+          gone the only scene this could mount was Barcelona's, which would
+          have put its traffic behind a San Francisco card -- the same
+          wrong-city-behind-the-map problem this section had to fix once. */}
 
       <Navbar
         tab={tab} onTab={onTab}
@@ -239,7 +209,7 @@ export default function App() {
       )}
 
       {isCity && (
-        <div className="page-layer city-layer">
+        <div className="page-layer">
           <Suspense fallback={null}>
             <TryCity current={district} onSelect={onSelectDistrict} />
           </Suspense>
