@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import json
 import multiprocessing as mp
+import os
 import queue
 import struct
 import sys
@@ -33,6 +34,8 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from sim_worker import DISTRICT, run_worker
+from validation import (HOUR_RANGE, SCALE_RANGE, SPEED_RANGE, Invalid,
+                        boolean, number, one_of)
 
 # The two AI roles. Both are inert without their key, and the simulation runs
 # its validated rules-based policy in that state, so importing this can never
@@ -274,8 +277,28 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Barcelona AI Traffic Orchestration", lifespan=lifespan)
+# Localhost origins only, and only the ones this project actually serves from.
+#
+# allow_origins=["*"] on a CONTROL api is the problem: the server binds
+# 127.0.0.1, but every page in your browser can reach 127.0.0.1. A wildcard let
+# any site you happened to have open POST to /api/control and pause the
+# simulation, change its speed, or reload the demand scale on both twins. The
+# origins below are the dev server, the static preview, and whatever
+# MAINSTREET_ORIGINS names -- nothing else needs to talk to it.
+_DEV_ORIGINS = [
+    "http://localhost:5173", "http://127.0.0.1:5173",   # vite dev
+    "http://localhost:8110", "http://127.0.0.1:8110",   # static preview
+    "http://localhost:8000", "http://127.0.0.1:8000",   # the server itself
+]
+ALLOWED_ORIGINS = [
+    o.strip() for o in os.environ.get("MAINSTREET_ORIGINS", "").split(",") if o.strip()
+] or _DEV_ORIGINS
+
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
 )
 
 
@@ -464,39 +487,57 @@ async def ai_scenario(payload: dict):
 
 @app.post("/api/control")
 async def control(payload: dict):
+    """Every numeric field goes through validation.number().
+
+    It used to call float() directly, which raised on "abc" or None -- an
+    unhandled 500 -- and happily returned nan or inf for "NaN", "Infinity" and
+    "1e400". Those were then forwarded to both SUMO twins, where a nan speed
+    quietly poisons the pacing arithmetic for the rest of the run without
+    anything crashing to tell you.
+    """
     action = payload.get("action")
-    if action == "pause":
-        engine.paused = bool(payload.get("value", True))
-        engine.send({"type": "pause", "value": engine.paused})
-    elif action == "speed":
-        engine.speed = float(payload.get("value", 5.0))
-        engine.send({"type": "speed", "value": engine.speed})
-    elif action == "focus":
-        engine.set_focus(payload.get("value", "ai"))
-    elif action == "scale":
-        # Congestion pressure. Sent to BOTH twins — the comparison is only
-        # meaningful if they are carrying the same load.
-        v = payload.get("value")
-        engine.manual_scale = None if v is None else float(v)
-        engine.send({"type": "scale", "value": engine.manual_scale})
-        return {"ok": True, "scale": engine.manual_scale}
-    elif action == "clock":
-        # Pick a day and an hour. Both twins move together — the comparison
-        # only means anything if they are living in the same moment.
-        day = payload.get("day")
-        hour = payload.get("hour")
-        if day in DOW_NAMES:
-            engine.day = day
-        if hour is not None:
-            engine.hour = float(hour)
-        engine.send({"type": "clock", "day": engine.day, "hour": engine.hour})
-        return {"ok": True, "day": engine.day, "hour": engine.hour,
-                "peaks": peaks_for(engine.day)}
-    elif action == "watch":
-        # Sent to both twins so the inspector can show fixed vs AI together.
-        engine.send({"type": "watch", "value": payload.get("value")})
-    else:
-        return JSONResponse({"error": f"unknown action {action}"}, status_code=400)
+    try:
+        if action == "pause":
+            engine.paused = boolean(payload.get("value"), name="value", default=True)
+            engine.send({"type": "pause", "value": engine.paused})
+        elif action == "speed":
+            engine.speed = number(payload.get("value", 5.0), name="speed",
+                                  lo=SPEED_RANGE[0], hi=SPEED_RANGE[1])
+            engine.send({"type": "speed", "value": engine.speed})
+        elif action == "focus":
+            engine.set_focus(one_of(payload.get("value", "ai"), name="focus",
+                                    allowed={"ai", "baseline"}))
+        elif action == "scale":
+            # Congestion pressure. Sent to BOTH twins -- the comparison is only
+            # meaningful if they are carrying the same load. None means "auto",
+            # which is a real setting and so is allowed through untouched.
+            v = payload.get("value")
+            engine.manual_scale = None if v is None else number(
+                v, name="scale", lo=SCALE_RANGE[0], hi=SCALE_RANGE[1])
+            engine.send({"type": "scale", "value": engine.manual_scale})
+            return {"ok": True, "scale": engine.manual_scale}
+        elif action == "clock":
+            # Pick a day and an hour. Both twins move together -- the comparison
+            # only means anything if they are living in the same moment.
+            day = payload.get("day")
+            hour = payload.get("hour")
+            if day is not None:
+                engine.day = one_of(day, name="day", allowed=set(DOW_NAMES))
+            if hour is not None:
+                engine.hour = number(hour, name="hour",
+                                     lo=HOUR_RANGE[0], hi=HOUR_RANGE[1])
+            engine.send({"type": "clock", "day": engine.day, "hour": engine.hour})
+            return {"ok": True, "day": engine.day, "hour": engine.hour,
+                    "peaks": peaks_for(engine.day)}
+        elif action == "watch":
+            # Sent to both twins so the inspector can show fixed vs AI together.
+            engine.send({"type": "watch", "value": payload.get("value")})
+        else:
+            return JSONResponse({"error": f"unknown action {action}"}, status_code=400)
+    except Invalid as e:
+        # A client mistake is a 400. It was a 500 before, which reads as a
+        # server fault and tells the caller nothing about what to send instead.
+        return JSONResponse({"error": str(e)}, status_code=400)
     return {"ok": True, "paused": engine.paused, "speed": engine.speed, "focus": engine.focus}
 
 
