@@ -1030,3 +1030,114 @@
   .replay-speed-cap { display: none; }
 }
 
+
+/* =========================================================================
+   CÓMO FUNCIONA — banda horizontal infinita sobre la escena
+   ========================================================================= */
+
+.hiw {
+  position: absolute;
+  z-index: 6;
+  bottom: 92px;
+  /* Empieza a la derecha del rail (272px + margen) para no taparlo. En móvil
+     el rail se comporta distinto y la banda ocupa todo el ancho. */
+  left: 304px;
+  right: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 8px 10px 8px 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--glass-edge);
+  background: var(--glass-fill);
+  backdrop-filter: blur(var(--glass-blur)) saturate(135%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(135%);
+}
+
+.hiw-label {
+  flex: 0 0 auto;
+  font-family: var(--font-data);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--terracota-400);
+}
+
+/* La ventana recorta la cinta y desvanece los bordes, para que los pasos
+   entren y salgan en vez de aparecer cortados de golpe. */
+.hiw-viewport {
+  flex: 1 1 auto;
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+}
+
+.hiw-rail {
+  display: flex;
+  width: max-content;
+  animation: hiw-scroll 46s linear infinite;
+}
+
+/* -50% exactamente: la segunda copia queda donde empezó la primera y el salto
+   es invisible. Cualquier otro valor deriva al cambiar el texto o la fuente. */
+@keyframes hiw-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* Un texto que no se está quieto no se puede leer. */
+.hiw:hover .hiw-rail,
+.hiw:focus-within .hiw-rail { animation-play-state: paused; }
+
+.hiw-track {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space-4) * 2);
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--space-4) 0 0;
+}
+
+.hiw-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.hiw-n {
+  font-family: var(--font-data);
+  font-size: 15px;
+  color: var(--terracota-500);
+  opacity: 0.85;
+}
+
+.hiw-body { display: flex; align-items: baseline; gap: 8px; }
+.hiw-body b { font-size: 12.5px; font-weight: 600; color: var(--ink-50); }
+.hiw-body span { font-size: 12px; color: var(--ink-300); }
+
+.hiw-tag {
+  font-family: var(--font-data);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-400);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-pill);
+  padding: 2px 7px;
+}
+
+/* Se va con el resto del cromo cuando se pulsa H. */
+.app.bare .hiw { opacity: 0; pointer-events: none; }
+
+@media (max-width: 860px) {
+  .hiw { left: var(--space-3); right: var(--space-3); bottom: 76px; }
+  .hiw-label { display: none; }
+  .hiw-body span { display: none; }   /* solo el titular cabe en un móvil */
+}
+
+/* Sin movimiento la cinta se queda quieta al principio, que sigue mostrando
+   el paso 01 completo y legible. */
+@media (prefers-reduced-motion: reduce) {
+  .hiw-rail { animation: none; }
+}
