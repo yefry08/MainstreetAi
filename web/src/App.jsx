@@ -6,6 +6,7 @@ import Bezel from './ui/Bezel'
 import CameraControls from './ui/CameraControls'
 import Navbar from './ui/Navbar'
 import ImpactPanel from './ui/ImpactPanel'
+import HowItWorks from './ui/HowItWorks'
 
 
 import LiveCity from './ui/LiveCity'
@@ -198,6 +199,10 @@ export default function App() {
           )}
           {/* These read camera state off the MapLibre instance, so they belong
               to the 3D scene and only to it. */}
+          {/* La escena no explica lo que es. Esta banda lo hace en tres frases
+              sin robarle sitio: vive sobre el bezel, a la derecha del rail, y
+              se va con el resto del cromo al pulsar H. */}
+          <HowItWorks />
           <CameraControls map={map} />
           <Bezel map={map} header={header} />
           {!chrome && (
