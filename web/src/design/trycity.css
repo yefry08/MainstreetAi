@@ -1,0 +1,309 @@
+/* =========================================================================
+   TRY YOUR CITY — asistente, cargador de semáforo y simulación en vivo
+
+   Su propio archivo: la sección es ahora una aplicación completa (asistente,
+   estados de carga, lienzo, métricas) y meterla en shell.css convertiría ese
+   archivo en un cajón de sastre.
+   ========================================================================= */
+
+.try-wizard {
+  list-style: none;
+  display: flex;
+  gap: var(--space-4);
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  flex-wrap: wrap;
+}
+
+.try-wizard li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink-400);
+}
+
+.try-wizard i {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--glass-edge);
+  font-family: var(--font-data);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.try-wizard .active { color: var(--ink-50); }
+.try-wizard .active i { border-color: var(--terracota-500); background: var(--terracota-glow); }
+.try-wizard .done { color: var(--ink-300); }
+.try-wizard .done i { border-color: var(--terracota-500); color: var(--terracota-400); }
+
+.try-step { margin-bottom: calc(var(--space-4) * 1.5); }
+.try-step h2 { font-size: 15px; margin: 0 0 var(--space-3); color: var(--ink-50); }
+
+.try-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
+
+.try-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-edge);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink-100);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color var(--t-fast) var(--ease-out),
+              color var(--t-fast) var(--ease-out);
+}
+
+.try-chip:hover { border-color: var(--terracota-500); color: var(--ink-50); }
+.try-chip.on { border-color: var(--terracota-500); background: var(--terracota-glow); color: var(--ink-50); }
+.try-chip .flag { font-size: 15px; }
+.try-chip em { font-style: normal; font-family: var(--font-data); font-size: 10.5px; color: var(--ink-400); }
+
+/* El aviso sobre las claves es el párrafo más importante de la página, así que
+   lleva el borde de acento en vez de disolverse en el texto corrido. */
+.try-keynote {
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--terracota-500);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 0 var(--r-md) var(--r-md) 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-100);
+  margin: 0 0 var(--space-4);
+  max-width: 74ch;
+}
+
+.try-keynote b { color: var(--ink-50); }
+
+.try-key { padding: var(--space-4); margin-bottom: var(--space-3); }
+.try-key h3 { margin: 0 0 4px; font-size: 14px; color: var(--ink-50); }
+.try-key-what { margin: 0 0 var(--space-3); font-size: 12.5px; line-height: 1.5; color: var(--ink-300); }
+.try-key-row { display: flex; gap: var(--space-2); margin-bottom: var(--space-2); flex-wrap: wrap; }
+
+.try-key select,
+.try-key input {
+  flex: 1 1 180px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--glass-edge);
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--ink-50);
+  font: inherit;
+  font-size: 13px;
+}
+
+.try-key input { font-family: var(--font-data); letter-spacing: 0.06em; }
+
+.try-key select:focus-visible,
+.try-key input:focus-visible {
+  outline: 2px solid var(--terracota-500);
+  outline-offset: 1px;
+}
+
+.try-key-foot { margin: 4px 0 0; font-size: 12px; }
+.try-key-foot a { color: var(--terracota-400); text-decoration: none; }
+.try-key-foot a:hover { text-decoration: underline; }
+.try-key-foot .ok { color: #6fb37b; }
+.try-key-foot .bad { color: #e0605a; }
+
+.try-launch { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-4); }
+
+.tl-btn {
+  font: inherit;
+  font-size: 13px;
+  padding: 9px 15px;
+  border-radius: 7px;
+  border: 1px solid var(--glass-edge);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink-50);
+  cursor: pointer;
+}
+
+.tl-btn:hover:not(:disabled) { border-color: var(--terracota-500); }
+.tl-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.tl-btn.primary { background: var(--terracota-500); border-color: var(--terracota-500); color: #fff; font-weight: 500; }
+.tl-btn.primary:hover:not(:disabled) { background: var(--terracota-600); }
+
+/* ---- el cargador de semáforo -------------------------------------------- */
+
+.tl {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: calc(var(--space-4) * 3) var(--space-4);
+}
+
+.tl-light {
+  position: relative;
+  width: 46px;
+  padding: 8px 0 10px;
+  border-radius: 10px;
+  background: #1c1f26;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: calc(var(--space-4) * 1.5);
+}
+
+.tl-lamp { width: 22px; height: 22px; border-radius: 50%; background: #2b2f38; }
+
+/* Cada lámpara se enciende en su tramo de un ciclo de 3,6 s: el cargador es un
+   semáforo que funciona, que es la única animación que este proyecto no
+   debería falsear. */
+.tl-lamp.red   { animation: tl-red   3.6s linear infinite; }
+.tl-lamp.amber { animation: tl-amber 3.6s linear infinite; }
+.tl-lamp.green { animation: tl-green 3.6s linear infinite; }
+
+@keyframes tl-red {
+  0%, 42%   { background: #e5484d; box-shadow: 0 0 14px 3px rgba(229, 72, 77, 0.55); }
+  43%, 100% { background: #2b2f38; box-shadow: none; }
+}
+
+@keyframes tl-amber {
+  43%, 55%            { background: #f2b134; box-shadow: 0 0 14px 3px rgba(242, 177, 52, 0.55); }
+  0%, 42%, 56%, 100%  { background: #2b2f38; box-shadow: none; }
+}
+
+@keyframes tl-green {
+  56%, 98%            { background: #3fb34f; box-shadow: 0 0 14px 3px rgba(63, 179, 79, 0.55); }
+  0%, 55%, 99%, 100%  { background: #2b2f38; box-shadow: none; }
+}
+
+/* Un fallo se queda en rojo en vez de seguir ciclando: un cargador que sigue
+   animándose bajo un mensaje de error dice "sigo trabajando", y no es cierto. */
+.tl-light.fault .tl-lamp { animation: none; background: #2b2f38; box-shadow: none; }
+.tl-light.fault .tl-lamp.red { background: #e5484d; box-shadow: 0 0 14px 3px rgba(229, 72, 77, 0.5); }
+
+.tl-pole { position: absolute; bottom: -22px; width: 4px; height: 22px; background: #1c1f26; }
+
+.tl-steps {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.tl-step { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-400); }
+.tl-step i { width: 8px; height: 8px; border-radius: 50%; background: #3a3f49; flex: 0 0 auto; }
+.tl-step.done { color: var(--ink-300); }
+.tl-step.done i { background: #3fb34f; }
+.tl-step.active { color: var(--ink-50); }
+.tl-step.active i { background: var(--terracota-500); animation: try-pulse 1.4s ease-in-out infinite; }
+.tl-step.fault { color: #e0605a; }
+.tl-step.fault i { background: #e5484d; }
+
+@keyframes try-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.7); }
+}
+
+.tl-detail { font-family: var(--font-data); font-size: 11.5px; color: var(--ink-400); margin: 0; }
+.tl-error { max-width: 52ch; text-align: center; margin-top: var(--space-3); }
+.tl-error p { font-size: 13px; line-height: 1.6; color: #e0605a; margin: 0 0 var(--space-3); }
+.tl-actions { display: flex; gap: var(--space-2); justify-content: center; }
+
+/* ---- la simulación en marcha -------------------------------------------- */
+
+.try-run {
+  padding: calc(var(--space-4) * 4) var(--space-4) var(--space-4);
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.try-run-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+
+.try-run-head h1 { margin: 0; font-size: 22px; color: var(--ink-50); }
+.try-run-sub { margin: 4px 0 0; font-family: var(--font-data); font-size: 11.5px; color: var(--ink-400); }
+.try-run-actions { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+
+.try-switch { display: flex; border: 1px solid var(--glass-edge); border-radius: 7px; overflow: hidden; }
+
+.try-switch button {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 8px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-300);
+  cursor: pointer;
+}
+
+.try-switch button.on { background: var(--terracota-500); color: #fff; }
+
+.city-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--r-md);
+  border: 1px solid var(--glass-edge);
+  background: #12141a;
+}
+
+.try-palette { margin: var(--space-3) 0 0; font-size: 12.5px; color: var(--ink-300); font-style: italic; }
+
+.try-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.try-metric {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.try-metric-label { font-size: 12px; color: var(--ink-300); }
+.try-metric-pair { font-family: var(--font-data); font-size: 12px; }
+.try-metric-pair .base { color: var(--ink-400); }
+.try-metric-pair i { color: var(--ink-500); font-style: normal; margin: 0 4px; }
+.try-metric-pair .ai { color: var(--ink-50); }
+.try-metric-delta { font-family: var(--font-data); font-size: 12px; color: var(--ink-400); }
+.try-metric-delta.good { color: #6fb37b; }
+.try-metric-delta.bad { color: #e0605a; }
+
+.try-ailog { margin-top: var(--space-4); }
+.try-ailog h2 { font-size: 13px; margin: 0 0 var(--space-2); color: var(--ink-50); }
+.try-ailog ul { margin: 0; padding-left: 18px; }
+
+.try-ailog li,
+.try-ailog p {
+  font-family: var(--font-data);
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--ink-300);
+}
+
+@media (max-width: 860px) {
+  .try-metrics { grid-template-columns: 1fr; }
+  .try-run-head { flex-direction: column; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tl-lamp, .tl-step.active i { animation: none; }
+  .tl-lamp.green { background: #3fb34f; }
+}
