@@ -15,6 +15,7 @@ import './design/tokens.css'
 import './design/bezel.css'
 import './design/panels.css'
 import './design/shell.css'
+import './design/trycity.css'
 import App from './App'
 
 createRoot(document.getElementById('root')).render(
