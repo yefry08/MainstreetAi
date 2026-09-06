@@ -66,23 +66,65 @@ const PRECEDENTS = [
   },
 ]
 
+/**
+ * The diagram rides beside the header rather than below the cards. That puts
+ * this project's own architecture next to the line saying none of the cited
+ * work is used by it, so the heading on the figure has to carry the attribution
+ * on its own -- it is the only thing telling a skimming reader that the diagram
+ * is ours and the cards are not.
+ */
 export default function Research() {
   return (
     <section className="research">
-      <header className="research-head">
-        <p className="research-eyebrow">Research</p>
-        <h1>Precedent, not architecture</h1>
-        <p className="research-lede">
-          Work that shows large-scale AI agent simulation is an active and
-          validated field. It is cited here as inspiration and context.
-        </p>
-        <p className="research-disclaimer glass">
-          <strong>None of this is used by MainstreetAi.</strong> This project runs
-          SUMO with a rule-based adaptive signal controller, and shares no code,
-          models or technical architecture with the work below. These are
-          references that shaped how the problem was framed — nothing more.
-        </p>
-      </header>
+      <div className="research-top">
+        <header className="research-head">
+          <p className="research-eyebrow">Research</p>
+          <h1>Precedent, not architecture</h1>
+          <p className="research-lede">
+            Work that shows large-scale AI agent simulation is an active and
+            validated field. It is cited here as inspiration and context.
+          </p>
+          <p className="research-disclaimer glass">
+            <strong>None of this is used by MainstreetAi.</strong> This project runs
+            SUMO with a rule-based adaptive signal controller, and shares no code,
+            models or technical architecture with the work below. These are
+            references that shaped how the problem was framed — nothing more.
+          </p>
+        </header>
+
+        {/* No loading="lazy": this is above the fold now and the largest element
+            on the page, so deferring it would hold back the very thing the load
+            is waiting on. */}
+        <figure className="pipeline-fig">
+          <img
+            src={assetUrl('img/pipeline-diagram.png')}
+            alt="Three-phase pipeline. Phase 1, data layer: OpenStreetMap and
+                 Overture feed city2graph, open data and sensors, and the SUMO
+                 simulation engine. Phase 2, visual layer: a prettymaps
+                 illustrated basemap with a pixel-art simulation overlaid on the
+                 same coordinates. Phase 3, AI orchestration: queue length, bus
+                 proximity and time-of-day demand drive signal retiming and bus
+                 green waves, measured as CO2 reduction, minutes saved and
+                 transit punctuality."
+            width="1440"
+            height="1446"
+            decoding="async"
+          />
+          <figcaption>
+            <h3>AI Traffic Orchestration — Technical Pipeline</h3>
+            <p>
+              MainstreetAi's own pipeline, as designed. Running today:
+              Barcelona, Shibuya and Midtown Manhattan have full SUMO networks
+              and recorded twins — <b>+41.1%</b>, <b>+36.0%</b> and{' '}
+              <b>+34.6%</b> network speed against fixed-time control. The
+              remaining districts have illustrated basemaps only. Demand is a
+              calibrated synthetic profile rather than a live municipal feed,
+              and the road graph is built by netconvert from OSM, with
+              city2graph supplying the transit layer.
+            </p>
+          </figcaption>
+        </figure>
+      </div>
 
       <ul className="research-grid">
         {PRECEDENTS.map((p) => (
@@ -114,44 +156,6 @@ export default function Research() {
         above informs how that question is framed; it does not run underneath it.
       </p>
 
-      {/* The architecture sits under the precedents on purpose. Read in that
-          order it settles the question the cards raise -- what, concretely, is
-          this thing? -- and shows there is no language model anywhere in it.
-
-          This is the authored diagram rather than the markup version that was
-          here before (kept at ui/PipelineDiagram.jsx). It is a 130 KB
-          palette-quantised PNG: a diagram is flat fills, so the palette is
-          lossless to the eye at roughly half the bytes. */}
-      <figure className="pipeline-fig">
-        <figcaption>
-          <h3>AI Traffic Orchestration — Technical Pipeline</h3>
-          <p>
-            The pipeline as designed. What is actually running today:
-            Barcelona, Shibuya and Midtown Manhattan have full SUMO networks and
-            recorded twins — <b>+41.1%</b>, <b>+36.0%</b> and <b>+34.6%</b>
-            network speed against fixed-time control. The remaining districts
-            have illustrated basemaps only. Demand is a calibrated synthetic
-            profile rather than a live municipal feed, and the road graph is
-            built by netconvert from OSM, with city2graph supplying the transit
-            layer.
-          </p>
-        </figcaption>
-        <img
-          src={assetUrl('img/pipeline-diagram.png')}
-          alt="Three-phase pipeline. Phase 1, data layer: OpenStreetMap and
-               Overture feed city2graph, open data and sensors, and the SUMO
-               simulation engine. Phase 2, visual layer: a prettymaps
-               illustrated basemap with a pixel-art simulation overlaid on the
-               same coordinates. Phase 3, AI orchestration: queue length, bus
-               proximity and time-of-day demand drive signal retiming and bus
-               green waves, measured as CO2 reduction, minutes saved and
-               transit punctuality."
-          width="1440"
-          height="1446"
-          loading="lazy"
-          decoding="async"
-        />
-      </figure>
     </section>
   )
 }

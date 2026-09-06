@@ -748,26 +748,41 @@
   color: var(--ink-300);
 }
 
-/* The authored diagram, beside its caption rather than under it. Full width it
-   was taller than the viewport and pushed the caption off the fold, so the one
-   thing that says what is actually running never got read.
+/* The header and the diagram share the top of the page: claim on the left,
+   architecture on the right, at roughly equal weight.
 
-   Grid, not flex, and the text column is minmax(0, 1fr) on purpose: a flex item
-   defaults to min-width:auto and refuses to shrink below its content, which at
-   phone width drove the figure 80px off the left edge and squeezed the caption
-   to a 96px sliver. minmax(0, ...) is what lets the column actually give way. */
-.pipeline-fig {
+   Both columns are minmax(0, ...) on purpose. A grid column sized `auto` or a
+   flex item both default to min-content and refuse to shrink, which is what
+   drove an earlier version of this figure 80px off the left edge at phone width
+   and squeezed its caption to a 96px sliver. minmax(0, ...) is what lets a
+   column actually give way. */
+.research-top {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
   gap: calc(var(--space-4) * 2);
   align-items: start;
+}
+
+.research-top .research-head { margin: 0; }
+
+.pipeline-fig {
   /* A bare <figure> carries a UA margin of 1em 40px. */
-  margin: calc(var(--space-4) * 3) 0 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.pipeline-fig img {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--glass-edge);
+  border-radius: 6px;
 }
 
 .pipeline-fig figcaption {
   min-width: 0;
-  max-width: 68ch;
   font-size: 12.5px;
   line-height: 1.6;
   color: var(--ink-300);
@@ -779,23 +794,15 @@
   color: var(--ink-100);
 }
 
-.pipeline-fig img {
-  width: 320px;
-  max-width: 100%;
-  height: auto;
-  border: 1px solid var(--glass-edge);
-  border-radius: 6px;
-}
+.pipeline-fig figcaption p { margin: 0; }
 
 @media (max-width: 860px) {
   .research { padding: calc(var(--space-4) * 4) var(--space-3) var(--space-4); }
   .research-grid { grid-template-columns: 1fr; }
 
-  /* Side by side stops working long before the text becomes unreadable, so the
-     diagram drops under the caption and is allowed to grow into the width it
-     just gained. */
-  .pipeline-fig { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
-  .pipeline-fig img { width: 100%; max-width: 420px; }
+  /* Side by side stops working long before the heading becomes unreadable, so
+     the diagram drops under it and keeps the width it just gained. */
+  .research-top { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 }
 
 /* =========================================================================
