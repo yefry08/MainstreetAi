@@ -122,8 +122,8 @@ export default function Research() {
           here before (kept at ui/PipelineDiagram.jsx). It is a 130 KB
           palette-quantised PNG: a diagram is flat fills, so the palette is
           lossless to the eye at roughly half the bytes. */}
-      <figure className="pipeline-fig" style={{ display: 'flex', gap: '2rem', alignItems: 'flex-start' }}>
-        <figcaption style={{ flex: 1 }}>
+      <figure className="pipeline-fig" style={{ display: 'flex', gap: '3rem', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <figcaption style={{ maxWidth: '60%' }}>
           <h3 style={{ marginTop: 0 }}>AI Traffic Orchestration — Technical Pipeline</h3>
           <p>
             The pipeline as designed. What is actually running today:
@@ -146,11 +146,11 @@ export default function Research() {
                proximity and time-of-day demand drive signal retiming and bus
                green waves, measured as CO2 reduction, minutes saved and
                transit punctuality."
-          width="500"
-          height="505"
+          width="320"
+          height="324"
           loading="lazy"
           decoding="async"
-          style={{ flex: 0, flexShrink: 0 }}
+          style={{ flex: 'none', marginLeft: 'auto' }}
         />
       </figure>
     </section>
