@@ -10,10 +10,15 @@ import CityCanvas from '../city/CityCanvas'
 /**
  * "Try your city": run the MainstreetAi comparison on any major city.
  *
- * FOUR STEPS, THEN THE SIMULATION
- * Country, city, providers, keys. Then the real work: OpenStreetMap supplies
- * the street network, one model supplies the palette, and two worlds run side
- * by side on identical traffic while a second model retimes the signals of one.
+ * KEYS ARE AN UPGRADE, NOT A TOLL
+ * The map and the simulation need no key at all: OpenStreetMap supplies the
+ * streets and the traffic runs locally. Only the palette and the signal
+ * controller are model work. So a visitor can watch their own city move
+ * immediately, and adding keys turns the fixed-time run into a comparison.
+ *
+ * That ordering matters. Demanding two API keys before showing anything means
+ * most visitors -- who do not have keys to hand -- reach a form and stop, never
+ * seeing the thing worth seeing.
  *
  * WHAT IS REAL AND WHAT IS NOT -- the page says both, because the alternative
  * is letting a visitor believe the wrong one:
@@ -28,12 +33,17 @@ import CityCanvas from '../city/CityCanvas'
  * has no backend of ours to send them to. Closing the tab destroys them.
  */
 
-const STEPS = [
+const BASE_STEPS = [
   { key: 'osm', label: 'Descargando calles reales de OpenStreetMap' },
   { key: 'graph', label: 'Construyendo el grafo de la ciudad' },
-  { key: 'palette', label: 'La IA elige la paleta de la ciudad' },
-  { key: 'sim', label: 'Arrancando los dos gemelos de tráfico' },
 ]
+const AI_STEP = { key: 'palette', label: 'La IA elige la paleta de la ciudad' }
+const SIM_STEP = { key: 'sim', label: 'Arrancando la simulación de tráfico' }
+
+// The loader must list the stages that will actually run. Showing a palette
+// step that is going to be skipped makes the run look like it stalled.
+const stepsFor = (withAi) =>
+  withAi ? [...BASE_STEPS, AI_STEP, SIM_STEP] : [...BASE_STEPS, SIM_STEP]
 
 const DEFAULT_PALETTE = {
   ground: '#e9e3d6', roads: '#6e7078', buildings: '#c9c2b4',
@@ -51,6 +61,7 @@ export default function TryCity() {
   const [aiCfg, setAiCfg] = useState({ provider: 'gemini', model: '', key: '' })
 
   const [phase, setPhase] = useState('form')     // form | loading | running
+  const [aiEnabled, setAiEnabled] = useState(false)
   const [stage, setStage] = useState('osm')
   const [detail, setDetail] = useState('')
   const [error, setError] = useState(null)
@@ -82,10 +93,20 @@ export default function TryCity() {
     abortRef.current?.abort()
     setPhase('form'); setStep(1); setError(null)
     setGraph(null); setTwins(null); setStats(null); setAiLog([])
-    setPalette(DEFAULT_PALETTE)
+    setPalette(DEFAULT_PALETTE); setAiEnabled(false)
   }, [])
 
-  const launch = useCallback(async () => {
+  /** Back to the key form without losing the city already chosen. */
+  const backToKeys = useCallback(() => {
+    cancelAnimationFrame(rafRef.current)
+    stopOrchRef.current?.()
+    abortRef.current?.abort()
+    setPhase('form'); setStep(3); setError(null)
+    setGraph(null); setTwins(null); setStats(null); setAiLog([])
+  }, [])
+
+  const launch = useCallback(async (withAi) => {
+    setAiEnabled(withAi)
     setPhase('loading'); setError(null); setStage('osm'); setDetail('')
     const ac = new AbortController()
     abortRef.current = ac
@@ -106,15 +127,19 @@ export default function TryCity() {
       setGraph(g)
       setDetail(`${g.stats.edges} calles · ${g.stats.signals} cruces con semáforo`)
 
-      // --- 3. palette (the first key) --------------------------------------
-      setStage('palette')
-      try {
-        setPalette(await cityPalette(mapCfg.provider, mapCfg.key, mapCfg.model, city, ac.signal))
-      } catch (e) {
-        if (e.name === 'AbortError') throw e
-        // A palette is decoration. Losing it must not cost the simulation, so
-        // it degrades to the default and says so rather than aborting.
-        setAiLog((l) => [`Paleta: ${e.message} — se usa la paleta por defecto.`, ...l])
+      // --- 3. palette (the first key), only when there is one ---------------
+      if (withAi) {
+        setStage('palette')
+        try {
+          setPalette(await cityPalette(mapCfg.provider, mapCfg.key, mapCfg.model, city, ac.signal))
+        } catch (e) {
+          if (e.name === 'AbortError') throw e
+          // A palette is decoration. Losing it must not cost the simulation, so
+          // it degrades to the default and says so rather than aborting.
+          setAiLog((l) => [`Paleta: ${e.message} — se usa la paleta por defecto.`, ...l])
+        }
+      } else {
+        setPalette(DEFAULT_PALETTE)
       }
 
       // --- 4. the twins ----------------------------------------------------
@@ -123,6 +148,12 @@ export default function TryCity() {
       const t = createTwins(g, { vehicles: density })
       setTwins(t)
       setPhase('running')
+
+      // One measurement before the loop starts. The panel otherwise sits blank
+      // until the first animation frame, which is a visible gap on a slow
+      // machine and a permanent one anywhere rAF is throttled -- a background
+      // tab, or a window the compositor has parked.
+      setStats(compare(t))
 
       // The simulation runs on rAF; the orchestrator on its own slow timer.
       let last = performance.now()
@@ -136,6 +167,11 @@ export default function TryCity() {
         rafRef.current = requestAnimationFrame(loop)
       }
       rafRef.current = requestAnimationFrame(loop)
+
+      // No key, no controller. Both worlds then run the identical fixed-time
+      // programme, so the view shows one of them and its own numbers rather
+      // than a comparison of a thing with itself.
+      if (!withAi) return
 
       stopOrchRef.current = startOrchestrator({
         world: t.ai,
@@ -157,15 +193,17 @@ export default function TryCity() {
     return (
       <div className="try-page">
         <TrafficLoader
-          stage={stage} steps={STEPS} detail={detail} error={error}
-          onRetry={() => launch()} onCancel={reset}
+          stage={stage} steps={stepsFor(aiEnabled)} detail={detail} error={error}
+          onRetry={() => launch(aiEnabled)} onCancel={reset}
         />
       </div>
     )
   }
 
   if (phase === 'running' && twins && graph) {
-    const world = view === 'ai' ? twins.ai : twins.fixed
+    // Without a controller the twins are identical, so there is one world to
+    // show and no delta worth printing.
+    const world = !aiEnabled ? twins.fixed : (view === 'ai' ? twins.ai : twins.fixed)
     return (
       <div className="try-run" style={{ '--city-accent': palette.accent }}>
         <div className="try-run-head">
@@ -177,13 +215,15 @@ export default function TryCity() {
             </p>
           </div>
           <div className="try-run-actions">
-            <div className="try-switch">
-              {['fixed', 'ai'].map((k) => (
-                <button key={k} className={view === k ? 'on' : ''} onClick={() => setView(k)}>
-                  {k === 'ai' ? 'IA adaptativa' : 'Tiempo fijo'}
-                </button>
-              ))}
-            </div>
+            {aiEnabled && (
+              <div className="try-switch">
+                {['fixed', 'ai'].map((k) => (
+                  <button key={k} className={view === k ? 'on' : ''} onClick={() => setView(k)}>
+                    {k === 'ai' ? 'IA adaptativa' : 'Tiempo fijo'}
+                  </button>
+                ))}
+              </div>
+            )}
             <button className="tl-btn" onClick={reset}>Otra ciudad</button>
           </div>
         </div>
@@ -192,7 +232,7 @@ export default function TryCity() {
 
         {palette.reason && <p className="try-palette">🎨 {palette.reason}</p>}
 
-        {stats && (
+        {stats && aiEnabled && (
           <div className="try-metrics">
             <Metric label="Velocidad media" d={stats.speed}
                     a={stats.ai.meanSpeedKmh} b={stats.fixed.meanSpeedKmh} unit=" km/h" />
@@ -205,11 +245,37 @@ export default function TryCity() {
           </div>
         )}
 
-        <div className="try-ailog">
-          <h2>Orquestador</h2>
-          {aiLog.length ? <ul>{aiLog.map((l, i) => <li key={i}>{l}</li>)}</ul>
-            : <p>Esperando la primera decisión…</p>}
-        </div>
+        {stats && !aiEnabled && (
+          <div className="try-metrics">
+            <Solo label="Velocidad media" v={stats.fixed.meanSpeedKmh} unit=" km/h" />
+            <Solo label="En cola ahora" v={stats.fixed.queued} />
+            <Solo label="Cruces completados" v={stats.fixed.arrivals} />
+            <Solo label="Vehículos" v={stats.fixed.vehicles} />
+          </div>
+        )}
+
+        {!aiEnabled && (
+          <div className="try-upsell glass">
+            <div>
+              <b>Esto es tu ciudad con semáforos a tiempo fijo.</b>
+              <span>
+                Nada de lo que ves necesitó una clave: las calles son de
+                OpenStreetMap y el tráfico corre en tu navegador. Añade tus dos
+                claves y la IA pasa a controlar los semáforos de un gemelo, para
+                medir la diferencia contra este mismo tráfico.
+              </span>
+            </div>
+            <button className="tl-btn primary" onClick={backToKeys}>Activar la IA</button>
+          </div>
+        )}
+
+        {aiEnabled && (
+          <div className="try-ailog">
+            <h2>Orquestador</h2>
+            {aiLog.length ? <ul>{aiLog.map((l, i) => <li key={i}>{l}</li>)}</ul>
+              : <p>Esperando la primera decisión…</p>}
+          </div>
+        )}
 
         <p className="try-note">
           Las calles son geometría real de OpenStreetMap (© colaboradores de OSM,
@@ -283,7 +349,23 @@ export default function TryCity() {
 
       {step >= 3 && (
         <section className="try-step">
-          <h2>3 · Tus dos claves de API</h2>
+          {/* The keyless run comes FIRST, and is the primary action. Someone
+              who has no keys to hand should still get to see their own city
+              rather than bouncing off a form. */}
+          <div className="try-free glass">
+            <div>
+              <b>Míralo ya, sin ninguna clave</b>
+              <span>
+                Calles reales de {city ? city.name : 'tu ciudad'} y tráfico
+                simulado con semáforos a tiempo fijo. Sin registro y sin coste.
+              </span>
+            </div>
+            <button className="tl-btn primary" disabled={!city} onClick={() => launch(false)}>
+              {city ? `Ver ${city.name} sin IA` : 'Elige una ciudad'}
+            </button>
+          </div>
+
+          <h2>3 · Añade la IA (opcional)</h2>
 
           <p className="try-keynote">
             <b>Tus claves no se guardan.</b> Viven solo en la memoria de esta
@@ -303,8 +385,8 @@ export default function TryCity() {
                    cfg={aiCfg} onChange={setAiCfg} />
 
           <div className="try-launch">
-            <button className="tl-btn primary" disabled={!canLaunch} onClick={launch}>
-              {city ? `Simular ${city.name}` : 'Elige una ciudad'}
+            <button className="tl-btn primary" disabled={!canLaunch} onClick={() => launch(true)}>
+              {city ? `Simular ${city.name} con IA` : 'Elige una ciudad'}
             </button>
             <button className="tl-btn" onClick={() => setStep(2)}>← Cambiar ciudad</button>
           </div>
@@ -375,6 +457,18 @@ function KeyCard({ title, what, cfg, onChange }) {
         {state === 'bad' && <span className="bad">✗ No se pudo usar esta clave</span>}
         {!state && <a href={p.keys} target="_blank" rel="noopener noreferrer">Obtener una clave de {p.label} ↗</a>}
       </p>
+    </div>
+  )
+}
+
+/** One number, for the keyless run where there is nothing to compare against. */
+function Solo({ label, v, unit = '' }) {
+  return (
+    <div className="try-metric">
+      <span className="try-metric-label">{label}</span>
+      <span className="try-metric-pair">
+        <b className="ai">{v == null ? '–' : v.toFixed(unit === ' km/h' ? 1 : 0)}{unit}</b>
+      </span>
     </div>
   )
 }
