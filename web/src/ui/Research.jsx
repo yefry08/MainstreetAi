@@ -122,7 +122,20 @@ export default function Research() {
           here before (kept at ui/PipelineDiagram.jsx). It is a 130 KB
           palette-quantised PNG: a diagram is flat fills, so the palette is
           lossless to the eye at roughly half the bytes. */}
-      <figure className="pipeline-fig">
+      <figure className="pipeline-fig" style={{ display: 'flex', gap: '2rem', alignItems: 'flex-start' }}>
+        <figcaption style={{ flex: 1 }}>
+          <h3 style={{ marginTop: 0 }}>AI Traffic Orchestration — Technical Pipeline</h3>
+          <p>
+            The pipeline as designed. What is actually running today:
+            Barcelona, Shibuya and Midtown Manhattan have full SUMO networks and
+            recorded twins — <b>+41.1%</b>, <b>+36.0%</b> and <b>+34.6%</b>
+            network speed against fixed-time control. The remaining districts
+            have illustrated basemaps only. Demand is a calibrated synthetic
+            profile rather than a live municipal feed, and the road graph is
+            built by netconvert from OSM, with city2graph supplying the transit
+            layer.
+          </p>
+        </figcaption>
         <img
           src={assetUrl('img/pipeline-diagram.png')}
           alt="Three-phase pipeline. Phase 1, data layer: OpenStreetMap and
@@ -133,21 +146,12 @@ export default function Research() {
                proximity and time-of-day demand drive signal retiming and bus
                green waves, measured as CO2 reduction, minutes saved and
                transit punctuality."
-          width="1440"
-          height="1446"
+          width="500"
+          height="505"
           loading="lazy"
           decoding="async"
+          style={{ flex: 0, flexShrink: 0 }}
         />
-        <figcaption>
-          The pipeline as designed. What is actually running today:
-          Barcelona, Shibuya and Midtown Manhattan have full SUMO networks and
-          recorded twins — <b>+41.1%</b>, <b>+36.0%</b> and <b>+34.6%</b>
-          network speed against fixed-time control. The remaining districts
-          have illustrated basemaps only. Demand is a calibrated synthetic
-          profile rather than a live municipal feed, and the road graph is
-          built by netconvert from OSM, with city2graph supplying the transit
-          layer.
-        </figcaption>
       </figure>
     </section>
   )

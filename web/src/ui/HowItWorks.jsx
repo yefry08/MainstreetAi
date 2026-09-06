@@ -22,21 +22,21 @@
 const STEPS = [
   {
     n: '01',
-    title: 'Calles reales',
-    body: 'Cada calle, carril, sentido único y semáforo sale del mapa real de la ciudad. Nada de esto está inventado.',
+    title: 'Real streets',
+    body: 'Every street, lane, one-way and traffic light comes from the city\'s real map. Nothing here is invented.',
     tag: 'OpenStreetMap',
   },
   {
     n: '02',
-    title: 'Dos gemelos idénticos',
-    body: 'La misma ciudad, el mismo tráfico, la misma semilla. Lo único que cambia entre los dos es quién controla los semáforos.',
+    title: 'Two identical twins',
+    body: 'Same city, same traffic, same random seed. The only difference between them is who controls the traffic lights.',
     tag: 'SUMO',
   },
   {
     n: '03',
-    title: 'La IA reparte el verde',
-    body: 'Lee la cola de cada cruce y mueve segundos de la dirección vacía a la que está llena. La diferencia entre gemelos es la medida.',
-    tag: 'Orquestador',
+    title: 'The AI distributes green',
+    body: 'It reads each junction\'s queue and moves seconds from the empty direction to the full one. The difference between twins is the measurement.',
+    tag: 'Orchestrator',
   },
 ]
 
@@ -59,12 +59,11 @@ function Track({ hidden }) {
 
 export default function HowItWorks({ onOpen }) {
   return (
-    <section className="hiw" aria-label="Cómo funciona, en tres pasos">
-      {/* La banda es el avance; la sección completa es la versión larga. Que
-          lleve a ella evita tener dos cosas con el mismo nombre y ninguna
-          relación entre ambas. */}
-      <button className="hiw-label" onClick={onOpen} title="Ver la explicación completa">
-        Cómo funciona ↗
+    <section className="hiw" aria-label="How it works, in three steps">
+      {/* The band is the preview; the full section is the complete version. Link to it
+          to avoid having two things with the same name and no relationship between them. */}
+      <button className="hiw-label" onClick={onOpen} title="See the full explanation">
+        How it works ↗
       </button>
       <div className="hiw-viewport">
         <div className="hiw-rail">

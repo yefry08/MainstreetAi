@@ -129,7 +129,7 @@ export default function App() {
   useEffect(() => {
     document.title =
       isHome ? 'MainstreetAi · Barcelona'
-      : isCity ? 'MainstreetAi · Cómo funciona'
+      : isCity ? 'MainstreetAi · How it works'
       : tab === 'research' ? 'MainstreetAi · Research'
       : 'MainstreetAi · Contact'
   }, [isHome, isCity, tab])
