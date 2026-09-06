@@ -51,5 +51,9 @@ export default defineConfig(({ mode }) => ({
       '/ws': { target: 'ws://127.0.0.1:8000', ws: true },
     },
   },
-  build: { outDir: 'dist', chunkSizeWarningLimit: 2000 },
+  build: {
+    base: '/MainstreetAi/',
+    outDir: 'dist',
+    chunkSizeWarningLimit: 2000
+  },
 }))
