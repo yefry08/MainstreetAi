@@ -1141,3 +1141,22 @@
 @media (prefers-reduced-motion: reduce) {
   .hiw-rail { animation: none; }
 }
+
+/* La etiqueta de la banda ahora es un botón hacia la sección completa. Debe
+   seguir pareciendo una etiqueta, no un botón de formulario. */
+.hiw-label {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-family: var(--font-data);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--terracota-400);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.hiw-label:hover { color: var(--terracota-500); text-decoration: underline; }
+.hiw-label:focus-visible { outline: 2px solid var(--terracota-500); outline-offset: 3px; border-radius: 3px; }

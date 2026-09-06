@@ -57,10 +57,15 @@ function Track({ hidden }) {
   )
 }
 
-export default function HowItWorks() {
+export default function HowItWorks({ onOpen }) {
   return (
     <section className="hiw" aria-label="Cómo funciona, en tres pasos">
-      <span className="hiw-label">Cómo funciona</span>
+      {/* La banda es el avance; la sección completa es la versión larga. Que
+          lleve a ella evita tener dos cosas con el mismo nombre y ninguna
+          relación entre ambas. */}
+      <button className="hiw-label" onClick={onOpen} title="Ver la explicación completa">
+        Cómo funciona ↗
+      </button>
       <div className="hiw-viewport">
         <div className="hiw-rail">
           <Track />
