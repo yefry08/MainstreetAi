@@ -38,6 +38,7 @@ function preloadReplay(enabled) {
 }
 
 export default defineConfig(({ mode }) => ({
+  base: '/MainstreetAi/',
   plugins: [
     react(),
     preloadReplay(process.env.VITE_REPLAY_ONLY === '1'),
@@ -52,7 +53,6 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
-    base: '/MainstreetAi/',
     outDir: 'dist',
     chunkSizeWarningLimit: 2000
   },
