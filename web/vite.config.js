@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 
 /**
@@ -37,23 +37,49 @@ function preloadReplay(enabled) {
   }
 }
 
-export default defineConfig(({ mode }) => ({
-  base: '/MainstreetAi/',
-  plugins: [
-    react(),
-    preloadReplay(process.env.VITE_REPLAY_ONLY === '1'),
-  ],
-  server: {
-    port: 5173,
-    proxy: {
-      // The Python simulation server. Proxying keeps the browser on one origin
-      // so the WebSocket needs no CORS dance.
-      '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true },
-      '/ws': { target: 'ws://127.0.0.1:8000', ws: true },
+/**
+ * ONE SWITCH DECIDES BOTH, ON PURPOSE.
+ *
+ * The static build needs two things together: it must play the recording rather
+ * than open a WebSocket (VITE_REPLAY_ONLY), and it must reference its assets
+ * relatively (base './'), because a GitHub project page lives at /MainstreetAi/
+ * and an absolute /assets/... resolves to the domain root -- a 404 and a blank
+ * page. Setting one without the other is what broke the deploy: a rebuild that
+ * dropped the flag shipped a page that waited on a server that cannot exist,
+ * and drew a city with no traffic in it.
+ *
+ * So the flag derives the base rather than being set beside it. There is no
+ * combination of the two left to get wrong.
+ *
+ * The env is read from both places: `--mode pages` picks it up from .env.pages,
+ * while sim/build_vercel.sh keeps working unchanged by passing it as a shell
+ * variable. A shell variable wins only when it is non-empty -- several existing
+ * build commands clear it with VITE_REPLAY_ONLY="" before a live build, and an
+ * empty string overriding the mode file would silently disable replay again.
+ */
+export default defineConfig(({ mode }) => {
+  const shell = process.env.VITE_REPLAY_ONLY
+  const fromFile = loadEnv(mode, process.cwd(), 'VITE_').VITE_REPLAY_ONLY
+  const replayOnly = (shell || fromFile) === '1'
+
+  return {
+    base: replayOnly ? './' : '/',
+    plugins: [
+      react(),
+      preloadReplay(replayOnly),
+    ],
+    server: {
+      port: 5173,
+      proxy: {
+        // The Python simulation server. Proxying keeps the browser on one origin
+        // so the WebSocket needs no CORS dance.
+        '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true },
+        '/ws': { target: 'ws://127.0.0.1:8000', ws: true },
+      },
     },
-  },
-  build: {
-    outDir: 'dist',
-    chunkSizeWarningLimit: 2000
-  },
-}))
+    build: {
+      outDir: 'dist',
+      chunkSizeWarningLimit: 2000,
+    },
+  }
+})
