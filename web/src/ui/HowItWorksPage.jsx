@@ -38,24 +38,24 @@ import { createTwins, compare } from '../city/sim'
 const STAGES = [
   {
     n: '01',
-    title: 'La red real',
-    body: 'Calles, carriles y cruces. Los que tienen más de dos accesos llevan ' +
-          'semáforo, y cada uno alterna dos grupos de direcciones opuestas.',
-    note: 'Aquí la retícula es sintética; en la app real viene de OpenStreetMap.',
+    title: 'The real network',
+    body: 'Streets, lanes and junctions. Those with more than two approaches have a ' +
+          'traffic light, and each one alternates two groups of opposite directions.',
+    note: 'Here the grid is synthetic; in the real app it comes from OpenStreetMap.',
   },
   {
     n: '02',
-    title: 'Dos gemelos idénticos',
-    body: 'La misma red, los mismos coches, la misma semilla. Ambos arrancan a ' +
-          'tiempo fijo, así que sus números coinciden hasta el último decimal.',
-    note: 'Si no fueran idénticos aquí, ninguna diferencia posterior probaría nada.',
+    title: 'Two identical twins',
+    body: 'Same network, same cars, same seed. Both start at fixed time, so their ' +
+          'numbers match to the last decimal.',
+    note: 'If they were not identical here, no later difference would prove anything.',
   },
   {
     n: '03',
-    title: 'El controlador reparte el verde',
-    body: 'Lee cuántos coches esperan en cada grupo de cada cruce y mueve segundos ' +
-          'del lado vacío al lleno, sin alargar el ciclo. Los naranjas están parados.',
-    note: 'En la demo decide una regla, no un modelo: un LLM necesitaría clave y red.',
+    title: 'The controller distributes green',
+    body: 'It reads how many cars are waiting in each group at each junction and moves ' +
+          'seconds from the empty side to the full one, without extending the cycle. The orange ones are stopped.',
+    note: 'In the demo a rule decides, not a model: a language model would need a key and network.',
   },
 ]
 
@@ -351,11 +351,11 @@ export default function HowItWorksPage() {
   return (
     <div className="hw-page">
       <header className="hw-head">
-        <h1>Cómo funciona</h1>
+        <h1>How it works</h1>
         <p>
-          Tres pasos, los tres corriendo de verdad en tu navegador. Lo de abajo
-          no es un vídeo: es el mismo motor de simulación que mueve la app, sin
-          red y sin ninguna clave.
+          Three steps, all three running real in your browser. What you see below
+          is not a video: it is the same simulation engine that powers the app, with
+          no network and no API key.
         </p>
       </header>
 
@@ -374,14 +374,14 @@ export default function HowItWorksPage() {
       <div ref={mountRef} className="hw-stage">
         {webglFailed && (
           <p className="hw-nogl">
-            Tu navegador no tiene WebGL disponible, así que la escena 3D no puede
-            dibujarse. Los tres pasos siguen explicados debajo.
+            Your browser doesn't have WebGL available, so the 3D scene cannot be
+            rendered. The three steps are still explained below.
           </p>
         )}
         {stage === 2 && !webglFailed && (
           <div className="hw-tags">
-            <span>Tiempo fijo</span>
-            <span className="ai">Controlado</span>
+            <span>Fixed time</span>
+            <span className="ai">Controlled</span>
           </div>
         )}
       </div>
@@ -395,22 +395,22 @@ export default function HowItWorksPage() {
         <div className="hw-metrics">
           {showCompare ? (
             <>
-              <Cmp label="Velocidad media" b={stats.fixed.meanSpeedKmh}
+              <Cmp label="Average speed" b={stats.fixed.meanSpeedKmh}
                    a={stats.ai.meanSpeedKmh} d={stats.speed} unit=" km/h" />
-              <Cmp label="En cola ahora" b={stats.fixed.queued} a={stats.ai.queued} d={stats.queued} />
-              <Cmp label="Cruces completados" b={stats.fixed.arrivals}
+              <Cmp label="Queued now" b={stats.fixed.queued} a={stats.ai.queued} d={stats.queued} />
+              <Cmp label="Junctions completed" b={stats.fixed.arrivals}
                    a={stats.ai.arrivals} d={stats.arrivals} />
               <div className="hw-metric">
-                <span className="hw-metric-label">Cruces retimados</span>
+                <span className="hw-metric-label">Retimed junctions</span>
                 <b className="hw-metric-solo">{decisions}</b>
               </div>
             </>
           ) : (
             <>
-              <Solo label="Vehículos" v={stats.fixed.vehicles} />
-              <Solo label="En movimiento" v={stats.fixed.moving} />
-              <Solo label="En cola" v={stats.fixed.queued} />
-              <Solo label="Velocidad media" v={stats.fixed.meanSpeedKmh} unit=" km/h" />
+              <Solo label="Vehicles" v={stats.fixed.vehicles} />
+              <Solo label="Moving" v={stats.fixed.moving} />
+              <Solo label="Queued" v={stats.fixed.queued} />
+              <Solo label="Average speed" v={stats.fixed.meanSpeedKmh} unit=" km/h" />
             </>
           )}
         </div>
@@ -419,19 +419,19 @@ export default function HowItWorksPage() {
       <div className="hw-actions">
         {stage < 2
           ? <button className="tl-btn primary" onClick={() => setStage(stage + 1)}>
-              Siguiente paso →
+              Next step →
             </button>
-          : <button className="tl-btn primary" onClick={restart}>Volver a empezar</button>}
+          : <button className="tl-btn primary" onClick={restart}>Start over</button>}
         {stage > 0 && (
-          <button className="tl-btn" onClick={() => setStage(stage - 1)}>← Paso anterior</button>
+          <button className="tl-btn" onClick={() => setStage(stage - 1)}>← Previous step</button>
         )}
       </div>
 
       <p className="hw-foot">
-        Los dos gemelos parten de la misma semilla y llevan el mismo tráfico, así
-        que cualquier diferencia entre ellos es el controlador y nada más. En
-        Home el mismo planteamiento corre sobre Barcelona con SUMO, un simulador
-        de tráfico completo, y da <b>+41,1%</b> de velocidad de red.
+        Both twins start from the same seed and carry the same traffic, so any
+        difference between them is the controller and nothing else. In Home the same
+        approach runs on Barcelona with SUMO, a full traffic simulator, and yields
+        <b> +41.1%</b> network speed.
       </p>
     </div>
   )
