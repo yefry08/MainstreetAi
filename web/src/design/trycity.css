@@ -355,3 +355,109 @@
   .try-free,
   .try-upsell { flex-direction: column; align-items: flex-start; }
 }
+
+/* =========================================================================
+   CÓMO FUNCIONA — el recorrido en 3D
+   ========================================================================= */
+
+.hw-page { max-width: 1040px; margin: 0 auto; padding: calc(var(--space-4) * 4) var(--space-4) var(--space-4); }
+.hw-head { max-width: 64ch; margin-bottom: var(--space-4); }
+.hw-head h1 { margin: 0 0 var(--space-2); font-size: clamp(24px, 3vw, 34px); color: var(--ink-50); }
+.hw-head p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--ink-100); }
+
+.hw-steps { list-style: none; display: flex; gap: var(--space-2); margin: 0 0 var(--space-3); padding: 0; flex-wrap: wrap; }
+
+.hw-step {
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 15px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--glass-edge);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink-300);
+  font: inherit; font-size: 13px;
+  cursor: pointer;
+  transition: border-color var(--t-fast) var(--ease-out), color var(--t-fast) var(--ease-out);
+}
+
+.hw-step:hover { border-color: var(--terracota-500); color: var(--ink-50); }
+.hw-step.on { border-color: var(--terracota-500); background: var(--terracota-glow); color: var(--ink-50); }
+.hw-step.done .hw-n { color: #6fb37b; }
+.hw-n { font-family: var(--font-data); font-size: 12px; color: var(--terracota-400); }
+
+/* El lienzo de three.js. El renderer se dimensiona a este contenedor con un
+   ResizeObserver, así que la altura la manda el CSS y no un número fijo. */
+.hw-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 8;
+  min-height: 300px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--glass-edge);
+  background: linear-gradient(180deg, #1a1f28 0%, #12141a 100%);
+  overflow: hidden;
+}
+
+.hw-stage canvas { display: block; width: 100%; height: 100%; }
+
+.hw-nogl {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  margin: 0; padding: var(--space-4);
+  text-align: center;
+  font-size: 13px; line-height: 1.6; color: var(--ink-300);
+}
+
+/* Etiqueta cada bloque en el paso 03. Sin ellas, dos retículas iguales no
+   dicen cuál es cuál, y toda la comparación depende de saberlo. */
+.hw-tags {
+  position: absolute; top: var(--space-3); left: 0; right: 0;
+  display: flex; justify-content: space-around;
+  pointer-events: none;
+}
+
+.hw-tags span {
+  font-family: var(--font-data); font-size: 10.5px;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-400);
+  background: rgba(10, 12, 16, 0.7);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-pill);
+  padding: 3px 10px;
+}
+
+.hw-tags .ai { color: var(--terracota-400); border-color: var(--terracota-500); }
+
+.hw-explain { margin-top: var(--space-3); max-width: 70ch; }
+.hw-body { margin: 0 0 6px; font-size: 13.5px; line-height: 1.6; color: var(--ink-100); }
+.hw-note { margin: 0; font-size: 12px; line-height: 1.55; color: var(--ink-400); font-style: italic; }
+
+.hw-metrics {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: var(--space-2); margin-top: var(--space-4);
+}
+
+.hw-metric {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--glass-edge); border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.hw-metric-label { font-size: 12px; color: var(--ink-300); }
+.hw-metric-solo { font-family: var(--font-data); font-size: 13px; color: var(--ink-50); }
+.hw-metric-pair { font-family: var(--font-data); font-size: 12px; }
+.hw-metric-pair .base { color: var(--ink-400); }
+.hw-metric-pair i { color: var(--ink-500); font-style: normal; margin: 0 4px; }
+.hw-metric-pair .ai { color: var(--ink-50); }
+.hw-metric-delta { font-family: var(--font-data); font-size: 12px; color: var(--ink-400); }
+.hw-metric-delta.good { color: #6fb37b; }
+.hw-metric-delta.bad { color: #e0605a; }
+
+.hw-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-4); }
+.hw-foot { margin: var(--space-4) 0 0; max-width: 72ch; font-size: 12.5px; line-height: 1.6; color: var(--ink-300); }
+.hw-foot b { color: var(--ink-50); }
+
+@media (max-width: 860px) {
+  .hw-metrics { grid-template-columns: 1fr; }
+  .hw-stage { aspect-ratio: 4 / 3; }
+}

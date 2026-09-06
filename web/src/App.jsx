@@ -26,7 +26,11 @@ import { useReplayFrames } from './data/useReplayFrames'
  */
 const Contact = lazy(() => import('./ui/Contact'))
 const Research = lazy(() => import('./ui/Research'))
-const TryCity = lazy(() => import('./ui/TryCity'))
+// TryCity sigue en el árbol y funciona: descarga OSM real, simula y orquesta
+// con las claves del visitante. Sale del render porque depende de Overpass y
+// de claves ajenas, y ninguna de las dos cosas debería poder fallar delante de
+// un jurado. HowItWorksPage no necesita red ni claves.
+const HowItWorksPage = lazy(() => import('./ui/HowItWorksPage'))
 
 /**
  * Two renderers, two jobs.
@@ -115,7 +119,7 @@ export default function App() {
   }, [chrome])
 
   const isHome = tab === 'home'
-  const isCity = tab === 'city'
+  const isCity = tab === 'how'
 
   // The tab title follows what is actually on screen. Try your city used to
   // fetch districts.json to name the selected district; it no longer selects
@@ -125,7 +129,7 @@ export default function App() {
   useEffect(() => {
     document.title =
       isHome ? 'MainstreetAi · Barcelona'
-      : isCity ? 'MainstreetAi · Try your city'
+      : isCity ? 'MainstreetAi · Cómo funciona'
       : tab === 'research' ? 'MainstreetAi · Research'
       : 'MainstreetAi · Contact'
   }, [isHome, isCity, tab])
@@ -202,7 +206,7 @@ export default function App() {
           {/* La escena no explica lo que es. Esta banda lo hace en tres frases
               sin robarle sitio: vive sobre el bezel, a la derecha del rail, y
               se va con el resto del cromo al pulsar H. */}
-          <HowItWorks />
+          <HowItWorks onOpen={() => onTab('how')} />
           <CameraControls map={map} />
           <Bezel map={map} header={header} />
           {!chrome && (
@@ -216,7 +220,7 @@ export default function App() {
       {isCity && (
         <div className="page-layer">
           <Suspense fallback={null}>
-            <TryCity current={district} onSelect={onSelectDistrict} />
+            <HowItWorksPage />
           </Suspense>
         </div>
       )}
