@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import Scene from './scene/Scene'
-import { PRESETS } from './scene/cameraPresets'
+import { cityConfig } from './scene/cityConfig'
 import Atmosphere from './ui/Atmosphere'
 import Bezel from './ui/Bezel'
 import CameraControls from './ui/CameraControls'
@@ -56,12 +56,15 @@ const HowItWorksPage = lazy(() => import('./ui/HowItWorksPage'))
  */
 const REPLAY_ONLY = import.meta.env?.VITE_REPLAY_ONLY === '1'
 
-const BASEMAP_LABEL = {
+// `ready` names the city, so the masthead cannot sit there announcing Barcelona
+// over a scene showing Midtown. The other three describe the basemap's health
+// and are the same wherever the camera is.
+const basemapLabel = (status, city) => ({
   loading: 'Basemap · loading',
-  ready: 'Barcelona · Signal Twin',
+  ready: cityConfig(city).label3d,
   fallback: 'Basemap · fallback',
   offline: 'Basemap · offline',
-}
+}[status])
 
 export default function App() {
   const [tab, setTab] = useState('home')
@@ -78,11 +81,17 @@ export default function App() {
 
   const { frameRef: liveRef, header, status } = useSimSocket({ enabled: !REPLAY_ONLY })
 
-  // On a static host the 3D hero has no socket to draw from. The Barcelona
-  // recording is in the identical frame shape, so it drives the same ref and
-  // the scene never learns the difference.
+  // Which city the 3D scene is standing in. Declared up here because the replay
+  // hook below needs it: Manhattan has its own recording, and the scene showing
+  // New York while the traffic came from Barcelona is precisely the
+  // wrong-city-over-the-wrong-map failure this project has hit before.
+  const sceneCity = tab === 'manhattan' ? 'manhattan' : 'barcelona'
+
+  // On a static host the 3D hero has no socket to draw from. Both recordings
+  // are in the identical frame shape, so they drive the same ref and the scene
+  // never learns the difference.
   const { frameRef: recordedRef, meta: recordedMeta } =
-    useReplayFrames({ enabled: REPLAY_ONLY, district: 'barcelona', twin })
+    useReplayFrames({ enabled: REPLAY_ONLY, district: sceneCity, twin })
   const frameRef = REPLAY_ONLY ? recordedRef : liveRef
 
   // Live metrics for the impact panel. Skipped in replay builds -- there is no
@@ -119,6 +128,10 @@ export default function App() {
   }, [chrome])
 
   const isHome = tab === 'home'
+  const isManhattan = tab === 'manhattan'
+  // Both tabs are the same 3D scene, anchored in a different city. Everything
+  // that reads camera state or twin metrics belongs to either of them.
+  const isScene = isHome || isManhattan
   const isCity = tab === 'how'
 
   // The tab title follows what is actually on screen. Try your city used to
@@ -129,10 +142,11 @@ export default function App() {
   useEffect(() => {
     document.title =
       isHome ? 'MainstreetAi · Barcelona'
+      : isManhattan ? 'MainstreetAi · Manhattan'
       : isCity ? 'MainstreetAi · How it works'
       : tab === 'research' ? 'MainstreetAi · Research'
       : 'MainstreetAi · Contact'
-  }, [isHome, isCity, tab])
+  }, [isHome, isManhattan, isCity, tab])
 
   // Picking a district shows it in the pixel view, which lives on this tab. It
   // used to jump to Home, which now belongs to the 3D scene instead.
@@ -144,12 +158,15 @@ export default function App() {
   // how it got reported. After panning across the city, "take me back" is the
   // thing people actually want from it.
   const onTab = useCallback((next) => {
-    if (next === 'home' && tab === 'home' && map) {
-      const p = PRESETS.eixample
-      map.easeTo({
-        center: p.center, zoom: p.zoom, pitch: p.pitch, bearing: p.bearing,
-        duration: 900,
-      })
+    // Clicking the tab you are already on flies the camera back to that city's
+    // opening shot. A control that does nothing when you are stood on its
+    // destination is indistinguishable from a broken one -- which is how it got
+    // reported -- and after panning across a city, "take me back" is the thing
+    // people actually want from it.
+    const sceneTab = next === 'home' || next === 'manhattan'
+    if (sceneTab && next === tab && map) {
+      map.easeTo({ ...cityConfig(next === 'manhattan' ? 'manhattan' : 'barcelona').home,
+                   duration: 900 })
     }
     setTab(next)
   }, [tab, map])
@@ -161,13 +178,14 @@ export default function App() {
           visible stall on the hardware this targets. opacity hides it from
           sight, aria-hidden from a screen reader. */}
       <div className="scene-layer"
-           aria-hidden={!isHome}
-           style={{ opacity: isHome ? 1 : 0,
-                    pointerEvents: isHome ? 'auto' : 'none' }}>
+           aria-hidden={!isScene}
+           style={{ opacity: isScene ? 1 : 0,
+                    pointerEvents: isScene ? 'auto' : 'none' }}>
         <Scene
           onMapReady={onMapReady}
           onBasemapStatus={onBasemapStatus}
           frameRef={frameRef}
+          city={sceneCity}
         />
         <Atmosphere map={map} />
       </div>
@@ -186,7 +204,7 @@ export default function App() {
         chrome={chrome} onChrome={setChrome}
       />
 
-      {isHome && (
+      {isScene && (
         <>
           <aside className="rail">
             <ImpactPanel twins={REPLAY_ONLY ? recordedMeta?.stats : twins} />
@@ -196,7 +214,7 @@ export default function App() {
             <div className="masthead-live">
               <LiveCity />
               <span className="masthead-tag">
-                {status === 'live' ? BASEMAP_LABEL[basemap]
+                {status === 'live' ? basemapLabel(basemap, sceneCity)
                                    : `Simulation · ${status}`}
               </span>
             </div>
@@ -206,7 +224,10 @@ export default function App() {
           {/* La escena no explica lo que es. Esta banda lo hace en tres frases
               sin robarle sitio: vive sobre el bezel, a la derecha del rail, y
               se va con el resto del cromo al pulsar H. */}
-          <HowItWorks onOpen={() => onTab('how')} />
+          {/* The band belongs to the landing tab only. On Manhattan the same
+              three sentences would be a second explanation of a thing the
+              visitor has already been told. */}
+          {isHome && <HowItWorks onOpen={() => onTab('how')} />}
           <CameraControls map={map} />
           <Bezel map={map} header={header} />
           {!chrome && (
