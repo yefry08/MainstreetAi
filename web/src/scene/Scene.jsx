@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
-import { addBuildings, growBuildings, BUILDING_LAYER_ID } from './buildings'
+import { addBuildings, growBuildings, removeBuildings, BUILDING_LAYER_ID } from './buildings'
 import { pruneUnusableSources } from './pruneStyle'
-import { HOME } from '../ui/CameraControls'
+import { cityConfig, DEFAULT_CITY } from './cityConfig'
 import { createThreeLayer } from './three/ThreeLayer'
 import { createTraffic } from './three/traffic'
 import { assetUrl } from '../data/assetUrl'
@@ -80,9 +80,8 @@ const OFFLINE_STYLE = {
  * no traffic, no overlay, no data connection. This pass is about how the city
  * looks and how it feels to move through it.
  */
-// Scene origin, near the middle of the simulated extract. Everything three.js
-// draws is expressed in metres from here — see three/geo.js for why.
-const ORIGIN = [2.1662, 41.3925]
+// Origins, camera homes and asset paths now live in ./cityConfig, because two
+// cities means they are parameters rather than constants.
 
 /**
  * Features that can actually be drawn.
@@ -108,7 +107,7 @@ function usableFeatures(gj) {
   return ok
 }
 
-export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
+export default function Scene({ onMapReady, onBasemapStatus, frameRef, city = DEFAULT_CITY }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const grownRef = useRef(false)
@@ -117,14 +116,25 @@ export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
   const signalsRef = useRef(null)
   const signalDataRef = useRef(null)
 
+  // ensureCity is rebuilt on every style event and has to read the CURRENT
+  // city, not the one captured when the map was created. A ref rather than a
+  // dependency, because putting `city` in the main effect's deps would tear the
+  // whole map down and rebuild it on a tab switch -- re-fetching every tile and
+  // rebuilding every buffer, which is the visible stall this is written to
+  // avoid on the target hardware.
+  const cityRef = useRef(cityConfig(city))
+  // Lets the city-change effect below drive the same build path.
+  const ensureRef = useRef(null)
+
   useEffect(() => {
+    const home = cityRef.current.home
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: VECTOR_STYLE,
-      center: HOME.center,
-      zoom: HOME.zoom,
-      pitch: HOME.pitch,
-      bearing: HOME.bearing,
+      center: home.center,
+      zoom: home.zoom,
+      pitch: home.pitch,
+      bearing: home.bearing,
       antialias: true,
 
       // --- free navigation ---
@@ -248,17 +258,19 @@ export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
     // was meant to rescue.
     const ensureCity = () => {
       if (!map.getStyle || map.getLayer(BUILDING_LAYER_ID)) return
+      const cfg = cityRef.current
       try {
         pruneUnusableSources(map)
-        const added = addBuildings(map)
+        const added = addBuildings(map, cfg)
         if (!added) return
 
         // Raise the city once. Not again on a fallback swap — re-sinking the
         // skyline mid-demo because a tile host hiccuped would look like a
-        // fault rather than a flourish.
+        // fault rather than a flourish. Switching city DOES re-raise it, by
+        // clearing grownRef: there a new skyline rising is the point.
         if (!grownRef.current) {
           grownRef.current = true
-          growBuildings(map, { duration: 1900 })
+          growBuildings(map, { duration: 1900, city: cfg })
         }
 
         // The traffic scene is a MapLibre custom layer, so it shares the map's
@@ -266,9 +278,16 @@ export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
         // zoom, rotate and pitch keep working for free.
         if (!threeRef.current) {
           const layer = createThreeLayer({
-            origin: ORIGIN,
+            origin: cfg.origin,
             onInit: ({ scene, proj }) => {
               trafficRef.current = createTraffic({ scene, proj })
+
+              // A city whose recording carries no signal states gets no lamps.
+              // See cityConfig.js: drawing them would stand 1,248 permanently
+              // red heads over moving traffic. No lamps is missing detail; red
+              // lamps would be an assertion that is not true.
+              if (!cfg.hasSignalStates) return
+
               // Signal geometry is fixed, so it can be built as soon as the
               // positions arrive — state colours stream in separately.
               // One lamp per APPROACH, not per junction. The server emits one
@@ -277,7 +296,7 @@ export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
               // sim/build_signal_approaches.py. Falls back to the old junction
               // lamps if that file has not been generated; the server applies
               // the same fallback, so the two ends agree either way.
-              fetch(assetUrl('data/signal_approaches.geojson'))
+              fetch(assetUrl(cfg.signals))
                 .then((r) => (r.ok ? r.json() : Promise.reject(new Error('no approaches'))))
                 .then((gj) => usableFeatures(gj).map((f) => ({
                   pos: f.geometry.coordinates,
@@ -286,16 +305,22 @@ export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
                   bearing: f.properties.bearing,
                   links: f.properties.links,
                 })))
-                .catch(() => fetch(assetUrl('data/signals.geojson'))
-                  .then((r) => r.json())
-                  .then((gj) => usableFeatures(gj).map((f) => ({
-                    pos: f.geometry.coordinates,
-                    id: f.properties.id,
-                    label: f.properties.label,
-                    links: f.properties.links,
-                    phases: f.properties.phases,
-                    corridor: f.properties.corridor,
-                  }))))
+                // Only Barcelona has the older per-junction lamps to fall back
+                // to. For a city without them, retrying would fetch Barcelona's
+                // file and scatter 3,230 Catalan traffic lights across Midtown.
+                .catch((err) => {
+                  if (!cfg.signalsFallback) throw err
+                  return fetch(assetUrl(cfg.signalsFallback))
+                    .then((r) => r.json())
+                    .then((gj) => usableFeatures(gj).map((f) => ({
+                      pos: f.geometry.coordinates,
+                      id: f.properties.id,
+                      label: f.properties.label,
+                      links: f.properties.links,
+                      phases: f.properties.phases,
+                      corridor: f.properties.corridor,
+                    })))
+                })
                 .then((pts) => {
                   signalDataRef.current = pts
                   signalsRef.current = createSignals({ scene, proj, signals: pts })
@@ -349,6 +374,7 @@ export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
 
     map.on('style.load', ensureCity)
     map.on('styledata', ensureCity)
+    ensureRef.current = ensureCity
 
     // Debug handle. requestAnimationFrame is throttled to zero in a
     // backgrounded or non-compositing tab, which stalls every animation; this
@@ -477,6 +503,50 @@ export default function Scene({ onMapReady, onBasemapStatus, frameRef }) {
       delete window.__mst
     }
   }, [onMapReady, onBasemapStatus, frameRef])
+
+  /**
+   * Move the scene to another city, without rebuilding the map.
+   *
+   * MapLibre, its GL context and every tile it has already fetched stay exactly
+   * where they are. What gets rebuilt is only what is actually city-specific:
+   * the buildings source, and the three.js layer -- whose projection origin is
+   * baked in at construction (see three/ThreeLayer.js), so it genuinely cannot
+   * be re-pointed and has to be recreated.
+   *
+   * Order matters. The three layer is removed FIRST so its onRemove disposes
+   * every vehicle and signal geometry; dropping the reference without removing
+   * the layer would leak a whole city's worth of GPU buffers on each switch,
+   * and on an N100 that is a handful of switches before the tab dies.
+   */
+  useEffect(() => {
+    const map = mapRef.current
+    const next = cityConfig(city)
+    if (!map || next.key === cityRef.current.key) return
+
+    cityRef.current = next
+
+    try {
+      if (map.getLayer('mst-three')) map.removeLayer('mst-three')
+    } catch { /* mid style swap */ }
+    threeRef.current = null
+    trafficRef.current?.dispose?.()
+    signalsRef.current?.dispose?.()
+    trafficRef.current = null
+    signalsRef.current = null
+    signalDataRef.current = null
+
+    removeBuildings(map)
+    // Let the new skyline rise rather than appearing at full height.
+    grownRef.current = false
+
+    // Cut, don't fly. An eased camera move between Barcelona and New York
+    // crosses the Atlantic at altitude and takes several seconds of empty
+    // ocean; the cities are not neighbours and pretending otherwise wastes the
+    // one moment the viewer is waiting on.
+    map.jumpTo(next.home)
+
+    ensureRef.current?.()
+  }, [city])
 
   return <div ref={containerRef} className="scene" />
 }

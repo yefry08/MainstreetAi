@@ -11,6 +11,7 @@ import { MODES, LIGHTING } from '../pixel/lighting.js'
 
 export const TABS = [
   { key: 'home', label: 'Home' },
+  { key: 'manhattan', label: 'Manhattan' },
   { key: 'how', label: 'How it works' },
   { key: 'research', label: 'Research' },
   { key: 'contact', label: 'Contact' },
