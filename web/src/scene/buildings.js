@@ -42,76 +42,95 @@ const SOURCE_ID = 'mst-bldg'
  * happens; the simulation extract is larger, so buildings thin out at the far
  * edges of a wide zoom-out.
  */
-const SOURCE_URL = assetUrl('data/buildings.geojson')
-
-/**
- * Heights are drawn at 1.45x true.
- *
- * This is a visualisation choice, not data: the Eixample is a near-uniform
- * plain of 6-8 storey blocks, and at the zooms a traffic view uses, true
- * heights compress into a flat crust. Exaggerating restores the skyline
- * silhouette that tells you you are looking at a city from above.
- * Nothing downstream measures buildings, so nothing is misled by it.
- */
-const EXAGGERATION = 1.45
-
 /** Thickness of the lighter roof cap, in exaggerated metres. */
 const CAP = 2.6
 
-/** Reference height at which a building counts as "tall" for the stagger. */
-const TALL = 120
-
-// `h` and `min_h` are written by sim/fetch_buildings.py; the `render_height`
-// fallbacks keep this working if it is ever pointed at an OpenMapTiles source.
+// `h` and `min_h` are written by sim/fetch_buildings.py (Barcelona, from OSM)
+// and sim/fetch_nyc_buildings.py (Manhattan, from NYC Open Data, converted from
+// feet). The `render_height` fallbacks keep this working if it is ever pointed
+// at an OpenMapTiles source.
 const RAW_HEIGHT = ['coalesce', ['get', 'h'], ['get', 'render_height'], ['get', 'height'], 12]
-const HEIGHT_EXPR = ['*', RAW_HEIGHT, EXAGGERATION]
-const BASE_EXPR = [
-  '*',
-  ['coalesce', ['get', 'min_h'], ['get', 'render_min_height'], ['get', 'min_height'], 0],
-  EXAGGERATION,
-]
 
-// Desaturated brown, wide in lightness. Compare the previous ramp, which
-// spanned roughly L13 -> L29; this spans L15 -> L58.
-const COLOR_EXPR = [
-  'interpolate',
-  ['linear'],
-  RAW_HEIGHT,
-  0, '#241d16',
-  10, '#33281e',
-  20, '#413326',
-  40, '#574433',
-  80, '#6e5843',
-  140, '#82684f',
+/**
+ * The ramp is in ABSOLUTE METRES, and stays that way for every city.
+ *
+ * The obvious alternative -- scale the stops to each city's tallest building --
+ * is wrong, and quietly so. Midtown's median building is 19 m, the same as the
+ * Eixample's; against a 472 m top stop that lands at 4% of the ramp and the
+ * ordinary city goes black, leaving a handful of lit towers floating in a void.
+ * Keeping the stops absolute means a 20 m building is the same colour in both
+ * cities, which is what makes the two comparable at a glance.
+ *
+ * Supertall cities just continue the ramp upward rather than rescaling it.
+ */
+const WALL_STOPS = [
+  0, '#241d16', 10, '#33281e', 20, '#413326',
+  40, '#574433', 80, '#6e5843', 140, '#82684f',
 ]
+const WALL_STOPS_TALL = [260, '#94795e', 430, '#a68b6f']
 
 // The cap is lighter than the wall it sits on at every height.
-const ROOF_COLOR_EXPR = [
-  'interpolate',
-  ['linear'],
-  RAW_HEIGHT,
-  0, '#3d3125',
-  10, '#52422f',
-  20, '#66513c',
-  40, '#7e6549',
-  80, '#977a5c',
-  140, '#ab8d6b',
+const ROOF_STOPS = [
+  0, '#3d3125', 10, '#52422f', 20, '#66513c',
+  40, '#7e6549', 80, '#977a5c', 140, '#ab8d6b',
 ]
+const ROOF_STOPS_TALL = [260, '#bc9e79', 430, '#ccb087']
 
-export function addBuildings(map) {
+/**
+ * The paint expressions for one city.
+ *
+ * With Barcelona's settings (1.45x, not supertall) this reproduces the previous
+ * hardcoded expressions exactly, stop for stop.
+ */
+function exprsFor(city) {
+  const ex = city?.exaggeration ?? 1.45
+  const tall = city?.supertall
+
+  return {
+    RAW_HEIGHT,
+    HEIGHT_EXPR: ['*', RAW_HEIGHT, ex],
+    BASE_EXPR: [
+      '*',
+      ['coalesce', ['get', 'min_h'], ['get', 'render_min_height'], ['get', 'min_height'], 0],
+      ex,
+    ],
+    COLOR_EXPR: [
+      'interpolate', ['linear'], RAW_HEIGHT,
+      ...WALL_STOPS, ...(tall ? WALL_STOPS_TALL : []),
+    ],
+    ROOF_COLOR_EXPR: [
+      'interpolate', ['linear'], RAW_HEIGHT,
+      ...ROOF_STOPS, ...(tall ? ROOF_STOPS_TALL : []),
+    ],
+    // Reference height for the grow stagger: short blocks land first, towers
+    // last. Scaled to the city, or Manhattan's towers would all arrive in the
+    // final instant together.
+    TALL: tall ? 400 : 120,
+  }
+}
+
+export function addBuildings(map, city) {
   if (!map || map.getLayer(BUILDING_LAYER_ID)) return false
 
   const style = map.getStyle()
   if (!style?.layers) return false
 
+  const { HEIGHT_EXPR, BASE_EXPR, COLOR_EXPR, ROOF_COLOR_EXPR } = exprsFor(city)
+  const sourceUrl = assetUrl(city?.buildings ?? 'data/buildings.geojson')
+
   if (!map.getSource(SOURCE_ID)) {
     map.addSource(SOURCE_ID, {
       type: 'geojson',
-      data: SOURCE_URL,
+      data: sourceUrl,
       // MapLibre tiles this in a worker; 10k polygons is comfortable.
       buffer: 64,
       tolerance: 0.4,
     })
+  } else {
+    // A style swap leaves the source in place. Point it at this city's file --
+    // otherwise switching cities flies the camera to New York and leaves
+    // Barcelona's buildings standing in the water.
+    map.getSource(SOURCE_ID).setData(sourceUrl)
   }
   const source = SOURCE_ID
 
@@ -191,7 +210,9 @@ export function addBuildings(map) {
  * zero in a backgrounded or non-compositing tab, and a stalled intro would
  * leave the city at height 0 — a blank screen mid-pitch.
  */
-export function growBuildings(map, { duration = 1900, fps = 30 } = {}) {
+export function growBuildings(map, { duration = 1900, fps = 30, city } = {}) {
+  const { HEIGHT_EXPR, BASE_EXPR, RAW_HEIGHT: RAW, TALL } = exprsFor(city)
+
   return new Promise((resolve) => {
     if (!map?.getLayer(BUILDING_LAYER_ID)) return resolve(false)
 
@@ -258,7 +279,7 @@ export function growBuildings(map, { duration = 1900, fps = 30 } = {}) {
       const p = 1 - Math.pow(1 - t, 3) // easeOutCubic
       if (t >= 1) return finish()
 
-      const hn = ['min', 1, ['/', RAW_HEIGHT, TALL]]
+      const hn = ['min', 1, ['/', RAW, TALL]]
       const prog = ['max', 0, ['min', 1, ['-', ['*', p, 1.35], ['*', 0.35, hn]]]]
 
       if (!setRamp(prog)) return finish()
@@ -270,4 +291,19 @@ export function growBuildings(map, { duration = 1900, fps = 30 } = {}) {
   })
 }
 
-export { BUILDING_LAYER_ID, ROOF_LAYER_ID, EXAGGERATION }
+/**
+ * Tear the city down so a different one can be built.
+ *
+ * Layers first, then the source: MapLibre refuses to remove a source that a
+ * layer still references, and the failure surfaces later as a style error with
+ * nothing pointing back to here.
+ */
+export function removeBuildings(map) {
+  if (!map?.getStyle) return
+  for (const id of [ROOF_LAYER_ID, BUILDING_LAYER_ID]) {
+    try { if (map.getLayer(id)) map.removeLayer(id) } catch { /* mid style swap */ }
+  }
+  try { if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID) } catch { /* ditto */ }
+}
+
+export { BUILDING_LAYER_ID, ROOF_LAYER_ID }
