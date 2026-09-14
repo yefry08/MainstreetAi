@@ -1,0 +1,44 @@
+# Environment variables with API keys
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+.venv-pipeline/
+__pycache__/
+*.pyc
+*.pyo
+.Python
+venv/
+env/
+
+# Build outputs
+dist/
+dist-pages/
+web/dist/
+web/dist-pages/
+web/dist-vercel/
+build/
+*.egg-info/
+
+# IDE and OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Runtime
+*.log
+.next/
+.cache/
+
+# Project-specific
+graphify-out/
+cache/
+web/.vite/
+web/node_modules/.bin/
+server/node_modules/
