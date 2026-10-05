@@ -1,16 +1,9 @@
 # gh-pages holds ONLY the built site (the contents of web/dist).
-# This branch shares a working directory with main, so everything below is
-# present on disk whenever it is checked out. A 'git add -A' here once
-# published .env and 5,800 files of source and node_modules. Never again.
+# Written by web/scripts/deploy-pages.mjs. Never deploy by hand: a 'git add -A'
+# here once published .env and 5,800 files of source and node_modules.
 .env
 .env.*
 web/
 sim/
 server/
-cache/
-graphify-out/
-dist-pages/
-.venv-pipeline/
-.claude/
 node_modules/
-__pycache__/
