@@ -33,7 +33,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from sim_worker import DISTRICT, run_worker
+from sim_worker import DISTRICT, data_file, run_worker
 from validation import (HOUR_RANGE, SCALE_RANGE, SPEED_RANGE, Invalid,
                         boolean, number, one_of)
 
@@ -305,7 +305,8 @@ app.add_middleware(
 # ---------------------------------------------------------------- REST
 @app.get("/api/meta")
 async def meta():
-    return JSONResponse(json.loads((DATA / "meta.json").read_text(encoding="utf-8")))
+    # The running district's metadata, not always Barcelona's.
+    return JSONResponse(json.loads(data_file("meta", ".json").read_text(encoding="utf-8")))
 
 
 @app.get("/api/health")

@@ -147,9 +147,11 @@ async def record(mode: str, seconds: float, hz: float, ext) -> dict:
                   f"{counts[-1]:5d} veh", end="", flush=True)
     print()
 
+    # Staged beside the live files, and only swapped in by main() once every
+    # check has passed -- a failed take must not overwrite a good recording.
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / f"{mode}.veh.bin").write_bytes(b"".join(frames))
-    (OUT / f"{mode}.sig.bin").write_bytes(b"".join(sigs))
+    (OUT / f"{mode}.veh.bin.tmp").write_bytes(b"".join(frames))
+    (OUT / f"{mode}.sig.bin.tmp").write_bytes(b"".join(sigs))
     return {
         "frames": len(frames),
         "counts": counts,
@@ -183,6 +185,38 @@ async def main() -> None:
     out = {}
     for mode in ("ai", "baseline"):
         out[mode] = await record(mode, args.seconds, args.hz, ext)
+
+    # REFUSE TO SHIP A RECORDING THAT CANNOT BE RIGHT.
+    #
+    # Manhattan and Shibuya were once recorded with the server still reading
+    # Barcelona's signal file: n_sig came out as 3,230 (Barcelona's approach
+    # count) and every signal byte was zero. This script wrote it anyway, the
+    # page drew 1,248 lamps stuck red forever over moving traffic, and nothing
+    # complained. Two checks would each have caught it:
+    sfx = "" if args.district == "barcelona" else f"_{args.district}"
+    appr = ROOT / "web" / "public" / "data" / f"signal_approaches{sfx}.geojson"
+    expected = len(json.loads(appr.read_text(encoding="utf-8"))["features"]) if appr.exists() else None
+    def discard_and_exit(msg: str) -> None:
+        for m in out:
+            for kind in ("veh", "sig"):
+                (OUT / f"{m}.{kind}.bin.tmp").unlink(missing_ok=True)
+        raise SystemExit(f"[abort] {msg}\n        The existing recording in {OUT} is untouched.")
+
+    for mode in out:
+        if expected is not None and out[mode]["n_sig"] != expected:
+            discard_and_exit(
+                f"{mode}: the server sent {out[mode]['n_sig']} signal states, but "
+                f"{appr.name} has {expected}. The server is probably running a different "
+                f"district -- start it with MAINSTREET_DISTRICT={args.district}.")
+        sig_bin = (OUT / f"{mode}.sig.bin.tmp").read_bytes()
+        if sig_bin and not any(sig_bin):
+            discard_and_exit(
+                f"{mode}: every recorded signal state is 0, so every lamp would render "
+                f"stuck red. Check that the server's signal ids match this network.")
+
+    for mode in out:
+        for kind in ("veh", "sig"):
+            (OUT / f"{mode}.{kind}.bin.tmp").replace(OUT / f"{mode}.{kind}.bin")
 
     manifest = {
         "extent": list(ext),
