@@ -17,8 +17,8 @@
 
 import { complete, parseJson } from './ai.js'
 
-const PALETTE_SYSTEM = `Eres un director de arte especializado en identidad visual urbana.
-Respondes SOLO con JSON valido, sin texto alrededor.`
+const PALETTE_SYSTEM = `You are an art director specialising in urban visual identity.
+Reply ONLY with valid JSON, no surrounding text.`
 
 /**
  * The city's colours. This is the "use the colour that best represents the
@@ -26,19 +26,19 @@ Respondes SOLO con JSON valido, sin texto alrededor.`
  * work that data cannot.
  */
 export async function cityPalette(provider, key, model, city, signal) {
-  const user = `Ciudad: ${city.name}, ${city.country}.
+  const user = `City: ${city.name}, ${city.country}.
 
-Elige una paleta que represente visualmente a esta ciudad: su luz, sus
-materiales de construccion, su clima y su caracter. No uses colores genericos.
+Choose a palette that visually represents this city: its light, its building
+materials, its climate and its character. Do not use generic colours.
 
-Devuelve exactamente este JSON:
+Return exactly this JSON:
 {
   "ground": "#rrggbb",
   "roads": "#rrggbb",
   "buildings": "#rrggbb",
   "accent": "#rrggbb",
   "sky": "#rrggbb",
-  "reason": "una frase de por que estos colores representan la ciudad"
+  "reason": "one sentence on why these colours represent the city"
 }`
 
   const out = await complete(provider, key, {
@@ -99,14 +99,7 @@ export async function signalPolicy(provider, key, model, world, signal, topN = 1
   // So a junction is only worth a decision when it has enough traffic to
   // measure AND a gap wide enough to be real. Everything else keeps its
   // timings, which is the correct action rather than an absence of one.
-  const MIN_TOTAL = 4
-  const MIN_GAP = 3
-  const busiest = [...queues.entries()]
-    .filter(([, q]) => q.total >= MIN_TOTAL &&
-                       Math.abs(q.byGroup[0] - q.byGroup[1]) >= MIN_GAP)
-    .sort((a, b) => Math.abs(b[1].byGroup[0] - b[1].byGroup[1]) -
-                    Math.abs(a[1].byGroup[0] - a[1].byGroup[1]))
-    .slice(0, topN)
+  const busiest = imbalanced(queues, topN)
 
   if (!busiest.length) return { policy: null, applied: 0, considered: 0 }
 
@@ -139,10 +132,64 @@ Devuelve el nuevo reparto para cada uno:
     parsed = parseJson(out)
   } catch {
     // A malformed reply costs one cycle of control, not the simulation.
-    return { policy: null, applied: 0, considered: busiest.length, error: 'JSON invalido' }
+    return { policy: null, applied: 0, considered: busiest.length, error: 'invalid JSON from the model' }
   }
 
   const policy = parsed.policy ?? parsed
+  const applied = world.applyPolicy(policy)
+  return { policy, applied, considered: busiest.length }
+}
+
+// The deadband shared by both controllers -- see signalPolicy for why acting
+// below it makes a network worse rather than better.
+const MIN_TOTAL = 4
+const MIN_GAP = 3
+
+/** Junctions with enough traffic to measure and a gap wide enough to be real. */
+function imbalanced(queues, topN) {
+  return [...queues.entries()]
+    .filter(([, q]) => q.total >= MIN_TOTAL &&
+                       Math.abs(q.byGroup[0] - q.byGroup[1]) >= MIN_GAP)
+    .sort((a, b) => Math.abs(b[1].byGroup[0] - b[1].byGroup[1]) -
+                    Math.abs(a[1].byGroup[0] - a[1].byGroup[1]))
+    .slice(0, topN)
+}
+
+/**
+ * The keyless controller: split each busy junction's cycle in proportion to
+ * its two queues, keeping the cycle length.
+ *
+ * WHY THIS EXISTS
+ * Without it, a visitor with no API key watched two identical fixed-time
+ * worlds -- their own streets, but no improvement to look at, which is the one
+ * thing this page is for. Proportional splitting is the textbook baseline for
+ * adaptive control and needs no model: it is arithmetic on the same queue
+ * counts the LLM is shown. The LLM path remains, as an alternative controller
+ * the visitor can bring, not as the price of seeing any result.
+ *
+ * Same deadband, same 8-55 s clamp (applied in world.applyPolicy), same
+ * constant-cycle rule the LLM prompt asks for -- so the two controllers are
+ * comparable, and neither can win by quietly lengthening every cycle.
+ */
+export function proportionalPolicy(world, topN = 40) {
+  const busiest = imbalanced(world.queues(), topN)
+  if (!busiest.length) return { policy: null, applied: 0, considered: 0 }
+
+  const current = new Map(world.signals.map((s) => [s.id, s.greens]))
+  const policy = {}
+  for (const [id, q] of busiest) {
+    const [g0, g1] = current.get(id) ?? [28, 28]
+    const cycle = g0 + g1
+    // +1 on each side so an empty arm keeps a share rather than going to the
+    // 8 s floor on the strength of one snapshot.
+    const share = (q.byGroup[0] + 1) / (q.total + 2)
+    // Move at most half-way to the target per decision. Jumping straight to it
+    // chases the snapshot: the queue flips sides next cycle and so does the
+    // split, which is oscillation, not control.
+    const target = cycle * share
+    const next0 = Math.round(g0 + (target - g0) * 0.5)
+    policy[id] = [next0, cycle - next0]
+  }
   const applied = world.applyPolicy(policy)
   return { policy, applied, considered: busiest.length }
 }

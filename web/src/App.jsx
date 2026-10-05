@@ -26,11 +26,13 @@ import { useReplayFrames } from './data/useReplayFrames'
  */
 const Contact = lazy(() => import('./ui/Contact'))
 const Research = lazy(() => import('./ui/Research'))
-// TryCity sigue en el árbol y funciona: descarga OSM real, simula y orquesta
-// con las claves del visitante. Sale del render porque depende de Overpass y
-// de claves ajenas, y ninguna de las dos cosas debería poder fallar delante de
-// un jurado. HowItWorksPage no necesita red ni claves.
 const HowItWorksPage = lazy(() => import('./ui/HowItWorksPage'))
+// Back on the site. It was taken off because it depended on live Overpass and
+// on visitors' API keys, and neither should be able to fail in front of an
+// audience. Both are now optional: the curated cities ship with the site and
+// open offline, and a built-in controller shows the improvement with no key.
+// Live Overpass remains only for places the visitor searches for.
+const TryCity = lazy(() => import('./ui/TryCity'))
 
 /**
  * Two renderers, two jobs.
@@ -144,6 +146,7 @@ export default function App() {
       isHome ? 'MainstreetAi · Barcelona'
       : isManhattan ? 'MainstreetAi · Manhattan'
       : isCity ? 'MainstreetAi · How it works'
+      : tab === 'yours' ? 'MainstreetAi · Your city'
       : tab === 'research' ? 'MainstreetAi · Research'
       : 'MainstreetAi · Contact'
   }, [isHome, isManhattan, isCity, tab])
@@ -242,6 +245,14 @@ export default function App() {
         <div className="page-layer">
           <Suspense fallback={null}>
             <HowItWorksPage />
+          </Suspense>
+        </div>
+      )}
+
+      {tab === 'yours' && (
+        <div className="page-layer">
+          <Suspense fallback={<p className="page-loading">Loading…</p>}>
+            <TryCity />
           </Suspense>
         </div>
       )}

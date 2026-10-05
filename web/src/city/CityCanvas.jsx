@@ -12,12 +12,14 @@ import { useEffect, useRef } from 'react'
  * The camera is fitted to the graph's own extent, so any city lands framed
  * regardless of how big its extract turned out.
  */
-export default function CityCanvas({ graph, world, palette, running }) {
+export default function CityCanvas({ graph, world, palette, running, hotspots = [] }) {
   const ref = useRef(null)
   const worldRef = useRef(world)
   const paletteRef = useRef(palette)
+  const hotRef = useRef(hotspots)
   useEffect(() => { worldRef.current = world }, [world])
   useEffect(() => { paletteRef.current = palette }, [palette])
+  useEffect(() => { hotRef.current = hotspots }, [hotspots])
 
   useEffect(() => {
     const canvas = ref.current
@@ -93,6 +95,27 @@ export default function CityCanvas({ graph, world, palette, running }) {
           ctx.fill()
         }
       }
+
+      // --- the worst junctions, numbered to match the list under the map ---
+      // Drawn last so no vehicle covers the number the list refers to.
+      const hot = hotRef.current
+      ctx.font = `600 ${11 * dpr}px system-ui, sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      hot.forEach((h, i) => {
+        const x = tx(h.x), y = ty(h.y)
+        ctx.lineWidth = 2 * dpr
+        ctx.strokeStyle = p.accent
+        ctx.beginPath()
+        ctx.arc(x, y, 11 * dpr, 0, Math.PI * 2)
+        ctx.stroke()
+        ctx.fillStyle = p.accent
+        ctx.beginPath()
+        ctx.arc(x + 11 * dpr, y - 11 * dpr, 7.5 * dpr, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.fillStyle = '#fff'
+        ctx.fillText(String(i + 1), x + 11 * dpr, y - 11 * dpr + 0.5 * dpr)
+      })
 
       raf = requestAnimationFrame(draw)
     }

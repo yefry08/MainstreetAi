@@ -286,6 +286,9 @@ export function compare(twins) {
     ai: a,
     fixed: b,
     speed: pct(a.meanSpeedKmh, b.meanSpeedKmh, true),
+    // Time-averaged: what a journey feels like. The instantaneous one above
+    // swings by several percent frame to frame, too much to put a delta on.
+    avgSpeed: pct(a.avgSpeedKmh, b.avgSpeedKmh, true),
     stopped: pct(a.stoppedVehSeconds, b.stoppedVehSeconds, false),
     queued: pct(a.queued, b.queued, false),
     arrivals: pct(a.arrivals, b.arrivals, true),
