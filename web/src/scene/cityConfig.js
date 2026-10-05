@@ -73,28 +73,20 @@ export const CITIES = {
     supertall: true,
 
     /**
-     * NO LAMPS, BECAUSE THE RECORDING HAS NO SIGNAL STATES.
+     * Whether the recording carries real signal states.
      *
-     * MEASURED, not assumed: replay_manhattan/ai.sig.bin and baseline.sig.bin
-     * are 110,696 and 105,848 bytes and every single byte is zero. Barcelona's
-     * equivalent is 96.9% non-zero. replay_shibuya is empty in the same way.
-     * All three manifests declare n_sig 3230 -- Barcelona's approach count --
-     * even though Midtown has 1,248, so the recorder sized the buffer from the
-     * wrong city and then never wrote to it.
+     * It once did not: the server loaded Barcelona's signal file whatever
+     * district it ran, so Manhattan's first recording held 3,230 states (the
+     * Barcelona count) that were every one zero, and drawing them would have
+     * put 1,248 lamps stuck red over moving traffic. That was fixed at source
+     * (server/sim_worker.py data_file) and Manhattan re-recorded: 1,248 states
+     * a frame, 99.5% non-zero. sim/record_replay.py now refuses a recording
+     * whose count or contents would reproduce the old fault.
      *
-     * Drawing them anyway is the tempting mistake: state 0 renders as red, so
-     * the scene comes up with 1,248 lamps stuck red forever over a city whose
-     * traffic flows straight through them. On a project whose entire claim is
-     * about retiming signals, a frozen all-red grid is not a cosmetic bug --
-     * it is a picture that contradicts the argument.
-     *
-     * The VEHICLES are genuinely Manhattan's (157 against the baseline's 195 at
-     * frame 0) and the recorded stats are real, so the comparison itself stands.
-     * It is only this one channel that is missing. Flip this to true once
-     * sim/record_replay.py has been re-run for Manhattan against its OWN
-     * signal list.
+     * Kept as a flag so a district with a broken or missing signal channel can
+     * still be shown without drawing a lie.
      */
-    hasSignalStates: false,
+    hasSignalStates: true,
     label3d: 'Midtown Manhattan · Signal Twin',
   },
 }

@@ -41,6 +41,22 @@ DISTRICT = os.environ.get("MAINSTREET_DISTRICT", "barcelona")
 NET = SIM / "net" / f"{DISTRICT}.net.xml"
 DEMAND_TAG = "" if DISTRICT == "barcelona" else f"_{DISTRICT}"
 
+# The district's own geometry files, by the same convention: Barcelona keeps
+# the unsuffixed names, every other district is "<stem>_<district>".
+#
+# These used to be hardcoded to the unsuffixed (Barcelona) names while the
+# network above followed DISTRICT. So a Manhattan run loaded Manhattan's SUMO
+# network and then Barcelona's 3,230 signal approaches and Barcelona's road
+# ids. None of those ids exist in Midtown, every lookup failed into an
+# `except: pass`, and the recording came out with a signal channel that was
+# 110,696 bytes of zeros and a congestion overlay measuring nothing -- with no
+# error anywhere. Shibuya was broken the same way.
+DATA = HERE.parent / "web" / "public" / "data"
+
+
+def data_file(stem: str, ext: str = ".geojson") -> Path:
+    return DATA / f"{stem}{DEMAND_TAG}{ext}"
+
 # Vehicle kinds on the wire. Order is fixed — the browser decodes these by
 # number, so appending is safe and reordering is not.
 KIND_CAR, KIND_BUS, KIND_BIKE, KIND_TRUCK, KIND_MOTO = 0.0, 1.0, 2.0, 3.0, 4.0
@@ -264,8 +280,7 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
 
     # Ordered edge list for the congestion overlay, matching roads.geojson.
     import json
-    roads = json.loads((HERE.parent / "web" / "public" / "data" / "roads.geojson")
-                       .read_text(encoding="utf-8"))
+    roads = json.loads(data_file("roads").read_text(encoding="utf-8"))
     edge_ids = [f["properties"]["id"] for f in roads["features"]]
     edge_vmax = np.array([max(f["properties"]["vmax"], 1.0) for f in roads["features"]],
                          dtype=np.float32)
@@ -279,8 +294,8 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
                                     tc.LAST_STEP_VEHICLE_NUMBER])
         except Exception:
             pass
-    corridors = json.loads((HERE.parent / "web" / "public" / "data" / "meta.json")
-                           .read_text(encoding="utf-8"))["corridors"]
+    corridors = json.loads(data_file("meta", ".json")
+                           .read_text(encoding="utf-8")).get("corridors", {})
 
     # Map each named corridor to positions in the edge array, so we can report
     # Diagonal / Gran Via / Meridiana separately. The pitch proposes piloting a
@@ -293,8 +308,7 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
     corridor_idx = {k: v for k, v in corridor_idx.items() if len(v)}
 
     # Signal order for the client, matching signals.geojson.
-    signals = json.loads((HERE.parent / "web" / "public" / "data" / "signals.geojson")
-                         .read_text(encoding="utf-8"))
+    signals = json.loads(data_file("signals").read_text(encoding="utf-8"))
     sig_ids = [f["properties"]["id"] for f in signals["features"]]
 
     # ---- approach lamps ---------------------------------------------------
@@ -307,7 +321,7 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
     #
     # Falls back to junction lamps if the file has not been generated, so a
     # fresh checkout still runs -- just with the old, less honest display.
-    appr_path = HERE.parent / "web" / "public" / "data" / "signal_approaches.geojson"
+    appr_path = data_file("signal_approaches")
     lamps_by_tls: dict[str, list[tuple[int, list[int]]]] = {}
     n_lamps = 0
     if appr_path.exists():
