@@ -7,6 +7,9 @@ import CameraControls from './ui/CameraControls'
 import Navbar from './ui/Navbar'
 import ImpactPanel from './ui/ImpactPanel'
 import HowItWorks from './ui/HowItWorks'
+// Eager, not lazy: it is the first page, and lazy-loading it would put a
+// second request in front of the first paint.
+import Landing from './ui/Landing'
 
 
 import LiveCity from './ui/LiveCity'
@@ -69,7 +72,9 @@ const basemapLabel = (status, city) => ({
 }[status])
 
 export default function App() {
-  const [tab, setTab] = useState('home')
+  // The landing page comes first; the 3D scene keeps loading behind it, so
+  // Barcelona is already running by the time anyone clicks through.
+  const [tab, setTab] = useState('landing')
   const [mode, setMode] = useState('night')
   const [chrome, setChrome] = useState(true)
   const [district, setDistrict] = useState('barcelona')
@@ -130,6 +135,7 @@ export default function App() {
   }, [chrome])
 
   const isHome = tab === 'home'
+  const isLanding = tab === 'landing'
   const isManhattan = tab === 'manhattan'
   // Both tabs are the same 3D scene, anchored in a different city. Everything
   // that reads camera state or twin metrics belongs to either of them.
@@ -143,13 +149,14 @@ export default function App() {
   // fewer request.
   useEffect(() => {
     document.title =
-      isHome ? 'MainstreetAi · Barcelona'
+      isLanding ? 'MainstreetAi · Smarter traffic lights, tested on real cities'
+      : isHome ? 'MainstreetAi · Barcelona'
       : isManhattan ? 'MainstreetAi · Manhattan'
       : isCity ? 'MainstreetAi · How it works'
       : tab === 'yours' ? 'MainstreetAi · Your city'
       : tab === 'research' ? 'MainstreetAi · Research'
       : 'MainstreetAi · Contact'
-  }, [isHome, isManhattan, isCity, tab])
+  }, [isLanding, isHome, isManhattan, isCity, tab])
 
   // Picking a district shows it in the pixel view, which lives on this tab. It
   // used to jump to Home, which now belongs to the 3D scene instead.
@@ -180,9 +187,11 @@ export default function App() {
           re-fetching tiles and rebuilding every three.js buffer, which is a
           visible stall on the hardware this targets. opacity hides it from
           sight, aria-hidden from a screen reader. */}
+      {/* Also visible -- but not interactive -- behind the landing page, so
+          the first screen has the live city moving under it. */}
       <div className="scene-layer"
            aria-hidden={!isScene}
-           style={{ opacity: isScene ? 1 : 0,
+           style={{ opacity: isScene || isLanding ? 1 : 0,
                     pointerEvents: isScene ? 'auto' : 'none' }}>
         <Scene
           onMapReady={onMapReady}
@@ -227,7 +236,7 @@ export default function App() {
           {/* La escena no explica lo que es. Esta banda lo hace en tres frases
               sin robarle sitio: vive sobre el bezel, a la derecha del rail, y
               se va con el resto del cromo al pulsar H. */}
-          {/* The band belongs to the landing tab only. On Manhattan the same
+          {/* The band belongs to the Barcelona tab only. On Manhattan the same
               three sentences would be a second explanation of a thing the
               visitor has already been told. */}
           {isHome && <HowItWorks onOpen={() => onTab('how')} />}
@@ -239,6 +248,12 @@ export default function App() {
             </button>
           )}
         </>
+      )}
+
+      {isLanding && (
+        <div className="page-layer">
+          <Landing onTab={onTab} />
+        </div>
       )}
 
       {isCity && (

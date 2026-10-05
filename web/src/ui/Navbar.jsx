@@ -10,7 +10,7 @@ import { MODES, LIGHTING } from '../pixel/lighting.js'
  */
 
 export const TABS = [
-  { key: 'home', label: 'Home' },
+  { key: 'home', label: 'Barcelona' },
   { key: 'manhattan', label: 'Manhattan' },
   { key: 'yours', label: 'Your city' },
   { key: 'how', label: 'How it works' },
@@ -45,8 +45,8 @@ export default function Navbar({
             ignores the click. */}
         <button
           className="nav-brand"
-          onClick={() => onTab?.('home')}
-          title="Back to the Barcelona scene"
+          onClick={() => onTab?.('landing')}
+          title="MainstreetAi — overview"
         >
           <span className="nav-mark" />
           <span className="nav-name">MainstreetAi</span>
@@ -68,7 +68,8 @@ export default function Navbar({
           {/* Lighting only means anything over a map. */}
           {/* Not on Your city either: it draws its own 2D canvas, which the
               lighting modes do not touch. */}
-          {tab !== 'contact' && tab !== 'research' && tab !== 'how' && tab !== 'yours' && (
+          {tab !== 'contact' && tab !== 'research' && tab !== 'how' && tab !== 'yours' &&
+           tab !== 'landing' && (
             <div className="nav-light" role="group" aria-label="Lighting">
               {MODES.map((m) => (
                 <button

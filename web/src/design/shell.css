@@ -1212,3 +1212,161 @@
 
 .hiw-label:hover { color: var(--terracota-500); text-decoration: underline; }
 .hiw-label:focus-visible { outline: 2px solid var(--terracota-500); outline-offset: 3px; border-radius: 3px; }
+
+/* =========================================================================
+   LANDING — what MainstreetAi is, what it found, where to look.
+
+   Sits over the live Barcelona scene like the other content pages, so the
+   first thing a visitor sees already has the product running behind it.
+   ========================================================================= */
+
+.land {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: calc(var(--space-4) * 4) var(--space-4) calc(var(--space-4) * 3);
+}
+
+.land-hero { max-width: 70ch; margin-bottom: calc(var(--space-4) * 4); }
+
+.land-eyebrow {
+  font-family: var(--font-data);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--terracota-500);
+  margin: 0 0 var(--space-3);
+}
+
+.land-hero h1 {
+  font-size: clamp(32px, 5vw, 56px);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--space-4);
+  color: var(--ink-50);
+}
+
+.land-lede {
+  font-size: clamp(15px, 1.4vw, 17px);
+  line-height: 1.65;
+  color: var(--ink-100);
+  margin: 0 0 calc(var(--space-4) * 1.5);
+}
+
+.land-cta { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
+.land-btn {
+  font: inherit;
+  font-size: 13.5px;
+  padding: 10px 16px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--glass-edge);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink-50);
+  cursor: pointer;
+  transition: border-color var(--t-fast) var(--ease-out),
+              background var(--t-fast) var(--ease-out);
+}
+
+.land-btn:hover { border-color: var(--terracota-500); }
+.land-btn:focus-visible { outline: 2px solid var(--terracota-500); outline-offset: 2px; }
+.land-btn.primary { background: var(--terracota-500); border-color: var(--terracota-500); color: #fff; font-weight: 500; }
+.land-btn.primary:hover { background: var(--terracota-600); }
+.land-btn.ghost { background: transparent; border-color: transparent; color: var(--ink-300); }
+.land-btn.ghost:hover { color: var(--ink-50); border-color: var(--glass-edge); }
+
+.land-section { margin-bottom: calc(var(--space-4) * 3.5); }
+
+.land-section h2 {
+  font-size: clamp(20px, 2.2vw, 26px);
+  margin: 0 0 var(--space-2);
+  color: var(--ink-50);
+}
+
+.land-sub { margin: 0 0 var(--space-4); font-size: 13.5px; color: var(--ink-300); max-width: 70ch; }
+
+.land-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: var(--space-4);
+}
+
+.land-card { padding: calc(var(--space-4) * 1.25); display: flex; flex-direction: column; }
+
+.land-card-where {
+  font-family: var(--font-data);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-400);
+  margin: 0 0 4px;
+}
+
+.land-card h3 { margin: 0 0 var(--space-2); font-size: 20px; color: var(--ink-50); }
+.land-card-blurb { margin: 0 0 var(--space-4); font-size: 13px; line-height: 1.55; color: var(--ink-300); }
+.land-card-missing { margin: 0 0 var(--space-4); font-size: 12.5px; color: var(--ink-400); font-style: italic; }
+
+.land-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3) var(--space-4);
+  margin: 0 0 var(--space-4);
+}
+
+.land-stats div { display: flex; flex-direction: column-reverse; gap: 2px; }
+.land-stats dt { font-size: 11.5px; color: var(--ink-400); }
+
+.land-stats dd {
+  margin: 0;
+  font-family: var(--font-data);
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--ink-50);
+}
+
+.land-stats dd.good { color: #7cc48a; }
+
+/* Pushed to the card's foot so the three buttons line up whatever the blurb. */
+.land-card .land-btn { margin-top: auto; align-self: flex-start; }
+
+.land-steps {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-4);
+}
+
+.land-steps li { padding-top: var(--space-3); border-top: 1px solid var(--glass-edge); }
+.land-step-n { font-family: var(--font-data); font-size: 12px; color: var(--terracota-400); }
+.land-steps h3 { margin: 6px 0; font-size: 15.5px; color: var(--ink-50); }
+.land-steps p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--ink-300); }
+
+.land-foot {
+  border-top: 1px solid var(--glass-edge);
+  padding-top: var(--space-4);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-400);
+  max-width: 78ch;
+}
+
+.land-foot b { color: var(--ink-100); }
+.land-foot p { margin: 0 0 var(--space-2); }
+.land-links { display: flex; gap: var(--space-2); align-items: center; }
+
+.land-links button {
+  font: inherit;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--terracota-400);
+  cursor: pointer;
+}
+
+.land-links button:hover { text-decoration: underline; }
+
+@media (max-width: 640px) {
+  .land { padding-top: calc(var(--space-4) * 2.5); }
+  .land-stats dd { font-size: 19px; }
+}
