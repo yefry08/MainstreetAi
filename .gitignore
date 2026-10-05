@@ -1,44 +1,16 @@
-# Environment variables with API keys
+# gh-pages holds ONLY the built site (the contents of web/dist).
+# This branch shares a working directory with main, so everything below is
+# present on disk whenever it is checked out. A 'git add -A' here once
+# published .env and 5,800 files of source and node_modules. Never again.
 .env
-.env.local
-.env.*.local
-
-# Dependencies
-node_modules/
-.venv-pipeline/
-__pycache__/
-*.pyc
-*.pyo
-.Python
-venv/
-env/
-
-# Build outputs
-dist/
-dist-pages/
-web/dist/
-web/dist-pages/
-web/dist-vercel/
-build/
-*.egg-info/
-
-# IDE and OS
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-Thumbs.db
-
-# Runtime
-*.log
-.next/
-.cache/
-
-# Project-specific
-graphify-out/
+.env.*
+web/
+sim/
+server/
 cache/
-web/.vite/
-web/node_modules/.bin/
-server/node_modules/
+graphify-out/
+dist-pages/
+.venv-pipeline/
+.claude/
+node_modules/
+__pycache__/
