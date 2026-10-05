@@ -12,6 +12,7 @@ import { MODES, LIGHTING } from '../pixel/lighting.js'
 export const TABS = [
   { key: 'home', label: 'Home' },
   { key: 'manhattan', label: 'Manhattan' },
+  { key: 'yours', label: 'Your city' },
   { key: 'how', label: 'How it works' },
   { key: 'research', label: 'Research' },
   { key: 'contact', label: 'Contact' },
@@ -65,7 +66,9 @@ export default function Navbar({
 
         <div className="nav-right">
           {/* Lighting only means anything over a map. */}
-          {tab !== 'contact' && tab !== 'research' && tab !== 'how' && (
+          {/* Not on Your city either: it draws its own 2D canvas, which the
+              lighting modes do not touch. */}
+          {tab !== 'contact' && tab !== 'research' && tab !== 'how' && tab !== 'yours' && (
             <div className="nav-light" role="group" aria-label="Lighting">
               {MODES.map((m) => (
                 <button

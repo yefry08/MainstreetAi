@@ -356,6 +356,142 @@
   .try-upsell { flex-direction: column; align-items: flex-start; }
 }
 
+/* ---- your city: search, ready-made cities, analysis --------------------- */
+
+.try-step h2 em,
+.try-byo summary em {
+  font-style: normal;
+  font-family: var(--font-data);
+  font-size: 10.5px;
+  color: var(--ink-400);
+  margin-left: 8px;
+  letter-spacing: 0.04em;
+}
+
+.try-search { display: flex; gap: var(--space-2); flex-wrap: wrap; max-width: 640px; }
+
+.try-search input {
+  flex: 1 1 300px;
+  padding: 9px 12px;
+  border-radius: 7px;
+  border: 1px solid var(--glass-edge);
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--ink-50);
+  font: inherit;
+  font-size: 13.5px;
+}
+
+.try-search input:focus-visible { outline: 2px solid var(--terracota-500); outline-offset: 1px; }
+.try-search-error { margin: var(--space-2) 0 0; font-size: 12.5px; color: #e0605a; }
+
+.try-results { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: 6px; max-width: 640px; }
+
+.try-results button {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 12px;
+  border-radius: 7px;
+  border: 1px solid var(--glass-edge);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ink-100);
+  font: inherit;
+  cursor: pointer;
+}
+
+.try-results button:hover { border-color: var(--terracota-500); }
+.try-results button.on { border-color: var(--terracota-500); background: var(--terracota-glow); }
+.try-results b { font-size: 13.5px; color: var(--ink-50); font-weight: 500; }
+.try-results span { font-size: 11.5px; color: var(--ink-400); }
+
+.try-fine { margin: var(--space-2) 0 0; font-size: 11.5px; color: var(--ink-400); max-width: 70ch; }
+
+.try-byo summary {
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--ink-100);
+  margin-bottom: var(--space-3);
+}
+
+.try-byo summary:hover { color: var(--ink-50); }
+
+/* The action bar, last on the page and the only primary button on it. */
+.try-go {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--terracota-500);
+  position: sticky;
+  bottom: var(--space-3);
+}
+
+.try-go > div { flex: 1 1 320px; }
+.try-go b { display: block; font-size: 14px; color: var(--ink-50); margin-bottom: 3px; }
+.try-go span { display: block; font-size: 12.5px; line-height: 1.5; color: var(--ink-300); }
+
+.try-source { color: var(--terracota-400); }
+
+.try-clock { margin: var(--space-2) 0 0; font-family: var(--font-data); font-size: 11.5px; color: var(--ink-400); }
+
+.try-analysis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.try-hot, .try-ctl {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.try-hot h2, .try-ctl h2 { font-size: 13.5px; margin: 0 0 var(--space-2); color: var(--ink-50); }
+
+.try-hot ol { margin: 0; padding-left: 22px; display: grid; gap: 5px; }
+
+.try-hot li {
+  font-family: var(--font-data);
+  font-size: 12px;
+  color: var(--ink-300);
+}
+
+.try-hot li::marker { color: var(--terracota-400); font-weight: 600; }
+.try-hot li .base { color: var(--ink-400); font-weight: 500; }
+.try-hot li .ai { color: var(--ink-50); font-weight: 500; }
+.try-hot li i { color: var(--ink-500); font-style: normal; }
+
+.try-hot p, .try-ctl p { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--ink-300); }
+.try-hot-note { margin-top: var(--space-2) !important; font-size: 11.5px !important; color: var(--ink-400) !important; }
+.try-ctl-count { margin-top: var(--space-2) !important; font-family: var(--font-data); font-size: 12px !important; color: var(--ink-50) !important; }
+.try-ctl-quiet { margin-top: var(--space-2) !important; color: var(--ink-100) !important; }
+
+.try-ctl ul { margin: var(--space-2) 0 0; padding-left: 18px; }
+.try-ctl li { font-family: var(--font-data); font-size: 11.5px; line-height: 1.7; color: var(--ink-300); }
+
+.try-warn {
+  margin: var(--space-4) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid #f2b134;
+  background: rgba(242, 177, 52, 0.06);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-100);
+  max-width: 78ch;
+}
+
+.try-warn b { color: var(--ink-50); }
+
+@media (max-width: 860px) {
+  .try-go { flex-direction: column; align-items: flex-start; position: static; }
+}
+
 /* =========================================================================
    CÓMO FUNCIONA — el recorrido en 3D
    ========================================================================= */

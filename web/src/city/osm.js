@@ -13,23 +13,41 @@
  * as graph vertices -- otherwise a straight road becomes forty junctions and
  * the simulation spends its time at imaginary intersections.
  *
- * MIRRORS AND TIMEOUTS
- * Overpass is a free, shared, frequently busy service. One mirror will refuse
- * or stall often enough that a single-endpoint client feels broken, so the
- * three public mirrors are tried in turn and the query carries its own server
- * side timeout.
+ * MIRRORS, HEDGED RATHER THAN SERIAL
+ * Overpass is a free, shared, frequently overloaded service. Measured on one
+ * afternoon: overpass-api.de 504 in 10 s, kumi.systems and private.coffee hung
+ * past 70 s, mail.ru answered in 26 s. Trying them one after another meant a
+ * visitor could wait minutes behind two dead servers before reaching the live
+ * one. So the first mirror starts at once, the next joins if nothing has come
+ * back within a few seconds or the current one fails, and the first usable
+ * answer wins and cancels the rest.
+ *
+ * overpass.osm.ch WAS ON THIS LIST AND MUST NOT RETURN. It is a Switzerland-
+ * only instance: it answers 200 with zero elements for anywhere else, which
+ * surfaced as "empty response" for every city outside Switzerland.
  */
 
 const MIRRORS = [
   'https://overpass-api.de/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
-  'https://overpass.osm.ch/api/interpreter',
 ]
+
+const host = (url) => new URL(url).hostname
 
 // Drivable streets only. Service roads, tracks and footways would triple the
 // node count and carry no through traffic worth simulating.
 const HIGHWAY =
   '^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street)(_link)?$'
+
+// How far before a junction a stop-line light is still taken to control it.
+const STOP_LINE_M = 40
+// Below this many mapped signalised junctions -- absolute, or as a share of all
+// 3+-way junctions -- the map is treated as carrying no signal data and the
+// layout is estimated instead. Istanbul's extract maps 3.
+const MIN_MAPPED_SIGNALS = 5
+const MIN_MAPPED_SHARE = 0.05
 
 function query([s, w, n, e]) {
   return `[out:json][timeout:60];
@@ -41,33 +59,140 @@ out body geom;`
 }
 
 /**
- * Fetch the extract. `onProgress` reports which mirror is being tried, because
- * a slow Overpass is the single longest wait in the whole flow and a silent
- * spinner during it reads as a hang.
+ * Fetch the extract from whichever mirror answers first.
+ *
+ * `onProgress` says how many servers are in play, because a slow Overpass is
+ * the single longest wait in the whole flow and a silent spinner reads as a
+ * hang. `headers` exists for the Node scripts only: overpass-api.de refuses a
+ * request with no User-Agent (406), which a browser always sends and Node's
+ * fetch does not. Browsers ignore an attempt to set one, so the page passes
+ * nothing.
  */
-export async function fetchCity(bbox, { signal, onProgress } = {}) {
-  let lastErr = null
-  for (let i = 0; i < MIRRORS.length; i++) {
-    onProgress?.(`Descargando calles (servidor ${i + 1}/${MIRRORS.length})…`)
-    try {
-      const res = await fetch(MIRRORS[i], {
+export function fetchCity(bbox, {
+  signal, onProgress, headers = {}, hedgeMs = 6000, timeoutMs = 120000,
+} = {}) {
+  const body = `data=${encodeURIComponent(query(bbox))}`
+
+  return new Promise((resolve, reject) => {
+    const inflight = []
+    const errors = []
+    let next = 0
+    let settled = false
+    let hedge = null
+    // Declared before finish() can run: an already-aborted signal calls it
+    // synchronously, and clearing a const still in its temporal dead zone
+    // would throw instead of rejecting.
+    let overall = null
+
+    const finish = (err, value) => {
+      if (settled) return
+      settled = true
+      clearTimeout(hedge)
+      clearTimeout(overall)
+      signal?.removeEventListener('abort', onAbort)
+      inflight.forEach((ac) => ac.abort())
+      if (err) reject(err)
+      else resolve(value)
+    }
+
+    const onAbort = () => finish(new DOMException('Aborted', 'AbortError'))
+    if (signal?.aborted) return onAbort()
+    signal?.addEventListener('abort', onAbort, { once: true })
+
+    overall = setTimeout(() => finish(new Error(
+      `OpenStreetMap's map servers did not answer within ${timeoutMs / 1000} s ` +
+      `(${errors.join('; ') || 'no reply'}). They are free and shared, and ` +
+      'are sometimes overloaded — try again in a minute, or pick one of the ' +
+      'ready-made cities.')), timeoutMs)
+
+    const allFailed = () => finish(new Error(
+      `Could not download this map from OpenStreetMap (${errors.join('; ')}). ` +
+      'The map servers are free and shared and are sometimes overloaded — ' +
+      'try again in a minute, or pick one of the ready-made cities.'))
+
+    const launch = () => {
+      if (settled || next >= MIRRORS.length) return
+      const url = MIRRORS[next++]
+      const ac = new AbortController()
+      inflight.push(ac)
+      onProgress?.(`Downloading streets (${next} of ${MIRRORS.length} map servers tried)…`)
+
+      // If this one has not answered soon, bring in the next alongside it.
+      clearTimeout(hedge)
+      hedge = setTimeout(launch, hedgeMs)
+
+      fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `data=${encodeURIComponent(query(bbox))}`,
-        signal,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...headers },
+        body,
+        signal: ac.signal,
       })
-      if (!res.ok) { lastErr = `HTTP ${res.status}`; continue }
-      const json = await res.json()
-      if (!json.elements?.length) { lastErr = 'respuesta vacía'; continue }
-      return json
-    } catch (e) {
-      if (e.name === 'AbortError') throw e
-      lastErr = e.message
+        .then(async (res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          const json = await res.json()
+          if (!json.elements?.length) throw new Error('empty response')
+          finish(null, json)
+        })
+        .catch((e) => {
+          if (settled) return
+          errors.push(`${host(url)}: ${e.message}`)
+          inflight.splice(inflight.indexOf(ac), 1)
+          // A fast failure should not sit out the hedge delay.
+          if (next < MIRRORS.length) launch()
+          else if (!inflight.length) allFailed()
+        })
+    }
+
+    launch()
+  })
+}
+
+/**
+ * READY-MADE CITIES: the same Overpass response, stored with the site.
+ *
+ * Live Overpass is the only way to reach an arbitrary city, and it is also the
+ * least reliable thing in the page. The curated cities are fetched ahead of
+ * time by scripts/bake-cities.mjs and shipped as static files, so they open
+ * instantly and work while every public mirror is down.
+ *
+ * Only what buildGraph() reads is kept -- node ids, geometry, five tags and the
+ * signal nodes -- in flat arrays. expandOsm() rebuilds the exact shape Overpass
+ * returns, so the graph code has one input format and cannot drift between the
+ * live path and the baked one.
+ */
+const KEEP_TAGS = ['highway', 'oneway', 'lanes', 'maxspeed', 'junction']
+
+export function slimOsm(osm) {
+  const ways = []
+  const signals = []
+  for (const el of osm.elements) {
+    if (el.type === 'way' && el.geometry?.length > 1) {
+      const t = {}
+      for (const k of KEEP_TAGS) if (el.tags?.[k] != null) t[k] = el.tags[k]
+      ways.push({
+        n: el.nodes,
+        // 6 dp is ~11 cm; the graph rounds coarser than that anyway.
+        g: el.geometry.flatMap((p) => [+p.lat.toFixed(6), +p.lon.toFixed(6)]),
+        t,
+      })
+    } else if (el.type === 'node' && el.tags?.highway === 'traffic_signals') {
+      signals.push(el.id)
     }
   }
-  throw new Error(`No se pudo descargar el mapa de OpenStreetMap (${lastErr}). ` +
-                  'Overpass es un servicio gratuito y a veces está saturado; ' +
-                  'espera un momento y reinténtalo.')
+  return { v: 1, ways, signals }
+}
+
+export function expandOsm(slim) {
+  if (slim?.v !== 1) throw new Error('Unknown ready-made city format.')
+  const elements = slim.ways.map((w) => {
+    const geometry = []
+    for (let i = 0; i < w.g.length; i += 2) geometry.push({ lat: w.g[i], lon: w.g[i + 1] })
+    return { type: 'way', nodes: w.n, geometry, tags: w.t }
+  })
+  for (const id of slim.signals) {
+    elements.push({ type: 'node', id, tags: { highway: 'traffic_signals' } })
+  }
+  return { elements }
 }
 
 /**
@@ -85,7 +210,7 @@ export function buildGraph(osm, bbox) {
   const toXY = (lat, lon) => [(lon - lon0) * mPerLon, (lat - lat0) * mPerLat]
 
   const ways = osm.elements.filter((el) => el.type === 'way' && el.geometry?.length > 1)
-  if (!ways.length) throw new Error('El extracto no contiene calles utilizables.')
+  if (!ways.length) throw new Error('There are no drivable streets in this area.')
 
   // A node touched by more than one way is a junction. Ends are always
   // junctions, so a dead end still terminates an edge.
@@ -97,6 +222,14 @@ export function buildGraph(osm, bbox) {
 
   const nodes = new Map()          // osm id -> { id, x, y, signal, deg }
   const edges = []                 // { a, b, pts, len, oneway, lanes, speed }
+
+  const signalIds = new Set()
+  for (const el of osm.elements) {
+    if (el.type === 'node' && el.tags?.highway === 'traffic_signals') signalIds.add(el.id)
+  }
+  // Junctions controlled by a light mapped at their STOP LINE rather than on
+  // the junction node itself -- filled in while the ways are walked below.
+  const stopLineJunctions = new Set()
 
   const addNode = (osmId, lat, lon) => {
     if (!nodes.has(osmId)) {
@@ -123,9 +256,24 @@ export function buildGraph(osm, bbox) {
       const b = addNode(ids[i], geom[i].lat, geom[i].lon)
       const pts = geom.slice(startIdx, i + 1).map((g) => toXY(g.lat, g.lon))
 
-      let len = 0
+      // Cumulative distance along the segment, so a stop-line light can be
+      // measured against both junctions it might belong to.
+      const along = [0]
       for (let k = 1; k < pts.length; k++) {
-        len += Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1])
+        along.push(along[k - 1] +
+          Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]))
+      }
+      const len = along[along.length - 1]
+
+      for (let k = 1; k < pts.length - 1; k++) {
+        if (!signalIds.has(ids[startIdx + k])) continue
+        const toStart = along[k]
+        const toEnd = len - along[k]
+        // A stop line sits just before the junction it controls. Past 40 m it
+        // is more likely a mid-block pedestrian crossing, which governs no
+        // junction, so it is left alone.
+        if (Math.min(toStart, toEnd) > STOP_LINE_M) continue
+        stopLineJunctions.add(toStart <= toEnd ? ids[startIdx] : ids[i])
       }
       // Sub-metre stubs are digitisation noise and make routing thrash.
       if (len >= 5 && a !== b) {
@@ -136,20 +284,41 @@ export function buildGraph(osm, bbox) {
     }
   }
 
-  // Signals from OSM where they exist. Many extracts tag few or none, so a
-  // junction of degree >= 3 without one is signalised synthetically -- and the
-  // UI says which, because "this city has no traffic lights" would be a claim
-  // about the city rather than about its map data.
-  let tagged = 0
-  for (const el of osm.elements) {
-    if (el.type === 'node' && el.tags?.highway === 'traffic_signals') {
-      const nd = nodes.get(el.id)
-      if (nd) { nd.signal = true; tagged++ }
-    }
+  // SIGNALS COME FROM THE MAP, AND ARE ONLY ESTIMATED WHEN THE MAP HAS NONE.
+  //
+  // The previous rule tagged the junction nodes OSM marks as signals and then
+  // signalised every other junction of degree 3+. It read the map wrongly and
+  // then papered over the gap. Much of OSM, Europe especially, maps a light at
+  // its stop line a few metres before the junction, not on the junction node.
+  // Measured: Madrid has 550 signal nodes and only 33 sit on a junction; the
+  // graph then invented 976 more, signalising 1,009 of its 1,053 junctions.
+  // That is not Madrid -- it is a city where every corner has a light, and any
+  // analysis of where traffic jams, or how much retiming helps, is an analysis
+  // of that fiction.
+  //
+  // Now: lights on the junction node count, lights at a stop line count for
+  // the junction they face, and junctions with neither are left unsignalised,
+  // as they are in the street. Only when the map carries almost no signals at
+  // all is the old degree-3 estimate used -- and the graph says so, so the page
+  // can say the layout is estimated rather than mapped.
+  for (const id of signalIds) {
+    const nd = nodes.get(id)
+    if (nd) nd.signal = true
   }
+  for (const id of stopLineJunctions) {
+    const nd = nodes.get(id)
+    if (nd) nd.signal = true
+  }
+  let tagged = 0
+  for (const nd of nodes.values()) if (nd.signal) tagged++
+
+  const crossings = [...nodes.values()].filter((nd) => nd.deg >= 3).length
+  const estimated = tagged < Math.max(MIN_MAPPED_SIGNALS, crossings * MIN_MAPPED_SHARE)
   let synthetic = 0
-  for (const nd of nodes.values()) {
-    if (!nd.signal && nd.deg >= 3) { nd.signal = true; synthetic++ }
+  if (estimated) {
+    for (const nd of nodes.values()) {
+      if (!nd.signal && nd.deg >= 3) { nd.signal = true; synthetic++ }
+    }
   }
 
   // Adjacency is built TWICE, and that is deliberate.
@@ -181,7 +350,7 @@ export function buildGraph(osm, bbox) {
   // component and drop the islands.
   const keep = largestComponent(buildAdjacency(edges), nodes)
   const liveEdges = edges.filter((e) => keep.has(e.a) && keep.has(e.b))
-  if (!liveEdges.length) throw new Error('El extracto no tiene una red conectada.')
+  if (!liveEdges.length) throw new Error('The streets in this area do not form a connected network.')
 
   // Rebuilt against the filtered list, so every index is valid again.
   const out = buildAdjacency(liveEdges)
@@ -197,6 +366,10 @@ export function buildGraph(osm, bbox) {
       signals: signals.length,
       taggedSignals: tagged,
       syntheticSignals: synthetic,
+      // True when the light positions are the degree-3 estimate rather than
+      // the map's. The page has to say so: it changes what the run shows.
+      estimatedSignals: estimated,
+      junctions: crossings,
       km: liveEdges.reduce((s2, e2) => s2 + e2.len * e2.lanes, 0) / 1000,
     },
     centre: [lon0, lat0],

@@ -119,8 +119,8 @@ function build(provider, { model, system, user, maxTokens }) {
  * providers echo the offending key back in an auth failure.
  */
 export async function complete(provider, key, { model, system, user, maxTokens = 700, signal }) {
-  if (!PROVIDERS[provider]) throw new Error(`Proveedor desconocido: ${provider}`)
-  if (!key) throw new Error('Falta la clave de API')
+  if (!PROVIDERS[provider]) throw new Error(`Unknown provider: ${provider}`)
+  if (!key) throw new Error('Missing API key')
 
   const spec = build(provider, { model, system, user, maxTokens })
   const headers = Object.fromEntries(
@@ -134,25 +134,25 @@ export async function complete(provider, key, { model, system, user, maxTokens =
     })
   } catch (e) {
     if (e.name === 'AbortError') throw e
-    throw new Error(`No se pudo contactar con ${PROVIDERS[provider].label}. ` +
-                    'Revisa tu conexión o si una extensión bloquea la petición.')
+    throw new Error(`Could not reach ${PROVIDERS[provider].label}. ` +
+                    'Check your connection, or whether an extension is blocking the request.')
   }
 
   if (!res.ok) {
     // Deliberately not res.text(): an auth error from several providers quotes
     // the key that failed, and that would put it on screen and in the console.
     const known = {
-      401: 'Clave rechazada (401). Comprueba que es correcta y está activa.',
-      403: 'Acceso denegado (403). La clave puede no tener permiso para este modelo.',
-      404: 'Modelo no encontrado (404). Prueba otro modelo del proveedor.',
-      429: 'Límite de uso alcanzado (429). Espera un momento o revisa tu cuota.',
+      401: 'Key rejected (401). Check that it is correct and active.',
+      403: 'Access denied (403). The key may not have access to this model.',
+      404: 'Model not found (404). Try another of this provider’s models.',
+      429: 'Rate limit reached (429). Wait a moment or check your quota.',
     }
     throw new Error(known[res.status] ??
-      `${PROVIDERS[provider].label} respondió ${res.status}.`)
+      `${PROVIDERS[provider].label} answered ${res.status}.`)
   }
 
   const text = spec.pick(await res.json())
-  if (!text) throw new Error('El proveedor respondió sin contenido.')
+  if (!text) throw new Error('The provider answered with no content.')
   return text
 }
 
@@ -162,7 +162,7 @@ export function parseJson(text) {
   const raw = (fenced ? fenced[1] : text).trim()
   const start = raw.indexOf('{')
   const end = raw.lastIndexOf('}')
-  if (start < 0 || end <= start) throw new Error('La IA no devolvió JSON.')
+  if (start < 0 || end <= start) throw new Error('The model did not return JSON.')
   return JSON.parse(raw.slice(start, end + 1))
 }
 
@@ -170,8 +170,8 @@ export function parseJson(text) {
 export async function verifyKey(provider, key, model, signal) {
   const out = await complete(provider, key, {
     model,
-    system: 'Responde solo con la palabra OK.',
-    user: 'Di OK.',
+    system: 'Reply with the single word OK.',
+    user: 'Say OK.',
     maxTokens: 16,
     signal,
   })

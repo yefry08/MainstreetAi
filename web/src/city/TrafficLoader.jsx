@@ -42,8 +42,8 @@ export default function TrafficLoader({ stage, steps, detail, error, onRetry, on
         <div className="tl-error">
           <p>{error}</p>
           <div className="tl-actions">
-            {onRetry && <button className="tl-btn primary" onClick={onRetry}>Reintentar</button>}
-            {onCancel && <button className="tl-btn" onClick={onCancel}>Empezar de nuevo</button>}
+            {onRetry && <button className="tl-btn primary" onClick={onRetry}>Try again</button>}
+            {onCancel && <button className="tl-btn" onClick={onCancel}>Start over</button>}
           </div>
         </div>
       )}
