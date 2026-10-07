@@ -1,5 +1,9 @@
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { assetUrl } from '../data/assetUrl'
+
+// Lazy: three.js scene setup should not hold up the headline. The text paints
+// first and the city arrives a moment later.
+const HeroCity = lazy(() => import('./HeroCity'))
 
 /**
  * The landing page: what MainstreetAi is, what it found, and where to look.
@@ -83,19 +87,27 @@ export default function Landing({ onTab }) {
   return (
     <div className="land">
       <section className="land-hero">
-        <p className="land-eyebrow">Adaptive traffic signals · real cities · digital twins</p>
-        <h1>Same streets. Same traffic.<br />Smarter traffic lights.</h1>
-        <p className="land-lede">
-          MainstreetAi runs two identical simulations of a real city side by
-          side. One keeps today’s fixed signal timings. In the other, AI reads
-          the queues at every junction and retimes the lights. Everything else
-          is held equal, so the difference you see is the signals and nothing else.
-        </p>
-        <div className="land-cta">
-          <button className="land-btn primary" onClick={() => onTab('home')}>Watch Barcelona</button>
-          <button className="land-btn" onClick={() => onTab('yours')}>Try your own city</button>
-          <button className="land-btn ghost" onClick={() => onTab('how')}>How it works</button>
+        <div className="land-hero-text">
+          <p className="land-eyebrow">Adaptive traffic signals · real cities · digital twins</p>
+          <h1>Same streets. Same traffic.<br />Smarter traffic lights.</h1>
+          <p className="land-lede">
+            MainstreetAi runs two identical simulations of a real city side by
+            side. One keeps today’s fixed signal timings. In the other, AI reads
+            the queues at every junction and retimes the lights. Everything else
+            is held equal, so the difference you see is the signals and nothing else.
+          </p>
+          <div className="land-cta">
+            <button className="land-btn primary" onClick={() => onTab('home')}>Watch Barcelona</button>
+            <button className="land-btn" onClick={() => onTab('yours')}>Try your own city</button>
+            <button className="land-btn ghost" onClick={() => onTab('how')}>How it works</button>
+          </div>
         </div>
+        <figure className="land-hero-city">
+          <Suspense fallback={<div className="land-city" />}><HeroCity /></Suspense>
+          <figcaption>
+            Live: a real simulation with adaptive signals. <span className="land-dot" /> stopped cars
+          </figcaption>
+        </figure>
       </section>
 
       <section className="land-section">
