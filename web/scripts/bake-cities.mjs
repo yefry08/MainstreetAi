@@ -22,6 +22,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CITIES, bbox, citySlug } from '../src/city/cities.js'
 import { fetchCity, buildGraph, slimOsm, expandOsm } from '../src/city/osm.js'
+import { writeIndex } from './index-cities.mjs'
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'cities')
 mkdirSync(OUT, { recursive: true })
@@ -78,4 +79,6 @@ for (const city of todo) {
 
 console.log(`\n${ok}/${todo.length} cities ready` +
             (failed.length ? `; missing: ${failed.join(', ')}` : ''))
+const indexed = writeIndex()
+console.log(`index.json lists ${indexed.length} ready-made cities`)
 process.exit(failed.length ? 1 : 0)

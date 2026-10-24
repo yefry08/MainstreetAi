@@ -428,6 +428,10 @@
   border-left: 3px solid var(--terracota-500);
   position: sticky;
   bottom: var(--space-3);
+  /* Opaque: it floats over the page while scrolling, and the glass fill let
+     the text underneath read through it. */
+  background: rgba(12, 15, 22, 0.96);
+  z-index: 2;
 }
 
 .try-go > div { flex: 1 1 320px; }
@@ -491,6 +495,21 @@
 @media (max-width: 860px) {
   .try-go { flex-direction: column; align-items: flex-start; position: static; }
 }
+
+.try-region { margin-bottom: var(--space-3); }
+
+.try-region h3 {
+  margin: 0 0 var(--space-2);
+  font-size: 11px;
+  font-weight: 500;
+  font-family: var(--font-data);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-300);
+}
+
+.try-region h3 em { font-style: normal; color: var(--ink-500); margin-left: 4px; }
+.try-cap { font-style: normal; font-size: 9px; color: var(--terracota-400); margin-left: 1px; }
 
 .try-ctl-pick { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 

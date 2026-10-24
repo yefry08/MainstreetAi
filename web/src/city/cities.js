@@ -34,7 +34,7 @@ export const CITIES = [
   { country: 'Portugal',       flag: '🇵🇹', name: 'Lisbon',         lat: 38.7223, lon: -9.1393, pop: 2.9,  km: 2.4 },
 
   // --- Americas ---
-  { country: 'Mexico',         flag: '🇲🇽', name: 'Mexico City',    lat: 19.4326, lon: -99.1332, pop: 22.0, km: 2.6 },
+  { country: 'Mexico',         flag: '🇲🇽', name: 'Mexico City',    lat: 19.4326, lon: -99.1332, pop: 22.0, km: 2.6, capital: true },
   { country: 'Mexico',         flag: '🇲🇽', name: 'Guadalajara',    lat: 20.6597, lon: -103.3496, pop: 5.3, km: 2.6 },
   { country: 'United States',  flag: '🇺🇸', name: 'New York',       lat: 40.7580, lon: -73.9855, pop: 19.5, km: 2.4 },
   { country: 'United States',  flag: '🇺🇸', name: 'Chicago',        lat: 41.8781, lon: -87.6298, pop: 9.5,  km: 2.6 },
@@ -42,11 +42,58 @@ export const CITIES = [
   { country: 'Canada',         flag: '🇨🇦', name: 'Toronto',        lat: 43.6532, lon: -79.3832, pop: 6.3,  km: 2.6 },
   { country: 'Brazil',         flag: '🇧🇷', name: 'São Paulo',      lat: -23.5505, lon: -46.6333, pop: 22.4, km: 2.6 },
   { country: 'Brazil',         flag: '🇧🇷', name: 'Rio de Janeiro', lat: -22.9068, lon: -43.1729, pop: 13.5, km: 2.4 },
-  { country: 'Argentina',      flag: '🇦🇷', name: 'Buenos Aires',   lat: -34.6037, lon: -58.3816, pop: 15.3, km: 2.6 },
-  { country: 'Colombia',       flag: '🇨🇴', name: 'Bogotá',         lat: 4.7110,  lon: -74.0721, pop: 11.3, km: 2.6 },
-  { country: 'Peru',           flag: '🇵🇪', name: 'Lima',           lat: -12.0464, lon: -77.0428, pop: 10.7, km: 2.6 },
-  { country: 'Chile',          flag: '🇨🇱', name: 'Santiago',       lat: -33.4489, lon: -70.6693, pop: 6.8,  km: 2.6 },
-  { country: 'Dominican Rep.', flag: '🇩🇴', name: 'Santo Domingo',  lat: 18.4861, lon: -69.9312, pop: 3.5,  km: 2.6 },
+  { country: 'Argentina',      flag: '🇦🇷', name: 'Buenos Aires',   lat: -34.6037, lon: -58.3816, pop: 15.3, km: 2.6, capital: true },
+  { country: 'Colombia',       flag: '🇨🇴', name: 'Bogotá',         lat: 4.7110,  lon: -74.0721, pop: 11.3, km: 2.6, capital: true },
+  { country: 'Peru',           flag: '🇵🇪', name: 'Lima',           lat: -12.0464, lon: -77.0428, pop: 10.7, km: 2.6, capital: true },
+  { country: 'Chile',          flag: '🇨🇱', name: 'Santiago',       lat: -33.4489, lon: -70.6693, pop: 6.8,  km: 2.6, capital: true },
+  { country: 'Dominican Rep.', flag: '🇩🇴', name: 'Santo Domingo',  lat: 18.4861, lon: -69.9312, pop: 3.5,  km: 2.6, capital: true },
+
+  // --- Latin America: every capital, and every city of ~2M+ ---------------
+  // Coordinates are the dense core rather than the administrative centroid:
+  // the extract is only ~2.5 km across, and a centroid in a park or a bay
+  // produces a network with nothing to control.
+  // Capitals
+  { country: 'Guatemala',      flag: '🇬🇹', name: 'Guatemala City', lat: 14.6349, lon: -90.5069, pop: 3.0, km: 2.4, capital: true },
+  { country: 'El Salvador',    flag: '🇸🇻', name: 'San Salvador',   lat: 13.6989, lon: -89.1914, pop: 1.1, km: 2.4, capital: true },
+  { country: 'Honduras',       flag: '🇭🇳', name: 'Tegucigalpa',    lat: 14.0818, lon: -87.2068, pop: 1.3, km: 2.4, capital: true },
+  { country: 'Nicaragua',      flag: '🇳🇮', name: 'Managua',        lat: 12.1364, lon: -86.2514, pop: 1.1, km: 2.4, capital: true },
+  { country: 'Costa Rica',     flag: '🇨🇷', name: 'San José',       lat: 9.9333,  lon: -84.0833, pop: 1.4, km: 2.4, capital: true },
+  { country: 'Panama',         flag: '🇵🇦', name: 'Panama City',    lat: 8.9824,  lon: -79.5199, pop: 1.9, km: 2.4, capital: true },
+  { country: 'Cuba',           flag: '🇨🇺', name: 'Havana',         lat: 23.1330, lon: -82.3830, pop: 2.1, km: 2.4, capital: true },
+  { country: 'Haiti',          flag: '🇭🇹', name: 'Port-au-Prince', lat: 18.5425, lon: -72.3386, pop: 2.9, km: 2.4, capital: true },
+  { country: 'Puerto Rico',    flag: '🇵🇷', name: 'San Juan',       lat: 18.4500, lon: -66.0667, pop: 2.4, km: 2.4, capital: true },
+  { country: 'Venezuela',      flag: '🇻🇪', name: 'Caracas',        lat: 10.4996, lon: -66.8786, pop: 2.9, km: 2.6, capital: true },
+  { country: 'Ecuador',        flag: '🇪🇨', name: 'Quito',          lat: -0.1807, lon: -78.4678, pop: 2.0, km: 2.4, capital: true },
+  { country: 'Bolivia',        flag: '🇧🇴', name: 'La Paz',         lat: -16.4990, lon: -68.1340, pop: 2.0, km: 2.4, capital: true },
+  { country: 'Bolivia',        flag: '🇧🇴', name: 'Sucre',          lat: -19.0476, lon: -65.2596, pop: 0.3, km: 2.4, capital: true },
+  { country: 'Uruguay',        flag: '🇺🇾', name: 'Montevideo',     lat: -34.9055, lon: -56.1851, pop: 1.7, km: 2.6, capital: true },
+  { country: 'Paraguay',       flag: '🇵🇾', name: 'Asunción',       lat: -25.2865, lon: -57.6470, pop: 2.3, km: 2.4, capital: true },
+  { country: 'Brazil',         flag: '🇧🇷', name: 'Brasília',       lat: -15.7942, lon: -47.8822, pop: 4.8, km: 2.6, capital: true },
+  // Largest cities
+  { country: 'Mexico',         flag: '🇲🇽', name: 'Monterrey',      lat: 25.6714, lon: -100.3089, pop: 5.3, km: 2.6 },
+  { country: 'Mexico',         flag: '🇲🇽', name: 'Puebla',         lat: 19.0433, lon: -98.1981, pop: 3.2, km: 2.4 },
+  { country: 'Mexico',         flag: '🇲🇽', name: 'Toluca',         lat: 19.2896, lon: -99.6532, pop: 2.4, km: 2.4 },
+  { country: 'Mexico',         flag: '🇲🇽', name: 'Tijuana',        lat: 32.5310, lon: -117.0360, pop: 2.2, km: 2.4 },
+  { country: 'Mexico',         flag: '🇲🇽', name: 'León',           lat: 21.1220, lon: -101.6830, pop: 1.9, km: 2.4 },
+  { country: 'Brazil',         flag: '🇧🇷', name: 'Belo Horizonte', lat: -19.9191, lon: -43.9386, pop: 6.0, km: 2.6 },
+  { country: 'Brazil',         flag: '🇧🇷', name: 'Porto Alegre',   lat: -30.0277, lon: -51.2287, pop: 4.3, km: 2.4 },
+  { country: 'Brazil',         flag: '🇧🇷', name: 'Recife',         lat: -8.0631,  lon: -34.8711, pop: 4.0, km: 2.4 },
+  { country: 'Brazil',         flag: '🇧🇷', name: 'Fortaleza',      lat: -3.7319,  lon: -38.5267, pop: 4.0, km: 2.4 },
+  { country: 'Brazil',         flag: '🇧🇷', name: 'Salvador',       lat: -12.9714, lon: -38.5014, pop: 3.9, km: 2.4 },
+  { country: 'Brazil',         flag: '🇧🇷', name: 'Curitiba',       lat: -25.4290, lon: -49.2671, pop: 3.7, km: 2.4 },
+  { country: 'Brazil',         flag: '🇧🇷', name: 'Campinas',       lat: -22.9056, lon: -47.0608, pop: 3.3, km: 2.4 },
+  { country: 'Brazil',         flag: '🇧🇷', name: 'Goiânia',        lat: -16.6799, lon: -49.2550, pop: 2.6, km: 2.4 },
+  { country: 'Brazil',         flag: '🇧🇷', name: 'Belém',          lat: -1.4558,  lon: -48.4902, pop: 2.5, km: 2.4 },
+  { country: 'Brazil',         flag: '🇧🇷', name: 'Manaus',         lat: -3.1190,  lon: -60.0217, pop: 2.3, km: 2.4 },
+  { country: 'Colombia',       flag: '🇨🇴', name: 'Medellín',       lat: 6.2476,  lon: -75.5658, pop: 4.0, km: 2.4 },
+  { country: 'Colombia',       flag: '🇨🇴', name: 'Cali',           lat: 3.4516,  lon: -76.5320, pop: 2.8, km: 2.4 },
+  { country: 'Colombia',       flag: '🇨🇴', name: 'Barranquilla',   lat: 10.9685, lon: -74.7813, pop: 2.3, km: 2.4 },
+  { country: 'Argentina',      flag: '🇦🇷', name: 'Córdoba',        lat: -31.4167, lon: -64.1833, pop: 1.6, km: 2.4 },
+  { country: 'Argentina',      flag: '🇦🇷', name: 'Rosario',        lat: -32.9468, lon: -60.6393, pop: 1.4, km: 2.4 },
+  { country: 'Venezuela',      flag: '🇻🇪', name: 'Maracaibo',      lat: 10.6427, lon: -71.6125, pop: 2.2, km: 2.4 },
+  { country: 'Venezuela',      flag: '🇻🇪', name: 'Valencia',       lat: 10.1620, lon: -68.0077, pop: 2.0, km: 2.4 },
+  { country: 'Ecuador',        flag: '🇪🇨', name: 'Guayaquil',      lat: -2.1894,  lon: -79.8891, pop: 3.0, km: 2.4 },
+  { country: 'Bolivia',        flag: '🇧🇴', name: 'Santa Cruz',     lat: -17.7833, lon: -63.1821, pop: 2.0, km: 2.4 },
 
   // --- Asia / Oceania / Africa ---
   { country: 'Japan',          flag: '🇯🇵', name: 'Tokyo',          lat: 35.6762, lon: 139.6503, pop: 37.0, km: 2.4 },
@@ -64,6 +111,46 @@ export const CITIES = [
   { country: 'South Africa',   flag: '🇿🇦', name: 'Johannesburg',   lat: -26.2041, lon: 28.0473, pop: 6.0, km: 2.6 },
   { country: 'Australia',      flag: '🇦🇺', name: 'Sydney',         lat: -33.8688, lon: 151.2093, pop: 5.3, km: 2.4 },
 ]
+
+/**
+ * Regions, in the order the picker shows them. Latin America leads: it is
+ * where this project's adaptive-signal work is aimed, and with every capital
+ * and every ~2M+ city it is now most of the list.
+ */
+export const REGIONS = ['Latin America', 'North America', 'Europe', 'Asia & Oceania', 'Africa']
+
+const REGION_OF = {
+  'Mexico': 'Latin America', 'Guatemala': 'Latin America', 'El Salvador': 'Latin America',
+  'Honduras': 'Latin America', 'Nicaragua': 'Latin America', 'Costa Rica': 'Latin America',
+  'Panama': 'Latin America', 'Cuba': 'Latin America', 'Haiti': 'Latin America',
+  'Puerto Rico': 'Latin America', 'Dominican Rep.': 'Latin America', 'Venezuela': 'Latin America',
+  'Colombia': 'Latin America', 'Ecuador': 'Latin America', 'Peru': 'Latin America',
+  'Bolivia': 'Latin America', 'Chile': 'Latin America', 'Argentina': 'Latin America',
+  'Uruguay': 'Latin America', 'Paraguay': 'Latin America', 'Brazil': 'Latin America',
+  'United States': 'North America', 'Canada': 'North America',
+  'Spain': 'Europe', 'France': 'Europe', 'United Kingdom': 'Europe', 'Germany': 'Europe',
+  'Italy': 'Europe', 'Russia': 'Europe', 'Turkey': 'Europe', 'Portugal': 'Europe',
+  'Japan': 'Asia & Oceania', 'South Korea': 'Asia & Oceania', 'China': 'Asia & Oceania',
+  'India': 'Asia & Oceania', 'Thailand': 'Asia & Oceania', 'Indonesia': 'Asia & Oceania',
+  'Singapore': 'Asia & Oceania', 'Australia': 'Asia & Oceania',
+  'Egypt': 'Africa', 'Nigeria': 'Africa', 'South Africa': 'Africa',
+}
+
+export const regionOf = (c) => REGION_OF[c.country] ?? 'Other'
+
+/** Cities grouped by region (REGIONS order), each sorted by country then size. */
+export function byRegion(cities = CITIES) {
+  const out = new Map(REGIONS.map((r) => [r, []]))
+  for (const c of cities) {
+    const r = regionOf(c)
+    if (!out.has(r)) out.set(r, [])
+    out.get(r).push(c)
+  }
+  for (const list of out.values()) {
+    list.sort((a, b) => a.country.localeCompare(b.country, 'en') || b.pop - a.pop)
+  }
+  return [...out.entries()].filter(([, l]) => l.length).map(([region, list]) => ({ region, cities: list }))
+}
 
 /** Countries, alphabetical, each with its cities largest-first. */
 export function byCountry() {
