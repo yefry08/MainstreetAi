@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
 import { assetUrl } from '../data/assetUrl'
+import { loadSignalModel } from '../city/signalModel'
 
 // Lazy: three.js scene setup should not hold up the headline. The text paints
 // first and the city arrives a moment later.
@@ -19,8 +20,12 @@ const HeroCity = lazy(() => import('./HeroCity'))
  * The any-city figures are the exception: they come from
  * src/city/controller.bench.mjs (37 cities x 3 seeds), not from a file the
  * page ships. Re-run the bench and update ANY_CITY if the controller changes.
+ * They are only the FALLBACK now: when the neural controller loads, the card
+ * shows that model's own held-out results, read from its file like the city
+ * cards read their recordings.
  */
-const ANY_CITY = { cities: 37, improved: 27, meanStopped: -19 }
+// Rule-based controller, 37 cities x 3 seeds, after the amber fix in sim.js.
+const ANY_CITY = { cities: 37, improved: 24, meanStopped: -16 }
 
 const CITIES = [
   {
@@ -83,6 +88,53 @@ function CityCard({ city, onTab }) {
   )
 }
 
+/**
+ * The any-city card. Shows the neural controller's own held-out results when
+ * the model loads -- the controller visitors actually get -- and the
+ * rule-based bench figures if it cannot be loaded.
+ */
+function AnyCityCard({ onTab }) {
+  const [nn, setNn] = useState(undefined)
+  useEffect(() => {
+    let alive = true
+    loadSignalModel().then((r) => { if (alive) setNn(r) })
+    return () => { alive = false }
+  }, [])
+  const t = nn?.model?.meta?.test?.summary
+  return (
+    <article className="land-card glass">
+      <p className="land-card-where">Anywhere</p>
+      <h3>Your city</h3>
+      <p className="land-card-blurb">
+        Search any place. Its real streets and traffic lights load from
+        OpenStreetMap, and a neural network trained on real cities times the
+        lights in your browser. No account, no key.
+      </p>
+      {t ? (
+        <dl className="land-stats">
+          <div><dt>Time stopped</dt><dd className="good">{fmt(t.nn_stopped_mean)}</dd></div>
+          <div><dt>Longest waits (p95)</dt><dd className="good">{fmt(t.nn_p95wait_mean)}</dd></div>
+          <div><dt>Unseen cities improved</dt><dd className="good">{t.nn_beats_rule_cities} of {t.cities}</dd></div>
+          <div><dt>Average speed</dt><dd className="good">{fmt(t.nn_speed_mean)}</dd></div>
+        </dl>
+      ) : (
+        <dl className="land-stats">
+          <div><dt>Cities tested</dt><dd>{ANY_CITY.cities}</dd></div>
+          <div><dt>Less time stopped</dt><dd className="good">{ANY_CITY.improved} of {ANY_CITY.cities}</dd></div>
+          <div><dt>Mean change</dt><dd className="good">{fmt(ANY_CITY.meanStopped)}</dd></div>
+          <div><dt>Made worse</dt><dd>0</dd></div>
+        </dl>
+      )}
+      <p className="land-card-note">
+        {t ? `Neural controller on ${t.cities} cities it never saw in training, against fixed timing.`
+          : nn === undefined ? 'Loading the neural controller’s results…'
+          : 'Rule-based controller, 37 cities.'}
+      </p>
+      <button className="land-btn" onClick={() => onTab('yours')}>Analyse a city →</button>
+    </article>
+  )
+}
+
 export default function Landing({ onTab }) {
   return (
     <div className="land">
@@ -118,22 +170,7 @@ export default function Landing({ onTab }) {
         </p>
         <div className="land-grid">
           {CITIES.map((c) => <CityCard key={c.key} city={c} onTab={onTab} />)}
-          <article className="land-card glass">
-            <p className="land-card-where">Anywhere</p>
-            <h3>Your city</h3>
-            <p className="land-card-blurb">
-              Search any place. Its real streets and traffic lights load from
-              OpenStreetMap, and a built-in adaptive controller runs in your
-              browser. No account, no key.
-            </p>
-            <dl className="land-stats">
-              <div><dt>Cities tested</dt><dd>{ANY_CITY.cities}</dd></div>
-              <div><dt>Less time stopped</dt><dd className="good">{ANY_CITY.improved} of {ANY_CITY.cities}</dd></div>
-              <div><dt>Mean change</dt><dd className="good">{fmt(ANY_CITY.meanStopped)}</dd></div>
-              <div><dt>Made worse</dt><dd>0</dd></div>
-            </dl>
-            <button className="land-btn" onClick={() => onTab('yours')}>Analyse a city →</button>
-          </article>
+          <AnyCityCard onTab={onTab} />
         </div>
       </section>
 
