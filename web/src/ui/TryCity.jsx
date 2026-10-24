@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { byCountry, bbox } from '../city/cities'
+import { CITIES, bbox, byRegion, citySlug } from '../city/cities'
+import { assetUrl } from '../data/assetUrl'
+import { parsePlaceParam, placeParam } from '../data/route'
 import { PROVIDERS, verifyKey } from '../city/ai'
 import { buildGraph } from '../city/osm'
 import { loadStreets } from '../city/load'
@@ -69,7 +71,11 @@ const stepsFor = (city, withLlm) => [
   { key: 'sim', label: 'Starting the two twin simulations' },
 ]
 
-export default function TryCity() {
+// What goes in the address for a city: its slug if ready-made, else its
+// coordinates and name.
+const paramFor = (c) => (c.live ? placeParam(c) : citySlug(c))
+
+export default function TryCity({ cityParam = null, onCityParam }) {
   const [phase, setPhase] = useState('pick')         // pick | loading | running
   const [city, setCity] = useState(null)
 
@@ -87,6 +93,23 @@ export default function TryCity() {
   const [nn, setNn] = useState(undefined)
   const [useNeural, setUseNeural] = useState(true)
   const [runNeural, setRunNeural] = useState(false)
+
+  // Which ready-made cities really exist (public/cities/index.json). Only
+  // those are offered as "instant, works offline": a city whose bake failed
+  // would otherwise make that promise and quietly fall back to a live
+  // download. null while loading; false if there is no index, in which case
+  // the whole catalogue is shown and the loader falls back per city.
+  const [ready, setReady] = useState(null)
+  useEffect(() => {
+    let alive = true
+    fetch(assetUrl('cities/index.json'))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (alive) setReady(j?.cities ? new Map(j.cities.map((c) => [c.slug, c])) : false) })
+      .catch(() => { if (alive) setReady(false) })
+    return () => { alive = false }
+  }, [])
+  const readyCities = ready ? CITIES.filter((c) => ready.has(citySlug(c)))
+    : ready === false ? CITIES : []
   useEffect(() => {
     let alive = true
     loadSignalModel().then((r) => { if (alive) setNn(r) })
@@ -137,7 +160,8 @@ export default function TryCity() {
     setPhase('pick'); setError(null)
     setGraph(null); setTwins(null); setStats(null); setHot([]); setAiLog([])
     setCtl({ checks: 0, retimes: 0 }); setPalette(DEFAULT_PALETTE); setSource(null)
-  }, [stopRun])
+    onCityParam?.(null)
+  }, [stopRun, onCityParam])
 
   const search = useCallback(async (e) => {
     e?.preventDefault()
@@ -156,6 +180,9 @@ export default function TryCity() {
   }, [query])
 
   const launch = useCallback(async () => {
+    // Put the city in the address, so what is on screen can be shared.
+    onCityParam?.(paramFor(city))
+    document.title = `MainstreetAi · ${city.name} traffic`
     const withLlm = llmOn && !!llm.key.trim()
     setRunLlm(withLlm)
     // The visitor's own model wins if they brought one; otherwise the trained
@@ -290,7 +317,43 @@ export default function TryCity() {
     } catch (err) {
       if (err.name !== 'AbortError') setError(err.message)
     }
-  }, [city, llm, llmOn, nn, useNeural])
+  }, [city, llm, llmOn, nn, useNeural, onCityParam])
+
+  // ---- opening a city from the address ----------------------------------
+  // A link like #/your-city/lima opens Lima and runs the analysis. The run is
+  // held until the neural controller has finished loading (or failed to), so
+  // a shared link is analysed with the same controller as a click would be.
+  const autoRef = useRef(null)
+  useEffect(() => {
+    if (!cityParam) return
+    if (city && paramFor(city) === cityParam) return
+    const c = parsePlaceParam(cityParam) ?? CITIES.find((x) => citySlug(x) === cityParam)
+    if (!c) return
+    stopRun()
+    setPhase('pick')
+    setCity(c)
+    autoRef.current = cityParam
+  }, [cityParam]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!autoRef.current || !city || paramFor(city) !== autoRef.current) return
+    if (nn === undefined) return
+    autoRef.current = null
+    launch()
+  }, [city, nn, launch])
+
+  const [copied, setCopied] = useState(false)
+  const copyLink = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+    } catch {
+      // Clipboard can be refused (permissions, http). The address bar already
+      // holds the link, so say where it is instead of failing silently.
+      window.prompt('Copy this link:', window.location.href)
+    }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }, [])
 
   // ---------------------------------------------------------------- loading
   if (phase === 'loading' || (phase === 'running' && error)) {
@@ -335,6 +398,7 @@ export default function TryCity() {
                 <button key={n} className={speed === n ? 'on' : ''} onClick={() => setSpeed(n)}>{n}×</button>
               ))}
             </div>
+            <button className="tl-btn" onClick={copyLink}>{copied ? 'Link copied ✓' : 'Copy link'}</button>
             <button className="tl-btn" onClick={reset}>Another city</button>
           </div>
         </div>
@@ -472,14 +536,25 @@ export default function TryCity() {
 
       <section className="try-step">
         <h2>Or open a ready-made city <em>instant, works offline</em></h2>
-        <div className="try-chips">
-          {byCountry().flatMap((c) => c.cities).map((c) => (
-            <button key={c.name} className={`try-chip ${city === c ? 'on' : ''}`}
-                    onClick={() => setCity(c)}>
-              <span className="flag">{c.flag}</span>{c.name}
-            </button>
-          ))}
-        </div>
+        {ready === null && <p className="try-fine">Loading the list…</p>}
+        {byRegion(readyCities).map(({ region, cities }) => (
+          <div key={region} className="try-region">
+            <h3>{region} <em>{cities.length}</em></h3>
+            <div className="try-chips">
+              {cities.map((c) => {
+                const info = ready ? ready.get(citySlug(c)) : null
+                return (
+                  <button key={citySlug(c)} className={`try-chip ${city === c ? 'on' : ''}`}
+                          onClick={() => setCity(c)}
+                          title={info ? `${info.signals} junctions with traffic lights` : undefined}>
+                    <span className="flag">{c.flag}</span>{c.name}
+                    {c.capital && <i className="try-cap" aria-label="capital" title="Capital">★</i>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))}
       </section>
 
       <section className="try-step">
@@ -556,6 +631,11 @@ function NeuralBlurb({ nn }) {
       and loaded from {nn?.source ?? 'the site'}.
       {t && ` On ${t.cities} cities it never saw in training, time stopped changed by `
           + `${pct(t.nn_stopped_mean)}, against ${pct(t.rule_stopped_mean)} for the rule-based controller.`}
+      {meta?.extra_tests?.latam && (() => {
+        const l = meta.extra_tests.latam.summary
+        return ` On ${l.cities} Latin American cities added after training: ${pct(l.nn_stopped_mean)} `
+          + `(rule-based ${pct(l.rule_stopped_mean)}), better in ${l.nn_beats_rule_cities} of ${l.cities}.`
+      })()}
     </>
   )
 }

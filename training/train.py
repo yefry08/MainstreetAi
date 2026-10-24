@@ -319,7 +319,15 @@ def train(args) -> None:
 def evaluate_test(args) -> None:
     model = json.loads((OUT / "model.json").read_text(encoding="utf-8"))
     split = model["meta"]["split"]
-    cases = [(c, s, TEST_SECONDS) for c in split["test"] for s in TEST_SEEDS]
+    # --cities runs the same protocol on any other set -- e.g. cities added to
+    # the catalogue after training, which are unseen by construction. Its
+    # result goes to its own file and never replaces the official test.
+    extra = [c.strip() for c in (args.cities or "").split(",") if c.strip()]
+    seen = set(split["train"]) | set(split["val"])
+    if extra and seen & set(extra):
+        raise SystemExit(f"refusing: {sorted(seen & set(extra))} were used in training or validation")
+    cities = extra or split["test"]
+    cases = [(c, s, TEST_SECONDS) for c in cities for s in TEST_SEEDS]
     ev = Evaluators(args.workers)
     try:
         base = ev.baseline(cases)
@@ -343,7 +351,7 @@ def evaluate_test(args) -> None:
             "rule_p95wait": pct(p, b, "p95Wait"), "nn_p95wait": pct(n, b, "p95Wait"),
         })
 
-    print(f"\nHELD-OUT TEST: {len(rows)} cities never seen in training, "
+    print(f"\n{(args.label.upper() + ' TEST') if extra else 'HELD-OUT TEST'}: {len(rows)} cities never seen in training, "
           f"{len(TEST_SEEDS)} seeds, {TEST_SECONDS // 60} simulated minutes each")
     print(f"{'city':<16}{'time stopped vs fixed':>34}{'avg speed vs fixed':>30}")
     print(f"{'':<16}{'rule-based':>17}{'neural':>17}{'rule-based':>15}{'neural':>15}")
@@ -378,6 +386,17 @@ def evaluate_test(args) -> None:
     print("VERDICT:", "ship it -- better than the current controller on unseen cities"
           if summary["ship"] else "do NOT ship -- it does not beat the current controller on unseen cities")
 
+    if extra:
+        out = OUT / f"test-{args.label}.json"
+        out.write_text(json.dumps({"summary": summary, "per_city": per_city}, indent=1), encoding="utf-8")
+        # Recorded beside the official test, never in place of it, so the site
+        # can cite it with its own label.
+        model["meta"].setdefault("extra_tests", {})[args.label] = {
+            "cities": cities, "summary": summary, "per_city": per_city}
+        (OUT / "model.json").write_text(json.dumps(model), encoding="utf-8")
+        print(f"-> {out}; added to model.json as meta.extra_tests.{args.label} "
+              "(the official held-out test is unchanged)")
+        return
     model["meta"]["test"] = {"summary": summary, "per_city": per_city}
     (OUT / "model.json").write_text(json.dumps(model), encoding="utf-8")
 
@@ -393,6 +412,26 @@ def write_card(args) -> None:
         f"| {r['city']} | {r['rule_stopped']:+.1f}% | {r['nn_stopped']:+.1f}% | "
         f"{r['rule_speed']:+.1f}% | {r['nn_speed']:+.1f}% |"
         for r in meta["test"]["per_city"])
+    extra_sections = ""
+    for label, x in meta.get("extra_tests", {}).items():
+        xs = x["summary"]
+        xrows = "\n".join(
+            f"| {r['city']} | {r['rule_stopped']:+.1f}% | {r['nn_stopped']:+.1f}% | "
+            f"{r['rule_speed']:+.1f}% | {r['nn_speed']:+.1f}% |" for r in x["per_city"])
+        extra_sections += f"""## Second test: {label}
+
+{xs['cities']} cities added to the catalogue **after** training, so unseen by construction. Same protocol.
+
+| City | Stopped, rule-based | Stopped, neural | Speed, rule-based | Speed, neural |
+|---|---|---|---|---|
+{xrows}
+| **Mean** | **{xs['rule_stopped_mean']:+.1f}%** | **{xs['nn_stopped_mean']:+.1f}%** | {xs['rule_speed_mean']:+.1f}% | {xs['nn_speed_mean']:+.1f}% |
+
+Neural better than rule-based in **{xs['nn_beats_rule_cities']} of {xs['cities']}**; 95th-percentile wait
+{xs['nn_p95wait_mean']:+.1f}% (rule-based {xs['rule_p95wait_mean']:+.1f}%); consistently worse than fixed timing in:
+**{', '.join(xs['nn_consistently_worse_than_fixed']) or 'none'}**.
+
+"""
     card = f"""---
 license: mit
 tags:
@@ -443,7 +482,7 @@ and ends the current green early when cars are waiting there and the green side 
 engineers call this actuated control. Here it was learned, not programmed.
 Consistently worse than fixed timing in: **{', '.join(t['nn_consistently_worse_than_fixed']) or 'none'}**.
 
-## Limits, stated plainly
+{extra_sections}## Limits, stated plainly
 
 - Trained and tested in a **simplified simulator**: queue-based car following, random-walk
   routes rather than measured trips. It shows how the controller behaves on each city's real
@@ -476,6 +515,8 @@ if __name__ == "__main__":
                     help="continue from training/out/checkpoint.npz")
     ev_ = sub.add_parser("evaluate")
     ev_.add_argument("--workers", type=int, default=2)
+    ev_.add_argument("--cities", default="", help="comma-separated slugs to test instead of the held-out split")
+    ev_.add_argument("--label", default="extra", help="name for the --cities result file")
     sub.add_parser("card")
     a = ap.parse_args()
     {"train": train, "evaluate": evaluate_test, "card": write_card}[a.cmd](a)

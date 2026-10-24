@@ -1,6 +1,8 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
 import { assetUrl } from '../data/assetUrl'
 import { loadSignalModel } from '../city/signalModel'
+import { CITIES as CATALOGUE, citySlug, regionOf } from '../city/cities'
+import { toHash } from '../data/route'
 
 // Lazy: three.js scene setup should not hold up the headline. The text paints
 // first and the city arrives a moment later.
@@ -135,6 +137,62 @@ function AnyCityCard({ onTab }) {
   )
 }
 
+/**
+ * Every Latin American capital, one click from an analysis.
+ *
+ * Plain links to #/your-city/<slug>, not buttons: they can be opened in a new
+ * tab, copied, and shared, and the address-bar router does the rest. Only
+ * capitals the site has actually baked are listed (public/cities/index.json),
+ * so none of them is a promise that falls back to a slow live download.
+ */
+function CapitalsStrip() {
+  const [ready, setReady] = useState(null)
+  const [latam, setLatam] = useState(null)
+  useEffect(() => {
+    let alive = true
+    loadSignalModel().then((r) => {
+      if (alive) setLatam(r?.model?.meta?.extra_tests?.latam?.summary ?? null)
+    })
+    fetch(assetUrl('cities/index.json'))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (alive) setReady(new Set((j?.cities ?? []).map((c) => c.slug))) })
+      .catch(() => { if (alive) setReady(new Set()) })
+    return () => { alive = false }
+  }, [])
+  const capitals = CATALOGUE
+    .filter((c) => c.capital && regionOf(c) === 'Latin America')
+    .sort((a, b) => a.country.localeCompare(b.country, 'en'))
+  const shown = ready ? capitals.filter((c) => ready.has(citySlug(c))) : []
+  if (ready && !shown.length) return null
+  return (
+    <section className="land-section">
+      <h2>Every capital in Latin America</h2>
+      <p className="land-sub">
+        Real streets and traffic lights from OpenStreetMap, ready to analyse in
+        your browser. Pick one: the analysis starts straight away.
+        {latam && ` Across ${latam.cities} Latin American cities added after the neural
+          controller was trained, it cut time stopped at lights by
+          ${Math.abs(latam.nn_stopped_mean).toFixed(0)}%, and beat the rule-based
+          controller in ${latam.nn_beats_rule_cities} of them.`}
+      </p>
+      <ul className="land-capitals">
+        {shown.map((c) => (
+          <li key={citySlug(c)}>
+            <a href={toHash('yours', citySlug(c))}>
+              <span className="flag" aria-hidden="true">{c.flag}</span>
+              <b>{c.name}</b>
+              <em>{c.country}</em>
+            </a>
+          </li>
+        ))}
+      </ul>
+      {ready && shown.length < capitals.length && (
+        <p className="land-card-note">{shown.length} of {capitals.length} ready; the rest can be searched for.</p>
+      )}
+    </section>
+  )
+}
+
 export default function Landing({ onTab }) {
   return (
     <div className="land">
@@ -174,6 +232,8 @@ export default function Landing({ onTab }) {
         </div>
       </section>
 
+      <CapitalsStrip />
+
       <section className="land-section">
         <h2>How it works</h2>
         <ol className="land-steps">
@@ -208,6 +268,7 @@ export default function Landing({ onTab }) {
           <span aria-hidden="true">·</span>
           <button onClick={() => onTab('contact')}>Contact</button>
         </p>
+        <p className="land-credits">Street data © OpenStreetMap contributors (ODbL). Flag emoji: Twemoji, CC-BY 4.0.</p>
       </footer>
     </div>
   )

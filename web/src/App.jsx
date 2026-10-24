@@ -10,6 +10,7 @@ import HowItWorks from './ui/HowItWorks'
 // Eager, not lazy: it is the first page, and lazy-loading it would put a
 // second request in front of the first paint.
 import Landing from './ui/Landing'
+import { parseHash, toHash } from './data/route'
 
 
 import LiveCity from './ui/LiveCity'
@@ -74,7 +75,29 @@ const basemapLabel = (status, city) => ({
 export default function App() {
   // The landing page comes first; the 3D scene keeps loading behind it, so
   // Barcelona is already running by the time anyone clicks through.
-  const [tab, setTab] = useState('landing')
+  const [tab, setTab] = useState(() => parseHash().tab)
+  // The city named in the address, for Your city: a ready-made slug or an
+  // "@lat,lon,Name" place. TryCity opens and analyses it.
+  const [cityParam, setCityParam] = useState(() => parseHash().city)
+
+  // Back and Forward move between tabs instead of leaving the site.
+  useEffect(() => {
+    const sync = () => { const r = parseHash(); setTab(r.tab); setCityParam(r.city) }
+    window.addEventListener('popstate', sync)
+    window.addEventListener('hashchange', sync)
+    return () => {
+      window.removeEventListener('popstate', sync)
+      window.removeEventListener('hashchange', sync)
+    }
+  }, [])
+
+  // Your city reports the city it is showing, so the address can be shared.
+  // replaceState, not pushState: picking a city is not a separate page the
+  // Back button should step through.
+  const onCityParam = useCallback((param) => {
+    setCityParam(param)
+    window.history.replaceState(null, '', toHash('yours', param))
+  }, [])
   const [mode, setMode] = useState('night')
   const [chrome, setChrome] = useState(true)
   const [district, setDistrict] = useState('barcelona')
@@ -178,6 +201,10 @@ export default function App() {
       map.easeTo({ ...cityConfig(next === 'manhattan' ? 'manhattan' : 'barcelona').home,
                    duration: 900 })
     }
+    if (next !== tab) {
+      window.history.pushState(null, '', toHash(next))
+      if (next === 'yours') setCityParam(null)
+    }
     setTab(next)
   }, [tab, map])
 
@@ -267,7 +294,7 @@ export default function App() {
       {tab === 'yours' && (
         <div className="page-layer">
           <Suspense fallback={<p className="page-loading">Loading…</p>}>
-            <TryCity />
+            <TryCity cityParam={cityParam} onCityParam={onCityParam} />
           </Suspense>
         </div>
       )}
