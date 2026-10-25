@@ -12,6 +12,7 @@ import { neuralPolicy } from '../city/neural'
 import { loadSignalModel } from '../city/signalModel'
 import TrafficLoader from '../city/TrafficLoader'
 import CityCanvas from '../city/CityCanvas'
+import CityScene3D from '../city/CityScene3D'
 
 /**
  * "Your city": analyse and improve the traffic of any city.
@@ -130,6 +131,11 @@ export default function TryCity({ cityParam = null, onCityParam }) {
   const [ctl, setCtl] = useState({ checks: 0, retimes: 0 })
   const [aiLog, setAiLog] = useState([])
   const [speed, setSpeed] = useState(1)
+  // 3D by default. If the 3D map cannot start (no WebGL, tiles down) the
+  // page falls back to the 2D canvas, which needs no network, and says why.
+  const [view3d, setView3d] = useState(true)
+  const [fail3d, setFail3d] = useState(null)
+  const onFail3d = useCallback((why) => setFail3d(why), [])
 
   const speedRef = useRef(1)
   const abortRef = useRef(null)
@@ -393,6 +399,12 @@ export default function TryCity({ cityParam = null, onCityParam }) {
                 <button key={k} className={view === k ? 'on' : ''} onClick={() => setView(k)}>{label}</button>
               ))}
             </div>
+            <div className="try-switch" role="group" aria-label="View">
+              {[[true, '3D'], [false, 'Map']].map(([v, label]) => (
+                <button key={label} className={v === (view3d && !fail3d) ? 'on' : ''}
+                        onClick={() => { setView3d(v); if (v) setFail3d(null) }}>{label}</button>
+              ))}
+            </div>
             <div className="try-switch" role="group" aria-label="Simulation speed">
               {[1, 4, 10].map((n) => (
                 <button key={n} className={speed === n ? 'on' : ''} onClick={() => setSpeed(n)}>{n}×</button>
@@ -403,7 +415,10 @@ export default function TryCity({ cityParam = null, onCityParam }) {
           </div>
         </div>
 
-        <CityCanvas graph={graph} world={world} palette={palette} running hotspots={hot} />
+        {view3d && !fail3d
+          ? <CityScene3D graph={graph} world={world} hotspots={hot} onFail={onFail3d} />
+          : <CityCanvas graph={graph} world={world} palette={palette} running hotspots={hot} />}
+        {fail3d && <p className="try-fine">{fail3d}</p>}
 
         <p className="try-clock">
           Simulated {fmtTime(simTime)}

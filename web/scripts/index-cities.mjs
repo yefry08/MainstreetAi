@@ -29,6 +29,8 @@ export function writeIndex() {
     const g = buildGraph(expandOsm(JSON.parse(readFileSync(file, 'utf8'))), bbox(c))
     cities.push({
       slug,
+      name: c.name,
+      country: c.country,
       streets: g.stats.edges,
       signals: g.stats.signals,
       junctions: g.stats.junctions,

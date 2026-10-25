@@ -43,12 +43,6 @@ def font(names, size):
     return ImageFont.load_default()
 
 
-def _ascii(s):
-    """Same accent stripping as citySlug() in cities.js."""
-    import unicodedata
-    return "".join(ch for ch in unicodedata.normalize("NFD", s) if unicodedata.category(ch) != "Mn")
-
-
 def figures():
     m = json.loads((WEB / "public" / "replay" / "manifest.json").read_text(encoding="utf-8"))
     a, b = m["stats"]["ai"], m["stats"]["baseline"]
@@ -61,16 +55,12 @@ def figures():
     # not from the catalogue, which can list cities whose bake failed.
     src = (WEB / "src" / "city" / "cities.js").read_text(encoding="utf-8")
     latam_countries = {"Mexico", "Guatemala", "El Salvador", "Honduras", "Nicaragua", "Costa Rica",
-                       "Panama", "Cuba", "Haiti", "Puerto Rico", "Dominican Rep.", "Venezuela",
+                       "Panama", "Cuba", "Puerto Rico", "Dominican Rep.", "Venezuela",
                        "Colombia", "Ecuador", "Peru", "Bolivia", "Chile", "Argentina", "Uruguay",
                        "Paraguay", "Brazil"}
-    country_of = {}
-    for country, name in re.findall(r"country: '([^']+)',\s*flag: '[^']+', name: '([^']+)'", src):
-        slug = re.sub(r"[^a-z0-9]+", "-", _ascii(name).lower()).strip("-")
-        country_of[slug] = country
     ready = json.loads((WEB / "public" / "cities" / "index.json").read_text(encoding="utf-8"))["cities"]
     total = len(ready)
-    latam = sum(1 for c in ready if country_of.get(c["slug"]) in latam_countries)
+    latam = sum(1 for c in ready if c.get("country") in latam_countries)
     return [
         (f"{t['nn_stopped_mean']:+.0f}%".replace("-", "−"), "time stopped at lights",
          f"neural controller, {t['cities']} unseen cities"),

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { pointOnEdge } from './geometry'
 
 /**
  * Draws the running simulation: real streets, live vehicles, live signals.
@@ -125,20 +126,4 @@ export default function CityCanvas({ graph, world, palette, running, hotspots = 
   }, [graph])
 
   return <canvas ref={ref} className={`city-canvas ${running ? '' : 'paused'}`} />
-}
-
-/** Walk the polyline to find the point `d` metres from its start. */
-function pointOnEdge(e, d) {
-  let acc = 0
-  for (let i = 1; i < e.pts.length; i++) {
-    const [x0, y0] = e.pts[i - 1]
-    const [x1, y1] = e.pts[i]
-    const seg = Math.hypot(x1 - x0, y1 - y0)
-    if (acc + seg >= d) {
-      const f = seg > 0 ? (d - acc) / seg : 0
-      return [x0 + (x1 - x0) * f, y0 + (y1 - y0) * f]
-    }
-    acc += seg
-  }
-  return e.pts[e.pts.length - 1]
 }

@@ -225,6 +225,7 @@ export default function App() {
           onBasemapStatus={onBasemapStatus}
           frameRef={frameRef}
           city={sceneCity}
+          active={isScene || isLanding}
         />
         <Atmosphere map={map} />
       </div>
