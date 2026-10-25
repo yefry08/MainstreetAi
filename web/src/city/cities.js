@@ -60,7 +60,6 @@ export const CITIES = [
   { country: 'Costa Rica',     flag: '🇨🇷', name: 'San José',       lat: 9.9333,  lon: -84.0833, pop: 1.4, km: 2.4, capital: true },
   { country: 'Panama',         flag: '🇵🇦', name: 'Panama City',    lat: 8.9824,  lon: -79.5199, pop: 1.9, km: 2.4, capital: true },
   { country: 'Cuba',           flag: '🇨🇺', name: 'Havana',         lat: 23.1330, lon: -82.3830, pop: 2.1, km: 2.4, capital: true },
-  { country: 'Haiti',          flag: '🇭🇹', name: 'Port-au-Prince', lat: 18.5425, lon: -72.3386, pop: 2.9, km: 2.4, capital: true },
   { country: 'Puerto Rico',    flag: '🇵🇷', name: 'San Juan',       lat: 18.4500, lon: -66.0667, pop: 2.4, km: 2.4, capital: true },
   { country: 'Venezuela',      flag: '🇻🇪', name: 'Caracas',        lat: 10.4996, lon: -66.8786, pop: 2.9, km: 2.6, capital: true },
   { country: 'Ecuador',        flag: '🇪🇨', name: 'Quito',          lat: -0.1807, lon: -78.4678, pop: 2.0, km: 2.4, capital: true },
@@ -94,6 +93,23 @@ export const CITIES = [
   { country: 'Venezuela',      flag: '🇻🇪', name: 'Valencia',       lat: 10.1620, lon: -68.0077, pop: 2.0, km: 2.4 },
   { country: 'Ecuador',        flag: '🇪🇨', name: 'Guayaquil',      lat: -2.1894,  lon: -79.8891, pop: 3.0, km: 2.4 },
   { country: 'Bolivia',        flag: '🇧🇴', name: 'Santa Cruz',     lat: -17.7833, lon: -63.1821, pop: 2.0, km: 2.4 },
+  // Second cities: the largest city after the capital in each country that
+  // did not already have one above.
+  { country: 'Guatemala',      flag: '🇬🇹', name: 'Quetzaltenango', lat: 14.8347, lon: -91.5180, pop: 0.3, km: 2.4 },
+  { country: 'El Salvador',    flag: '🇸🇻', name: 'Santa Ana',      lat: 13.9942, lon: -89.5597, pop: 0.4, km: 2.4 },
+  { country: 'Honduras',       flag: '🇭🇳', name: 'San Pedro Sula', lat: 15.5042, lon: -88.0250, pop: 1.0, km: 2.4 },
+  // A second "León" (Mexico's is above): an explicit slug keeps the two from
+  // sharing one ready-made file.
+  { country: 'Nicaragua',      flag: '🇳🇮', name: 'León',           lat: 12.4350, lon: -86.8790, pop: 0.2, km: 2.4, slug: 'leon-nicaragua' },
+  { country: 'Costa Rica',     flag: '🇨🇷', name: 'Alajuela',       lat: 10.0163, lon: -84.2116, pop: 0.3, km: 2.4 },
+  { country: 'Panama',         flag: '🇵🇦', name: 'Colón',          lat: 9.3592,  lon: -79.9014, pop: 0.3, km: 2.4 },
+  { country: 'Cuba',           flag: '🇨🇺', name: 'Santiago de Cuba', lat: 20.0217, lon: -75.8294, pop: 0.5, km: 2.4 },
+  { country: 'Dominican Rep.', flag: '🇩🇴', name: 'Santiago de los Caballeros', lat: 19.4517, lon: -70.6970, pop: 1.0, km: 2.4 },
+  { country: 'Puerto Rico',    flag: '🇵🇷', name: 'Ponce',          lat: 18.0111, lon: -66.6141, pop: 0.1, km: 2.4 },
+  { country: 'Peru',           flag: '🇵🇪', name: 'Arequipa',       lat: -16.3989, lon: -71.5369, pop: 1.1, km: 2.4 },
+  { country: 'Chile',          flag: '🇨🇱', name: 'Valparaíso',     lat: -33.0458, lon: -71.6197, pop: 1.0, km: 2.4 },
+  { country: 'Uruguay',        flag: '🇺🇾', name: 'Salto',          lat: -31.3833, lon: -57.9667, pop: 0.1, km: 2.4 },
+  { country: 'Paraguay',       flag: '🇵🇾', name: 'Ciudad del Este', lat: -25.5097, lon: -54.6111, pop: 0.3, km: 2.4 },
 
   // --- Asia / Oceania / Africa ---
   { country: 'Japan',          flag: '🇯🇵', name: 'Tokyo',          lat: 35.6762, lon: 139.6503, pop: 37.0, km: 2.4 },
@@ -122,7 +138,7 @@ export const REGIONS = ['Latin America', 'North America', 'Europe', 'Asia & Ocea
 const REGION_OF = {
   'Mexico': 'Latin America', 'Guatemala': 'Latin America', 'El Salvador': 'Latin America',
   'Honduras': 'Latin America', 'Nicaragua': 'Latin America', 'Costa Rica': 'Latin America',
-  'Panama': 'Latin America', 'Cuba': 'Latin America', 'Haiti': 'Latin America',
+  'Panama': 'Latin America', 'Cuba': 'Latin America',
   'Puerto Rico': 'Latin America', 'Dominican Rep.': 'Latin America', 'Venezuela': 'Latin America',
   'Colombia': 'Latin America', 'Ecuador': 'Latin America', 'Peru': 'Latin America',
   'Bolivia': 'Latin America', 'Chile': 'Latin America', 'Argentina': 'Latin America',
@@ -178,6 +194,5 @@ export const cityId = (c) => `${c.country}:${c.name}`
  * Accents are stripped rather than encoded, because GitHub Pages serves the
  * path as given and a percent-encoded filename is one more thing to get wrong.
  */
-export const citySlug = (c) =>
-  c.name.normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+export const citySlug = (c) => c.slug ?? c.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')

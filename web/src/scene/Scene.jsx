@@ -107,7 +107,8 @@ function usableFeatures(gj) {
   return ok
 }
 
-export default function Scene({ onMapReady, onBasemapStatus, frameRef, city = DEFAULT_CITY }) {
+export default function Scene({ onMapReady, onBasemapStatus, frameRef, city = DEFAULT_CITY,
+                                active = true }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const grownRef = useRef(false)
@@ -125,6 +126,12 @@ export default function Scene({ onMapReady, onBasemapStatus, frameRef, city = DE
   const cityRef = useRef(cityConfig(city))
   // Lets the city-change effect below drive the same build path.
   const ensureRef = useRef(null)
+  // Whether anyone can see the scene. It stays mounted on every tab (a
+  // remount re-fetches tiles and rebuilds every buffer), but it used to keep
+  // repainting at full rate behind opaque pages too -- and with Your city's
+  // own 3D map that is two WebGL maps drawing at once for one visible view.
+  const activeRef = useRef(active)
+  activeRef.current = active
 
   useEffect(() => {
     const home = cityRef.current.home
@@ -397,7 +404,7 @@ export default function Scene({ onMapReady, onBasemapStatus, frameRef, city = DE
         const n = traffic.applyFrame(f)
         if (n >= 0) live = n
       }
-      if (live > 0) layer.redraw()
+      if (live > 0 && activeRef.current) layer.redraw()
     }
     raf = requestAnimationFrame(pump)
 
