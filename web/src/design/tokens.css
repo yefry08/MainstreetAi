@@ -130,7 +130,7 @@
      JetBrains Mono specifically because a readout updating many times a
      second needs unambiguous 0/O and 1/l, and its figures are tabular by
      design so nothing shifts as digits change. */
-  --font-ui: 'Archivo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+  --font-ui: 'Twemoji Country Flags', 'Archivo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
              sans-serif;
   --font-data: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas,
                monospace;

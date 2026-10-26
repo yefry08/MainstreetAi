@@ -1417,3 +1417,36 @@
 
 .land-card-note { margin: calc(var(--space-2) * -1) 0 var(--space-4); font-size: 11px; color: var(--ink-400); }
 
+
+/* Every Latin American capital, as links. */
+.land-capitals {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--space-2);
+}
+
+.land-capitals a {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+  align-items: center;
+  padding: 9px 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--glass-edge);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ink-50);
+  text-decoration: none;
+  transition: border-color var(--t-fast) var(--ease-out), background var(--t-fast) var(--ease-out);
+}
+
+.land-capitals a:hover { border-color: var(--terracota-500); background: var(--terracota-glow); }
+.land-capitals a:focus-visible { outline: 2px solid var(--terracota-500); outline-offset: 2px; }
+.land-capitals .flag { grid-row: span 2; font-size: 20px; }
+.land-capitals b { font-size: 13.5px; font-weight: 500; }
+.land-capitals em { font-style: normal; font-size: 11px; color: var(--ink-400); }
+
+.land-credits { margin-top: var(--space-2); font-size: 11px; color: var(--ink-500); }
+
