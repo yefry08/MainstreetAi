@@ -86,6 +86,7 @@ export function createWorld(graph, { seed = 1, vehicles = 260, adaptive = false 
       // constant cycle length, which is what adaptive control actually is.
       greens: [28, 28],
       amber: 3,
+      amberT: 0,
       state: GREEN,
     }
   })
@@ -128,14 +129,32 @@ export function createWorld(graph, { seed = 1, vehicles = 260, adaptive = false 
     // --- signals -------------------------------------------------------
     blocked = new Set()
     for (const s of signals) {
+      // AN EXPLICIT GREEN -> AMBER -> NEXT-PHASE MACHINE. A green only ever
+      // ends by turning amber, and only a full amber hands over the junction.
+      //
+      // This used to be arithmetic on one clock: switch phase once
+      // t >= green + amber, show amber while t > green. That is fine for a
+      // fixed programme and wrong under control. When a controller shortened
+      // the running phase's green below the time already elapsed, t was
+      // already past green + amber, so the phase switched on the very next
+      // step with NO amber at all -- free capacity no real junction has.
+      // Measured: the trained neural controller ended 3-8% of its phases that
+      // way, against ~1% for fixed timing (a start-up artefact of the same
+      // bug). A controller must not be able to win by deleting the amber.
       s.t += dt
-      // The phase in progress owns its own green, so cycle length is the sum
-      // of the two rather than twice one of them.
-      if (s.t >= s.greens[s.phase] + s.amber) {
-        s.t -= s.greens[s.phase] + s.amber
-        s.phase = 1 - s.phase
+      if (s.state === GREEN) {
+        // The phase in progress owns its own green, so cycle length is the
+        // sum of the two rather than twice one of them.
+        if (s.t >= s.greens[s.phase]) { s.state = AMBER; s.amberT = 0 }
+      } else {
+        s.amberT += dt
+        if (s.amberT >= s.amber) {
+          s.phase = 1 - s.phase
+          s.state = GREEN
+          s.t = s.amberT - s.amber      // carry the overshoot, no drift
+          s.amberT = 0
+        }
       }
-      s.state = s.t > s.greens[s.phase] ? AMBER : GREEN
       // The group that is not holding green is stopped, and only for traffic
       // arriving AT this junction.
       const stop = s.groups[1 - s.phase] ?? []

@@ -6,6 +6,8 @@ import { loadStreets } from '../city/load'
 import { searchPlaces } from '../city/geocode'
 import { createTwins, compare } from '../city/sim'
 import { cityPalette, startOrchestrator, proportionalPolicy } from '../city/orchestrator'
+import { neuralPolicy } from '../city/neural'
+import { loadSignalModel } from '../city/signalModel'
 import TrafficLoader from '../city/TrafficLoader'
 import CityCanvas from '../city/CityCanvas'
 
@@ -29,10 +31,14 @@ import CityCanvas from '../city/CityCanvas'
  *     timing, numbered on the map, with what adaptive control did at each
  *
  * WHAT THE NUMBERS MEAN -- the page says this, because overclaiming here would
- * be easy and wrong. Measured with city/controller.bench.mjs on all 37
- * ready-made cities, three seeds each: stopped time fell in 27 (all three seeds
- * agreeing), by 3-65%; in 10 the seed range spans zero; none got consistently
- * worse. Mean over all 37: stopped time -19%, average speed +1%. Where traffic
+ * be easy and wrong. Rule-based controller, measured with
+ * city/controller.bench.mjs on all 37 ready-made cities, three seeds each,
+ * after the amber fix in sim.js: stopped time fell in 24 (all three seeds
+ * agreeing); in 13 the seed range spans zero; none got consistently worse.
+ * Mean: stopped time -16%, average speed +1%. (Before the amber fix it read
+ * 27 / -19%: the old physics let any controller skip ambers.) The neural
+ * controller's figures come from its own model file, measured on held-out
+ * cities -- see NeuralBlurb and training/train.py. Where traffic
  * is light or balanced it rightly does almost nothing, and the page says that
  * too rather than presenting noise as a result. Re-run the bench and update
  * this and the copy below if the controller, deadband or demand changes.
@@ -75,6 +81,17 @@ export default function TryCity() {
   const [llmOn, setLlmOn] = useState(false)
   const [llm, setLlm] = useState({ provider: 'gemini', model: '', key: '' })
   const [runLlm, setRunLlm] = useState(false)
+
+  // The trained neural controller: undefined while loading, null if neither
+  // Hugging Face nor the site copy could provide a valid model.
+  const [nn, setNn] = useState(undefined)
+  const [useNeural, setUseNeural] = useState(true)
+  const [runNeural, setRunNeural] = useState(false)
+  useEffect(() => {
+    let alive = true
+    loadSignalModel().then((r) => { if (alive) setNn(r) })
+    return () => { alive = false }
+  }, [])
 
   const [stage, setStage] = useState('osm')
   const [detail, setDetail] = useState('')
@@ -141,6 +158,10 @@ export default function TryCity() {
   const launch = useCallback(async () => {
     const withLlm = llmOn && !!llm.key.trim()
     setRunLlm(withLlm)
+    // The visitor's own model wins if they brought one; otherwise the trained
+    // network if it loaded and is selected; otherwise the rule-based one.
+    const neural = !withLlm && useNeural && nn ? nn.model : null
+    setRunNeural(!!neural)
     setPhase('loading'); setError(null); setStage('osm'); setDetail('')
     const ac = new AbortController()
     abortRef.current = ac
@@ -233,7 +254,7 @@ export default function TryCity() {
             if (sinceDecide >= DECIDE_EVERY_S) {
               sinceDecide = 0
               checks++
-              retimes += proportionalPolicy(t.ai).applied
+              retimes += (neural ? neuralPolicy(t.ai, neural) : proportionalPolicy(t.ai)).applied
             }
           }
         }
@@ -269,7 +290,7 @@ export default function TryCity() {
     } catch (err) {
       if (err.name !== 'AbortError') setError(err.message)
     }
-  }, [city, llm, llmOn])
+  }, [city, llm, llmOn, nn, useNeural])
 
   // ---------------------------------------------------------------- loading
   if (phase === 'loading' || (phase === 'running' && error)) {
@@ -305,7 +326,7 @@ export default function TryCity() {
           </div>
           <div className="try-run-actions">
             <div className="try-switch" role="group" aria-label="Which twin to show">
-              {[['fixed', 'Today: fixed timing'], ['ai', runLlm ? 'Your model' : 'Adaptive']].map(([k, label]) => (
+              {[['fixed', 'Today: fixed timing'], ['ai', runLlm ? 'Your model' : runNeural ? 'Neural network' : 'Adaptive']].map(([k, label]) => (
                 <button key={k} className={view === k ? 'on' : ''} onClick={() => setView(k)}>{label}</button>
               ))}
             </div>
@@ -350,21 +371,23 @@ export default function TryCity() {
             ) : <p>Collecting queue data…</p>}
             <p className="try-hot-note">
               Numbered on the map. Left: fixed timing, as the city runs now.
-              Right: the same junction under {runLlm ? 'your model' : 'adaptive control'}.
+              Right: the same junction under {runLlm ? 'your model' : runNeural ? 'the neural network' : 'adaptive control'}.
             </p>
           </section>
 
           <section className="try-ctl">
-            <h2>{runLlm ? `Controller: your model (${PROVIDERS[llm.provider].label})` : 'Controller: built-in adaptive'}</h2>
+            <h2>{runLlm ? `Controller: your model (${PROVIDERS[llm.provider].label})`
+              : runNeural ? 'Controller: neural network' : 'Controller: built-in adaptive'}</h2>
             <p>
               {runLlm ? 'Reads the queue on each arm of the busiest junctions and returns new green times.'
+                : runNeural ? <NeuralBlurb nn={nn} />
                 : 'Every few seconds it finds junctions with a real imbalance between their two directions and moves green time towards the longer queue, keeping each cycle the same length.'}
             </p>
             <p className="try-ctl-count">{ctl.retimes} {ctl.retimes === 1 ? 'retiming' : 'retimings'} · {ctl.checks} {ctl.checks === 1 ? 'check' : 'checks'}</p>
             {quiet && (
               <p className="try-ctl-quiet">
                 Little to fix here. Traffic at these junctions is light or evenly
-                balanced, so the controller is mostly leaving timings alone --
+                balanced, so the controller is mostly leaving timings alone —
                 which is the right call, and why the numbers above barely move.
               </p>
             )}
@@ -391,12 +414,13 @@ export default function TryCity() {
         <p className="try-note">
           <b>What is simplified.</b> Vehicles follow random routes rather than
           measured trips, so this shows how adaptive timing behaves on this
-          city’s network, not a forecast of its real traffic. Measured on all
-          37 ready-made cities, three runs each: time spent stopped fell in
-          27 of them, by 3% to 65%; in the other 10 the change was within
-          noise, because there was too little unbalanced traffic to act on.
-          It made no city measurably worse. Average speed barely moves (+1%
-          on average) — most of a trip is driving, not waiting at a light.
+          city’s network, not a forecast of its real traffic. The rule-based
+          controller, measured on all 37 ready-made cities with three runs
+          each, cut time stopped in 24 of them and made none measurably worse
+          (mean −16%). The neural network was tested on 10 cities it never saw
+          in training; its result is shown with the controller above. Average
+          speed moves little either way: most of a trip is driving, not
+          waiting at a light.
         </p>
       </div>
     )
@@ -459,6 +483,30 @@ export default function TryCity() {
       </section>
 
       <section className="try-step">
+        <h2>Controller</h2>
+        <div className="try-ctl-pick" role="radiogroup" aria-label="Signal controller">
+          <label className={useNeural && nn ? 'on' : ''}>
+            <input type="radio" name="ctl" checked={!!(useNeural && nn)} disabled={!nn}
+                   onChange={() => setUseNeural(true)} />
+            <span>
+              <b>Neural network</b>
+              <em>{nn === undefined ? 'loading…'
+                : nn ? `trained on ${nn.model.meta?.split?.train?.length ?? 'many'} cities · from ${nn.source}`
+                : 'could not be loaded — using rule-based'}</em>
+            </span>
+          </label>
+          <label className={!(useNeural && nn) ? 'on' : ''}>
+            <input type="radio" name="ctl" checked={!(useNeural && nn)}
+                   onChange={() => setUseNeural(false)} />
+            <span>
+              <b>Rule-based</b>
+              <em>proportional green splits</em>
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <section className="try-step">
         <details className="try-byo" open={llmOn}>
           <summary onClick={(e) => { e.preventDefault(); setLlmOn((v) => !v) }}>
             Use your own AI model as the controller <em>optional</em>
@@ -483,7 +531,8 @@ export default function TryCity() {
             {!city ? 'Search for a place or pick a ready-made city.'
               : city.live ? `${city.label}. Its streets are downloaded live from OpenStreetMap, which can take up to a minute.`
               : 'Ready-made: opens instantly.'}
-            {city && llmOn && llm.key.trim() && ' Controller: your model.'}
+            {city && (llmOn && llm.key.trim() ? ' Controller: your model.'
+              : useNeural && nn ? ' Controller: neural network.' : ' Controller: rule-based.')}
           </span>
         </div>
         <button className="tl-btn primary" disabled={!city} onClick={launch}>
@@ -491,6 +540,23 @@ export default function TryCity() {
         </button>
       </div>
     </div>
+  )
+}
+
+/** What the neural controller is, with its own held-out result when the model carries one. */
+function NeuralBlurb({ nn }) {
+  const meta = nn?.model?.meta
+  const t = meta?.test?.summary
+  const pct = (v) => `${v > 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}%`
+  return (
+    <>
+      A small neural network reads each junction’s queues and nudges its green
+      split, keeping the cycle length. It was trained by evolution strategies
+      on this same simulator across {meta?.split?.train?.length ?? 'many'} cities,
+      and loaded from {nn?.source ?? 'the site'}.
+      {t && ` On ${t.cities} cities it never saw in training, time stopped changed by `
+          + `${pct(t.nn_stopped_mean)}, against ${pct(t.rule_stopped_mean)} for the rule-based controller.`}
+    </>
   )
 }
 

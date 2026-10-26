@@ -185,5 +185,57 @@ console.log('sim: the comparison is only worth anything if the worlds start iden
         'nothing has been controlled yet, so there is nothing to differ')
 }
 
+// --- every phase change goes through a full amber ---------------------------
+// A controller once could end a phase with no amber by shortening the running
+// green below the time already elapsed, and a trained network learned to use
+// it. These pin the fix.
+{
+  const AMBER = 1
+  const w = createWorld(G, { vehicles: 60, seed: 3 })
+  const s = w.signals[0]
+  let guard = 0
+  while (!(s.state !== AMBER && s.t >= 20) && guard++ < 4000) w.step(0.25)
+  const phase = s.phase
+  // Cut the running green to 8 s -- well below the 20 s already elapsed.
+  w.applyPolicy({ [s.id]: phase === 0 ? [8, 48] : [48, 8] })
+  let amber = 0
+  let switched = false
+  for (let i = 0; i < 80 && !switched; i++) {
+    w.step(0.25)
+    if (s.phase !== phase) switched = true
+    else if (s.state === AMBER) amber += 0.25
+  }
+  check('a green cut short still ends through a full amber',
+        switched && amber >= s.amber - 1e-9, `${amber.toFixed(2)} s of amber before the switch`)
+
+  // A hostile controller: random splits every 4 s, everywhere. No phase may
+  // ever change without having been amber on the step before.
+  const h = createWorld(G, { vehicles: 120, seed: 11 })
+  const prev = new Map(h.signals.map((x) => [x.id, { phase: x.phase, state: x.state }]))
+  let r = 12345
+  const rnd = () => ((r = (r * 1103515245 + 12345) % 2147483648) / 2147483648)
+  let changes = 0
+  let skipped = 0
+  for (let i = 0; i < 2400; i++) {
+    h.step(0.25)
+    for (const x of h.signals) {
+      const p = prev.get(x.id)
+      if (x.phase !== p.phase) { changes++; if (p.state !== AMBER) skipped++ }
+      p.phase = x.phase; p.state = x.state
+    }
+    if (i % 16 === 0) {
+      const policy = {}
+      for (const x of h.signals) {
+        const c = x.greens[0] + x.greens[1]
+        const g0 = Math.round(c * (0.15 + 0.7 * rnd()))
+        policy[x.id] = [g0, c - g0]
+      }
+      h.applyPolicy(policy)
+    }
+  }
+  check('no phase ever changes without amber, under constant retiming',
+        changes > 0 && skipped === 0, `${skipped} of ${changes} changes skipped amber`)
+}
+
 console.log(`\n${failures === 0 ? 'all passed' : `${failures} FAILED`}`)
 process.exit(failures ? 1 : 0)

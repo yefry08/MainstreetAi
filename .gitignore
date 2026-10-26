@@ -87,3 +87,7 @@ web/dist-vercel/
 
 # Generated media from generate.py (large binaries, regenerable from prompts).
 media/generated/
+
+# Neural controller training scratch: checkpoints, logs, intermediate models.
+# The published model goes to Hugging Face and to web/public/models/.
+training/out/

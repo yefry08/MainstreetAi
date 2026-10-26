@@ -1414,3 +1414,6 @@
   .land { padding-top: calc(var(--space-4) * 2.5); }
   .land-stats dd { font-size: 19px; }
 }
+
+.land-card-note { margin: calc(var(--space-2) * -1) 0 var(--space-4); font-size: 11px; color: var(--ink-400); }
+
