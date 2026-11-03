@@ -10,6 +10,7 @@ import { createTwins, compare } from '../city/sim'
 import { cityPalette, startOrchestrator, proportionalPolicy } from '../city/orchestrator'
 import { neuralPolicy } from '../city/neural'
 import { loadSignalModel } from '../city/signalModel'
+import { TOMTOM_KEY, liveCongestion, vehiclesFor } from '../city/liveTraffic'
 import TrafficLoader from '../city/TrafficLoader'
 import CityCanvas from '../city/CityCanvas'
 import CityScene3D from '../city/CityScene3D'
@@ -68,6 +69,7 @@ const stepsFor = (city, withLlm) => [
   { key: 'osm', label: city?.live ? 'Downloading real streets from OpenStreetMap'
                                   : 'Loading the city’s real streets' },
   { key: 'graph', label: 'Placing the city’s traffic lights from the map' },
+  ...(TOMTOM_KEY ? [{ key: 'live', label: 'Reading live traffic on these streets (TomTom)' }] : []),
   ...(withLlm ? [{ key: 'palette', label: 'Your model picks the city’s palette' }] : []),
   { key: 'sim', label: 'Starting the two twin simulations' },
 ]
@@ -125,6 +127,7 @@ export default function TryCity({ cityParam = null, onCityParam }) {
   const [graph, setGraph] = useState(null)
   const [palette, setPalette] = useState(DEFAULT_PALETTE)
   const [twins, setTwins] = useState(null)
+  const [live, setLive] = useState(null)
   const [view, setView] = useState('ai')
   const [stats, setStats] = useState(null)
   const [hot, setHot] = useState([])
@@ -219,6 +222,16 @@ export default function TryCity({ cityParam = null, onCityParam }) {
       setGraph(g)
       setDetail(`${g.stats.edges} streets · ${g.stats.signals} junctions with traffic lights`)
 
+      // --- 2b. live traffic, if the site has a TomTom key ---------------------
+      // Sizes the fleet to how congested these streets are right now. Optional:
+      // no key or no answer means the street-length default, not a failed run.
+      let lv = null
+      if (TOMTOM_KEY) {
+        setStage('live'); setDetail('')
+        lv = await liveCongestion(g, g.signals, { signal: ac.signal, cacheKey: paramFor(city) })
+      }
+      setLive(lv)
+
       // --- 3. palette, only with the visitor's model ------------------------
       if (withLlm) {
         setStage('palette')
@@ -236,7 +249,8 @@ export default function TryCity({ cityParam = null, onCityParam }) {
 
       // --- 4. the twins -----------------------------------------------------
       setStage('sim')
-      const vehicles = Math.min(420, Math.max(90, Math.round(g.stats.km * 12)))
+      const base = Math.min(420, Math.max(90, Math.round(g.stats.km * 12)))
+      const vehicles = lv ? vehiclesFor(base, lv.ratio) : base
       const t = createTwins(g, { vehicles })
       setTwins(t)
       setView('ai')
@@ -419,6 +433,18 @@ export default function TryCity({ cityParam = null, onCityParam }) {
             <button className="tl-btn" onClick={reset}>Another city</button>
           </div>
         </div>
+
+        {live && (
+          <p className="try-live">
+            <span className="try-live-dot" aria-hidden="true" />
+            <b>Live traffic now</b>: these streets are moving at {Math.round(live.currentKmh)} km/h,
+            {' '}{Math.round(live.ratio * 100)}% of their free-flow {Math.round(live.freeKmh)} km/h
+            {' '}({live.points} points, read at {live.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}).
+            {' '}Both twins carry a fleet sized to that congestion, so the comparison below is for
+            the traffic this city has right now. Sizing the fleet from speed is a rule of thumb, not a calibration.
+            {' '}<span className="try-fine">Traffic data © TomTom.</span>
+          </p>
+        )}
 
         {display !== 'map' && !fail3d
           ? <CityScene3D graph={graph} world={world} hotspots={hot} onFail={onFail3d}
