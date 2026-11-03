@@ -14,6 +14,7 @@ export const TABS = [
   { key: 'home', label: 'Barcelona', es: 'Barcelona' },
   { key: 'manhattan', label: 'Manhattan', es: 'Manhattan' },
   { key: 'yours', label: 'Your city', es: 'Tu ciudad' },
+  { key: 'transit', label: 'Transit', es: 'Transporte' },
   { key: 'how', label: 'How it works', es: 'Cómo funciona' },
   { key: 'research', label: 'Research', es: 'Investigación' },
   { key: 'contact', label: 'Contact', es: 'Contacto' },
@@ -77,7 +78,7 @@ export default function Navbar({
           {/* Lighting only means anything over a map. */}
           {/* Not on Your city either: it draws its own 2D canvas, which the
               lighting modes do not touch. */}
-          {tab !== 'contact' && tab !== 'research' && tab !== 'how' && tab !== 'yours' &&
+          {tab !== 'contact' && tab !== 'research' && tab !== 'how' && tab !== 'yours' && tab !== 'transit' &&
            tab !== 'landing' && (
             <div className="nav-light" role="group" aria-label="Lighting">
               {MODES.map((m) => (

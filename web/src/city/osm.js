@@ -69,9 +69,11 @@ out body geom;`
  * nothing.
  */
 export function fetchCity(bbox, {
-  signal, onProgress, headers = {}, hedgeMs = 6000, timeoutMs = 120000,
+  signal, onProgress, headers = {}, hedgeMs = 6000, timeoutMs = 120000, ql,
 } = {}) {
-  const body = `data=${encodeURIComponent(query(bbox))}`
+  // `ql` replaces the street query (scripts/bake-transit.mjs asks for stops,
+  // routes and homes instead) while keeping the mirror fallback.
+  const body = `data=${encodeURIComponent(ql ?? query(bbox))}`
 
   return new Promise((resolve, reject) => {
     const inflight = []

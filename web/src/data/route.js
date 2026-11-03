@@ -7,6 +7,7 @@
  *   #/your-city                the city picker
  *   #/your-city/lima           Lima, analysed on open
  *   #/your-city/@-0.18,-78.47,Quito   any searched place, by coordinates
+ *   #/transit/pristina          bus coverage and route-review flags
  *   #/how-it-works  #/research  #/contact
  *
  * WHY THIS EXISTS
@@ -21,15 +22,17 @@
  */
 const TAB_PATH = {
   landing: '', home: 'barcelona', manhattan: 'manhattan', yours: 'your-city',
-  how: 'how-it-works', research: 'research', contact: 'contact',
+  how: 'how-it-works', research: 'research', contact: 'contact', transit: 'transit',
 }
+// Tabs that take a city after the slash: #/your-city/lima, #/transit/pristina.
+const CITY_TABS = new Set(['yours', 'transit'])
 const PATH_TAB = Object.fromEntries(Object.entries(TAB_PATH).map(([k, v]) => [v, k]))
 
 export function parseHash(hash = window.location.hash) {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean)
   const tab = PATH_TAB[parts[0] ?? ''] ?? 'landing'
   let city = null
-  if (tab === 'yours' && parts[1]) {
+  if (CITY_TABS.has(tab) && parts[1]) {
     try { city = decodeURIComponent(parts.slice(1).join('/')) } catch { city = null }
   }
   return { tab, city }
