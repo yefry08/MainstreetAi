@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { MODES, LIGHTING } from '../pixel/lighting.js'
+import { useT } from '../i18n'
 
 /**
  * Top navigation: tabs, lighting, and the chrome toggle.
@@ -10,18 +11,19 @@ import { MODES, LIGHTING } from '../pixel/lighting.js'
  */
 
 export const TABS = [
-  { key: 'home', label: 'Barcelona' },
-  { key: 'manhattan', label: 'Manhattan' },
-  { key: 'yours', label: 'Your city' },
-  { key: 'how', label: 'How it works' },
-  { key: 'research', label: 'Research' },
-  { key: 'contact', label: 'Contact' },
+  { key: 'home', label: 'Barcelona', es: 'Barcelona' },
+  { key: 'manhattan', label: 'Manhattan', es: 'Manhattan' },
+  { key: 'yours', label: 'Your city', es: 'Tu ciudad' },
+  { key: 'how', label: 'How it works', es: 'Cómo funciona' },
+  { key: 'research', label: 'Research', es: 'Investigación' },
+  { key: 'contact', label: 'Contact', es: 'Contacto' },
 ]
 
 export default function Navbar({
-  tab, onTab, mode, onMode, chrome, onChrome,
+  tab, onTab, mode, onMode, chrome, onChrome, lang = 'en', onLang,
 }) {
   const [open, setOpen] = useState(false)
+  const tr = useT()
 
   // A tab change should close the mobile menu; leaving it open covers the very
   // thing the user just navigated to.
@@ -59,12 +61,19 @@ export default function Navbar({
               className={`nav-tab ${tab === t.key ? 'on' : ''}`}
               onClick={() => onTab?.(t.key)}
             >
-              {t.label}
+              {lang === 'es' ? t.es : t.label}
             </button>
           ))}
         </nav>
 
         <div className="nav-right">
+          <div className="nav-lang" role="group" aria-label={tr('Language', 'Idioma')}>
+            {[['es', 'ES'], ['en', 'EN']].map(([l, label]) => (
+              <button key={l} className={lang === l ? 'on' : ''} aria-pressed={lang === l}
+                      onClick={() => onLang?.(l)}>{label}</button>
+            ))}
+          </div>
+
           {/* Lighting only means anything over a map. */}
           {/* Not on Your city either: it draws its own 2D canvas, which the
               lighting modes do not touch. */}
@@ -88,9 +97,9 @@ export default function Navbar({
             <button
               className={`nav-chrome ${chrome ? '' : 'off'}`}
               onClick={() => onChrome?.(!chrome)}
-              title={chrome ? 'Hide panels for a clean view' : 'Show panels'}
+              title={chrome ? tr('Hide panels for a clean view', 'Ocultar paneles para ver limpio') : tr('Show panels', 'Mostrar paneles')}
             >
-              {chrome ? 'Hide panels' : 'Show panels'}
+              {chrome ? tr('Hide panels', 'Ocultar paneles') : tr('Show panels', 'Mostrar paneles')}
             </button>
           )}
         </div>

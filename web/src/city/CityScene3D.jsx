@@ -69,9 +69,12 @@ function pixelPaint(layer) {
     if (/water/.test(id)) return { 'fill-color': '#3d7fc4' }
     if (/wood|forest|park|grass|landcover/.test(id)) return { 'fill-color': '#3f7a33' }
     if (/residential|landuse/.test(id)) return { 'fill-color': '#5d9548' }
+    if (/aeroway/.test(id)) return { 'fill-color': '#7a7a72' }
   }
   if (layer.type === 'line') {
     if (/water/.test(id)) return { 'line-color': '#3d7fc4' }
+    // Runways were left near-black from the dark style: thick black bars.
+    if (/aeroway/.test(id)) return { 'line-color': '#9a998f' }
     if (/casing/.test(id)) return { 'line-color': '#3c3c38' }
     if (/highway|road|street|bridge|tunnel/.test(id)) return { 'line-color': '#8c8b84' }
     if (/rail/.test(id)) return { 'line-color': '#6d5a4a' }
@@ -300,6 +303,11 @@ export default function CityScene3D({ graph, world, hotspots = [], onFail, pixel
   // Pixel mode on and off, on the live map.
   useEffect(() => {
     const map = mapRef.current
+    // The class is toggled here, never through React's className: MapLibre adds
+    // its own `maplibregl-map` class to this element, and a React re-render
+    // that rewrote the attribute dropped it -- the canvas lost its positioning
+    // and spilled over the whole page.
+    ref.current?.classList.toggle('pixel', pixel)
     if (!map || !styleReady) return
     if (!pixel && savedPaint.current.size === 0) return   // never switched on
     setPixelMode(map, pixel, savedPaint.current)
@@ -326,7 +334,7 @@ export default function CityScene3D({ graph, world, hotspots = [], onFail, pixel
   }, [hotKey, graph])
 
   return (
-    <div className={`city-3d ${pixel ? 'pixel' : ''}`} ref={ref} role="img"
+    <div className="city-3d" ref={ref} role="img"
          aria-label="3D view of the city: real buildings, with the simulated traffic and traffic lights." />
   )
 }

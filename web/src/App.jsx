@@ -11,6 +11,7 @@ import HowItWorks from './ui/HowItWorks'
 // second request in front of the first paint.
 import Landing from './ui/Landing'
 import { parseHash, toHash } from './data/route'
+import { LangContext, initialLang, saveLang } from './i18n'
 
 
 import LiveCity from './ui/LiveCity'
@@ -79,6 +80,9 @@ export default function App() {
   // The city named in the address, for Your city: a ready-made slug or an
   // "@lat,lon,Name" place. TryCity opens and analyses it.
   const [cityParam, setCityParam] = useState(() => parseHash().city)
+  const [lang, setLang] = useState(initialLang)
+  useEffect(() => { document.documentElement.lang = lang }, [lang])
+  const onLang = useCallback((l) => { setLang(l); saveLang(l) }, [])
 
   // Back and Forward move between tabs instead of leaving the site.
   useEffect(() => {
@@ -209,6 +213,7 @@ export default function App() {
   }, [tab, map])
 
   return (
+    <LangContext.Provider value={lang}>
     <div className={`app ${chrome ? '' : 'bare'}`}>
       {/* The 3D hero stays mounted across tabs: re-initialising MapLibre means
           re-fetching tiles and rebuilding every three.js buffer, which is a
@@ -242,6 +247,7 @@ export default function App() {
         tab={tab} onTab={onTab}
         mode={mode} onMode={setMode}
         chrome={chrome} onChrome={setChrome}
+        lang={lang} onLang={onLang}
       />
 
       {isScene && (
@@ -294,7 +300,7 @@ export default function App() {
 
       {tab === 'yours' && (
         <div className="page-layer">
-          <Suspense fallback={<p className="page-loading">Loading…</p>}>
+          <Suspense fallback={<p className="page-loading">{lang === 'es' ? 'Cargando…' : 'Loading…'}</p>}>
             <TryCity cityParam={cityParam} onCityParam={onCityParam} />
           </Suspense>
         </div>
@@ -316,5 +322,6 @@ export default function App() {
         </div>
       )}
     </div>
+    </LangContext.Provider>
   )
 }

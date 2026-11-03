@@ -14,6 +14,7 @@ import { LIVE_TRAFFIC, liveTraffic, vehiclesFor } from '../city/liveTraffic'
 import TrafficLoader from '../city/TrafficLoader'
 import CityCanvas from '../city/CityCanvas'
 import CityScene3D from '../city/CityScene3D'
+import { useT } from '../i18n'
 
 /**
  * "Your city": analyse and improve the traffic of any city.
@@ -65,20 +66,26 @@ const DECIDE_EVERY_S = 4
 const SETTLE_S = 90
 const HOTSPOTS = 5
 
-const stepsFor = (city, withLlm) => [
-  { key: 'osm', label: city?.live ? 'Downloading real streets from OpenStreetMap'
-                                  : 'Loading the city’s real streets' },
-  { key: 'graph', label: 'Placing the city’s traffic lights from the map' },
-  ...(LIVE_TRAFFIC ? [{ key: 'live', label: 'Reading live traffic on these streets' }] : []),
-  ...(withLlm ? [{ key: 'palette', label: 'Your model picks the city’s palette' }] : []),
-  { key: 'sim', label: 'Starting the two twin simulations' },
+const stepsFor = (city, withLlm, tr) => [
+  { key: 'osm', label: city?.live ? tr('Downloading real streets from OpenStreetMap', 'Descargando las calles reales de OpenStreetMap')
+                                  : tr('Loading the city’s real streets', 'Cargando las calles reales de la ciudad') },
+  { key: 'graph', label: tr('Placing the city’s traffic lights from the map', 'Colocando los semáforos de la ciudad según el mapa') },
+  ...(LIVE_TRAFFIC ? [{ key: 'live', label: tr('Reading live traffic on these streets', 'Leyendo el tráfico en vivo de estas calles') }] : []),
+  ...(withLlm ? [{ key: 'palette', label: tr('Your model picks the city’s palette', 'Tu modelo elige los colores de la ciudad') }] : []),
+  { key: 'sim', label: tr('Starting the two twin simulations', 'Arrancando las dos simulaciones gemelas') },
 ]
+
+const REGION_ES = {
+  'Latin America': 'América Latina', 'North America': 'Norteamérica', 'Europe': 'Europa',
+  'Asia & Oceania': 'Asia y Oceanía', 'Africa': 'África',
+}
 
 // What goes in the address for a city: its slug if ready-made, else its
 // coordinates and name.
 const paramFor = (c) => (c.live ? placeParam(c) : citySlug(c))
 
 export default function TryCity({ cityParam = null, onCityParam }) {
+  const tr = useT()
   const [phase, setPhase] = useState('pick')         // pick | loading | running
   const [city, setCity] = useState(null)
 
@@ -215,12 +222,14 @@ export default function TryCity({ cityParam = null, onCityParam }) {
       setStage('graph'); setDetail('')
       const g = buildGraph(osm, bbox(city))
       if (g.stats.signals < 3) {
-        throw new Error(`Only ${g.stats.signals} junctions with traffic lights were found ` +
-          'around this point — too few for signal timing to matter. Try a denser ' +
-          'city centre.')
+        throw new Error(tr(`Only ${g.stats.signals} junctions with traffic lights were found ` +
+          'around this point — too few for signal timing to matter. Try a denser city centre.',
+          `Solo se encontraron ${g.stats.signals} cruces con semáforo cerca de este punto: ` +
+          'muy pocos para que el horario de los semáforos importe. Prueba un centro más denso.'))
       }
       setGraph(g)
-      setDetail(`${g.stats.edges} streets · ${g.stats.signals} junctions with traffic lights`)
+      setDetail(tr(`${g.stats.edges} streets · ${g.stats.signals} junctions with traffic lights`,
+                   `${g.stats.edges} calles · ${g.stats.signals} cruces con semáforo`))
 
       // --- 2b. live traffic, if the site has a Mapbox or TomTom key ----------
       // Sizes the fleet to how congested these streets are right now. Optional:
@@ -339,7 +348,7 @@ export default function TryCity({ cityParam = null, onCityParam }) {
     } catch (err) {
       if (err.name !== 'AbortError') setError(err.message)
     }
-  }, [city, llm, llmOn, nn, useNeural, onCityParam])
+  }, [city, llm, llmOn, nn, useNeural, onCityParam]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- opening a city from the address ----------------------------------
   // A link like #/your-city/lima opens Lima and runs the analysis. The run is
@@ -371,18 +380,18 @@ export default function TryCity({ cityParam = null, onCityParam }) {
     } catch {
       // Clipboard can be refused (permissions, http). The address bar already
       // holds the link, so say where it is instead of failing silently.
-      window.prompt('Copy this link:', window.location.href)
+      window.prompt(tr('Copy this link:', 'Copia este enlace:'), window.location.href)
     }
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------------------------------------------- loading
   if (phase === 'loading' || (phase === 'running' && error)) {
     return (
       <div className="try-page">
         <TrafficLoader
-          stage={stage} steps={stepsFor(city, runLlm)}
+          stage={stage} steps={stepsFor(city, runLlm, tr)}
           detail={detail} error={error}
           onRetry={launch} onCancel={reset}
         />
@@ -404,19 +413,20 @@ export default function TryCity({ cityParam = null, onCityParam }) {
           <div>
             <h1>{city.flag ?? '📍'} {city.name}</h1>
             <p className="try-run-sub">
-              {s.edges} streets · {s.signals} of {s.junctions} junctions with traffic lights ·
-              {' '}{world.fleet.length} vehicles ·
-              {' '}<span className="try-source">{source === 'ready-made' ? 'ready-made streets' : 'streets downloaded live'}</span>
+              {tr(`${s.edges} streets · ${s.signals} of ${s.junctions} junctions with traffic lights · ${world.fleet.length} vehicles`,
+                  `${s.edges} calles · ${s.signals} de ${s.junctions} cruces con semáforo · ${world.fleet.length} vehículos`)} ·
+              {' '}<span className="try-source">{source === 'ready-made' ? tr('ready-made streets', 'calles incluidas') : tr('streets downloaded live', 'calles descargadas en vivo')}</span>
             </p>
           </div>
           <div className="try-run-actions">
-            <div className="try-switch" role="group" aria-label="Which twin to show">
-              {[['fixed', 'Today: fixed timing'], ['ai', runLlm ? 'Your model' : runNeural ? 'Neural network' : 'Adaptive']].map(([k, label]) => (
+            <div className="try-switch" role="group" aria-label={tr('Which twin to show', 'Qué gemelo mostrar')}>
+              {[['fixed', tr('Today: fixed timing', 'Hoy: horario fijo')],
+                ['ai', runLlm ? tr('Your model', 'Tu modelo') : runNeural ? tr('Neural network', 'Red neuronal') : tr('Adaptive', 'Adaptativo')]].map(([k, label]) => (
                 <button key={k} className={view === k ? 'on' : ''} onClick={() => setView(k)}>{label}</button>
               ))}
             </div>
-            <div className="try-switch" role="group" aria-label="View">
-              {[['3d', '3D'], ['pixel', 'Pixel'], ['map', 'Map']].map(([v, label]) => {
+            <div className="try-switch" role="group" aria-label={tr('View', 'Vista')}>
+              {[['3d', '3D'], ['pixel', 'Pixel'], ['map', tr('Map', 'Mapa')]].map(([v, label]) => {
                 const shown = fail3d ? 'map' : display
                 return (
                   <button key={v} className={shown === v ? 'on' : ''}
@@ -424,30 +434,35 @@ export default function TryCity({ cityParam = null, onCityParam }) {
                 )
               })}
             </div>
-            <div className="try-switch" role="group" aria-label="Simulation speed">
+            <div className="try-switch" role="group" aria-label={tr('Simulation speed', 'Velocidad de la simulación')}>
               {[1, 4, 10].map((n) => (
                 <button key={n} className={speed === n ? 'on' : ''} onClick={() => setSpeed(n)}>{n}×</button>
               ))}
             </div>
-            <button className="tl-btn" onClick={copyLink}>{copied ? 'Link copied ✓' : 'Copy link'}</button>
-            <button className="tl-btn" onClick={reset}>Another city</button>
+            <button className="tl-btn" onClick={copyLink}>{copied ? tr('Link copied ✓', 'Enlace copiado ✓') : tr('Copy link', 'Copiar enlace')}</button>
+            <button className="tl-btn" onClick={reset}>{tr('Another city', 'Otra ciudad')}</button>
           </div>
         </div>
 
         {live && (
           <p className="try-live">
             <span className="try-live-dot" aria-hidden="true" />
-            <b>Live traffic now</b>
-            {live.provider === 'mapbox'
-              ? <>: of {live.km.toFixed(0)} km of road here, {Math.round((live.shares.moderate + live.shares.heavy + live.shares.severe) * 100)}% is
-                  {' '}congested ({Math.round(live.shares.heavy * 100 + live.shares.severe * 100)}% heavy or severe);
-                  {' '}estimated speed ~{Math.round(live.ratio * 100)}% of free flow</>
-              : <>: these streets are moving at {Math.round(live.currentKmh)} km/h,
-                  {' '}{Math.round(live.ratio * 100)}% of their free-flow {Math.round(live.freeKmh)} km/h ({live.points} points)</>}
-            {' '}· read at {live.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} your time.
-            {' '}Both twins carry a fleet sized to that congestion, so the comparison below is for
-            the traffic this city has right now. Sizing the fleet from congestion is a rule of thumb, not a calibration.
-            {' '}<span className="try-fine">Traffic data © {live.provider === 'mapbox' ? 'Mapbox' : 'TomTom'}.</span>
+            <b>{tr('Live traffic now', 'Tráfico en vivo ahora')}</b>
+            {(() => {
+              const pc = (v) => Math.round(v * 100)
+              const at = live.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              if (live.provider === 'mapbox') {
+                const jam = pc(live.shares.moderate + live.shares.heavy + live.shares.severe)
+                const bad = pc(live.shares.heavy + live.shares.severe)
+                return tr(`: of ${live.km.toFixed(0)} km of road here, ${jam}% is congested (${bad}% heavy or severe); estimated speed ~${pc(live.ratio)}% of free flow · read at ${at} your time.`,
+                          `: de ${live.km.toFixed(0)} km de calles aquí, el ${jam}% está congestionado (${bad}% denso o severo); velocidad estimada ~${pc(live.ratio)}% de la normal · leído a las ${at} (tu hora).`)
+              }
+              return tr(`: these streets are moving at ${Math.round(live.currentKmh)} km/h, ${pc(live.ratio)}% of their free-flow ${Math.round(live.freeKmh)} km/h (${live.points} points) · read at ${at} your time.`,
+                        `: estas calles van a ${Math.round(live.currentKmh)} km/h, el ${pc(live.ratio)}% de sus ${Math.round(live.freeKmh)} km/h sin tráfico (${live.points} puntos) · leído a las ${at} (tu hora).`)
+            })()}
+            {' '}{tr('Both twins carry a fleet sized to that congestion, so the comparison below is for the traffic this city has right now. Sizing the fleet from congestion is a rule of thumb, not a calibration.',
+                     'Los dos gemelos llevan una flota ajustada a esa congestión, así que la comparación de abajo es para el tráfico que la ciudad tiene ahora mismo. Ajustar la flota a la congestión es una regla aproximada, no una calibración.')}
+            {' '}<span className="try-fine">{tr('Traffic data', 'Datos de tráfico')} © {live.provider === 'mapbox' ? 'Mapbox' : 'TomTom'}.</span>
           </p>
         )}
 
@@ -458,18 +473,19 @@ export default function TryCity({ cityParam = null, onCityParam }) {
         {fail3d && <p className="try-fine">{fail3d}</p>}
 
         <p className="try-clock">
-          Simulated {fmtTime(simTime)}
-          {!settled && ' · measuring — the comparison settles after about a minute and a half'}
+          {tr('Simulated', 'Simulado')} {fmtTime(simTime)}
+          {!settled && tr(' · measuring — the comparison settles after about a minute and a half',
+                          ' · midiendo: la comparación se estabiliza en un minuto y medio')}
         </p>
 
         <div className="try-metrics">
-          <Metric label="Time spent stopped" unit=" min" settled={settled} d={stats.stopped}
+          <Metric label={tr('Time spent stopped', 'Tiempo detenido')} unit=" min" settled={settled} d={stats.stopped}
                   a={stats.ai.stoppedVehSeconds / 60} b={stats.fixed.stoppedVehSeconds / 60} />
-          <Metric label="Average speed" unit=" km/h" settled={settled} d={stats.avgSpeed}
+          <Metric label={tr('Average speed', 'Velocidad media')} unit=" km/h" settled={settled} d={stats.avgSpeed}
                   a={stats.ai.avgSpeedKmh} b={stats.fixed.avgSpeedKmh} digits={1} />
-          <Metric label="Junctions crossed" unit="" settled={settled} d={stats.arrivals}
+          <Metric label={tr('Junctions crossed', 'Cruces atravesados')} unit="" settled={settled} d={stats.arrivals}
                   a={stats.ai.arrivals} b={stats.fixed.arrivals} />
-          <Metric label="CO₂ per km driven" unit=" g" settled={settled} d={stats.co2}
+          <Metric label={tr('CO₂ per km driven', 'CO₂ por km recorrido')} unit=" g" settled={settled} d={stats.co2}
                   a={stats.ai.co2GramsPerKm} b={stats.fixed.co2GramsPerKm} />
         </div>
         {settled && stats.co2 && (() => {
@@ -481,49 +497,52 @@ export default function TryCity({ cityParam = null, onCityParam }) {
           return (
             <p className="try-co2">
               {savedKgH > 0
-                ? <>≈ <b>{savedKgH.toFixed(0)} kg of CO₂ avoided per hour</b> for the same distance driven
-                    in this ~2.5 km area, from fewer stops and less idling.</>
-                : <>No CO₂ saving per kilometre at this traffic level so far.</>}
-              {' '}Estimated with a power-based fuel model: the comparison is robust, the
-              absolute figures are an order of magnitude.
+                ? <>≈ <b>{tr(`${savedKgH.toFixed(0)} kg of CO₂ avoided per hour`, `${savedKgH.toFixed(0)} kg de CO₂ evitados por hora`)}</b>
+                    {' '}{tr('for the same distance driven in this ~2.5 km area, from fewer stops and less idling.',
+                             'para la misma distancia recorrida en esta zona de ~2,5 km, gracias a menos paradas y menos tiempo al ralentí.')}</>
+                : tr('No CO₂ saving per kilometre at this traffic level so far.', 'Por ahora no hay ahorro de CO₂ por kilómetro con este nivel de tráfico.')}
+              {' '}{tr('Estimated with a power-based fuel model: the comparison is robust, the absolute figures are an order of magnitude.',
+                       'Estimado con un modelo de consumo basado en potencia: la comparación es sólida; las cifras absolutas son un orden de magnitud.')}
             </p>
           )
         })()}
 
         <div className="try-analysis">
           <section className="try-hot">
-            <h2>Where traffic queues worst today</h2>
+            <h2>{tr('Where traffic queues worst today', 'Dónde se forman las peores colas hoy')}</h2>
             {hot.length ? (
               <ol>
                 {hot.map((h) => (
                   <li key={h.id}>
-                    Average queue <b className="base">{h.fixed.toFixed(1)}</b>
-                    {' '}<i aria-label="becomes">→</i>{' '}
-                    <b className="ai">{h.adaptive.toFixed(1)}</b> vehicles
+                    {tr('Average queue', 'Cola media')} <b className="base">{h.fixed.toFixed(1)}</b>
+                    {' '}<i aria-label={tr('becomes', 'pasa a')}>→</i>{' '}
+                    <b className="ai">{h.adaptive.toFixed(1)}</b> {tr('vehicles', 'vehículos')}
                   </li>
                 ))}
               </ol>
-            ) : <p>Collecting queue data…</p>}
+            ) : <p>{tr('Collecting queue data…', 'Recogiendo datos de colas…')}</p>}
             <p className="try-hot-note">
-              Numbered on the map. Left: fixed timing, as the city runs now.
-              Right: the same junction under {runLlm ? 'your model' : runNeural ? 'the neural network' : 'adaptive control'}.
+              {tr('Numbered on the map. Left: fixed timing, as the city runs now. Right: the same junction under ',
+                  'Numerados en el mapa. Izquierda: horario fijo, como funciona hoy la ciudad. Derecha: el mismo cruce con ')}
+              {runLlm ? tr('your model', 'tu modelo') : runNeural ? tr('the neural network', 'la red neuronal') : tr('adaptive control', 'control adaptativo')}.
             </p>
           </section>
 
           <section className="try-ctl">
-            <h2>{runLlm ? `Controller: your model (${PROVIDERS[llm.provider].label})`
-              : runNeural ? 'Controller: neural network' : 'Controller: built-in adaptive'}</h2>
+            <h2>{tr('Controller', 'Controlador')}: {runLlm ? `${tr('your model', 'tu modelo')} (${PROVIDERS[llm.provider].label})`
+              : runNeural ? tr('neural network', 'red neuronal') : tr('built-in adaptive', 'adaptativo integrado')}</h2>
             <p>
-              {runLlm ? 'Reads the queue on each arm of the busiest junctions and returns new green times.'
+              {runLlm ? tr('Reads the queue on each arm of the busiest junctions and returns new green times.',
+                           'Lee la cola de cada acceso de los cruces más cargados y devuelve nuevos tiempos de verde.')
                 : runNeural ? <NeuralBlurb nn={nn} />
-                : 'Every few seconds it finds junctions with a real imbalance between their two directions and moves green time towards the longer queue, keeping each cycle the same length.'}
+                : tr('Every few seconds it finds junctions with a real imbalance between their two directions and moves green time towards the longer queue, keeping each cycle the same length.',
+                     'Cada pocos segundos busca cruces con un desequilibrio real entre sus dos direcciones y da más verde a la cola más larga, sin cambiar la duración del ciclo.')}
             </p>
-            <p className="try-ctl-count">{ctl.retimes} {ctl.retimes === 1 ? 'retiming' : 'retimings'} · {ctl.checks} {ctl.checks === 1 ? 'check' : 'checks'}</p>
+            <p className="try-ctl-count">{ctl.retimes} {ctl.retimes === 1 ? tr('retiming', 'ajuste') : tr('retimings', 'ajustes')} · {ctl.checks} {ctl.checks === 1 ? tr('check', 'revisión') : tr('checks', 'revisiones')}</p>
             {quiet && (
               <p className="try-ctl-quiet">
-                Little to fix here. Traffic at these junctions is light or evenly
-                balanced, so the controller is mostly leaving timings alone —
-                which is the right call, and why the numbers above barely move.
+                {tr('Little to fix here. Traffic at these junctions is light or evenly balanced, so the controller is mostly leaving timings alone — which is the right call, and why the numbers above barely move.',
+                    'Poco que arreglar aquí. El tráfico en estos cruces es ligero o está equilibrado, así que el controlador casi no toca los tiempos: es lo correcto, y por eso los números de arriba apenas se mueven.')}
               </p>
             )}
             {runLlm && aiLog.length > 0 && <ul>{aiLog.map((l, i) => <li key={i}>{l}</li>)}</ul>}
@@ -532,30 +551,22 @@ export default function TryCity({ cityParam = null, onCityParam }) {
 
         {s.estimatedSignals && (
           <p className="try-warn">
-            OpenStreetMap has almost no traffic lights mapped here, so their
-            positions are <b>estimated</b> (every junction of three or more
-            streets). Treat this run as illustrative of the method rather than
-            of this city’s actual signals.
+            {tr('OpenStreetMap has almost no traffic lights mapped here, so their positions are ', 'OpenStreetMap casi no tiene semáforos mapeados aquí, así que sus posiciones son ')}
+            <b>{tr('estimated', 'estimadas')}</b>
+            {tr(' (every junction of three or more streets). Treat this run as illustrative of the method rather than of this city’s actual signals.',
+                ' (cada cruce de tres o más calles). Toma esta simulación como una ilustración del método, no de los semáforos reales de la ciudad.')}
           </p>
         )}
 
         <p className="try-note">
-          <b>What is real.</b> The streets, their lanes, speed limits and one-way
-          rules, and where the traffic lights are, all come from OpenStreetMap
-          (© OpenStreetMap contributors, ODbL). Both twins carry the same vehicles
-          on the same streets from the same seed; the only difference is who
-          times the lights.
+          <b>{tr('What is real.', 'Qué es real.')}</b>{' '}
+          {tr('The streets, their lanes, speed limits and one-way rules, and where the traffic lights are, all come from OpenStreetMap (© OpenStreetMap contributors, ODbL). Both twins carry the same vehicles on the same streets from the same seed; the only difference is who times the lights.',
+              'Las calles, sus carriles, límites de velocidad y sentidos, y dónde están los semáforos vienen de OpenStreetMap (© colaboradores de OpenStreetMap, ODbL). Los dos gemelos llevan los mismos vehículos por las mismas calles con la misma semilla; la única diferencia es quién programa los semáforos.')}
         </p>
         <p className="try-note">
-          <b>What is simplified.</b> Vehicles follow random routes rather than
-          measured trips, so this shows how adaptive timing behaves on this
-          city’s network, not a forecast of its real traffic. The rule-based
-          controller, measured on all 37 ready-made cities with three runs
-          each, cut time stopped in 24 of them and made none measurably worse
-          (mean −16%). The neural network was tested on 10 cities it never saw
-          in training; its result is shown with the controller above. Average
-          speed moves little either way: most of a trip is driving, not
-          waiting at a light.
+          <b>{tr('What is simplified.', 'Qué está simplificado.')}</b>{' '}
+          {tr('Vehicles follow random routes rather than measured trips, so this shows how adaptive timing behaves on this city’s network, not a forecast of its real traffic. The rule-based controller, measured on all 37 ready-made cities with three runs each, cut time stopped in 24 of them and made none measurably worse (mean −16%). The neural network was tested on 10 cities it never saw in training; its result is shown with the controller above. Average speed moves little either way: most of a trip is driving, not waiting at a light.',
+              'Los vehículos siguen rutas aleatorias, no viajes medidos, así que esto muestra cómo se comportan los semáforos adaptativos en la red de esta ciudad, no un pronóstico de su tráfico real. El controlador por reglas, medido en las 37 ciudades incluidas con tres simulaciones cada una, redujo el tiempo detenido en 24 y no empeoró ninguna de forma medible (media −16%). La red neuronal se probó en 10 ciudades que nunca vio al entrenar; su resultado aparece arriba, con el controlador. La velocidad media cambia poco: la mayor parte de un viaje es conducir, no esperar en un semáforo.')}
         </p>
       </div>
     )
@@ -565,24 +576,22 @@ export default function TryCity({ cityParam = null, onCityParam }) {
   return (
     <div className="try-page">
       <header className="try-head">
-        <h1>Your city</h1>
+        <h1>{tr('Your city', 'Tu ciudad')}</h1>
         <p>
-          Pick any city. MainstreetAi loads its real streets and traffic lights,
-          runs two identical traffic simulations, and lets an adaptive controller
-          time the lights in one of them — so you can see where traffic queues
-          and how much adaptive signal timing helps. No account and no key needed.
+          {tr('Pick any city. MainstreetAi loads its real streets and traffic lights, runs two identical traffic simulations, and lets an adaptive controller time the lights in one of them — so you can see where traffic queues and how much adaptive signal timing helps. No account and no key needed.',
+              'Elige cualquier ciudad. MainstreetAi carga sus calles y semáforos reales, ejecuta dos simulaciones de tráfico idénticas y deja que un controlador adaptativo programe los semáforos en una de ellas, para que veas dónde se forman colas y cuánto ayudan los semáforos adaptativos. Sin cuenta y sin clave.')}
         </p>
       </header>
 
       <section className="try-step">
-        <h2>Search for a place</h2>
+        <h2>{tr('Search for a place', 'Busca un lugar')}</h2>
         <form className="try-search" onSubmit={search}>
           <input
             type="search" value={query} onChange={(e) => setQuery(e.target.value)}
-            placeholder="City, district or address — e.g. Valencia, Medellín, Shibuya"
-            aria-label="Search for a place" autoComplete="off" />
+            placeholder={tr('City, district or address — e.g. Valencia, Medellín, Shibuya', 'Ciudad, barrio o dirección — p. ej. Valencia, Medellín, Shibuya')}
+            aria-label={tr('Search for a place', 'Busca un lugar')} autoComplete="off" />
           <button className="tl-btn" type="submit" disabled={searching || query.trim().length < 2}>
-            {searching ? 'Searching…' : 'Search'}
+            {searching ? tr('Searching…', 'Buscando…') : tr('Search', 'Buscar')}
           </button>
         </form>
         {searchError && <p className="try-search-error">{searchError}</p>}
@@ -597,27 +606,27 @@ export default function TryCity({ cityParam = null, onCityParam }) {
                 </li>
               ))}
             </ul>
-          ) : <p className="try-search-error">No places found for “{query}”.</p>
+          ) : <p className="try-search-error">{tr('No places found for', 'No se encontraron lugares para')} “{query}”.</p>
         )}
         <p className="try-fine">
-          Search uses OpenStreetMap’s Nominatim; only the text you type is sent.
-          The area analysed is about 2.5 km across, centred on the place you pick.
+          {tr('Search uses OpenStreetMap’s Nominatim; only the text you type is sent. The area analysed is about 2.5 km across, centred on the place you pick.',
+              'La búsqueda usa Nominatim de OpenStreetMap; solo se envía el texto que escribes. La zona analizada mide unos 2,5 km, centrada en el lugar que elijas.')}
         </p>
       </section>
 
       <section className="try-step">
-        <h2>Or open a ready-made city <em>instant, works offline</em></h2>
-        {ready === null && <p className="try-fine">Loading the list…</p>}
+        <h2>{tr('Or open a ready-made city', 'O abre una ciudad incluida')} <em>{tr('instant, works offline', 'al instante, sin conexión')}</em></h2>
+        {ready === null && <p className="try-fine">{tr('Loading the list…', 'Cargando la lista…')}</p>}
         {byRegion(readyCities).map(({ region, cities }) => (
           <div key={region} className="try-region">
-            <h3>{region} <em>{cities.length}</em></h3>
+            <h3>{tr(region, REGION_ES[region] ?? region)} <em>{cities.length}</em></h3>
             <div className="try-chips">
               {cities.map((c) => {
                 const info = ready ? ready.get(citySlug(c)) : null
                 return (
                   <button key={citySlug(c)} className={`try-chip ${city === c ? 'on' : ''}`}
                           onClick={() => setCity(c)}
-                          title={info ? `${info.signals} junctions with traffic lights` : undefined}>
+                          title={info ? tr(`${info.signals} junctions with traffic lights`, `${info.signals} cruces con semáforo`) : undefined}>
                     <span className="flag">{c.flag}</span>{c.name}
                     {c.capital && <i className="try-cap" aria-label="capital" title="Capital">★</i>}
                   </button>
@@ -629,24 +638,25 @@ export default function TryCity({ cityParam = null, onCityParam }) {
       </section>
 
       <section className="try-step">
-        <h2>Controller</h2>
-        <div className="try-ctl-pick" role="radiogroup" aria-label="Signal controller">
+        <h2>{tr('Controller', 'Controlador')}</h2>
+        <div className="try-ctl-pick" role="radiogroup" aria-label={tr('Signal controller', 'Controlador de semáforos')}>
           <label className={useNeural && nn ? 'on' : ''}>
             <input type="radio" name="ctl" checked={!!(useNeural && nn)} disabled={!nn}
                    onChange={() => setUseNeural(true)} />
             <span>
-              <b>Neural network</b>
-              <em>{nn === undefined ? 'loading…'
-                : nn ? `trained on ${nn.model.meta?.split?.train?.length ?? 'many'} cities · from ${nn.source}`
-                : 'could not be loaded — using rule-based'}</em>
+              <b>{tr('Neural network', 'Red neuronal')}</b>
+              <em>{nn === undefined ? tr('loading…', 'cargando…')
+                : nn ? tr(`trained on ${nn.model.meta?.split?.train?.length ?? 'many'} cities · from ${nn.source}`,
+                          `entrenada en ${nn.model.meta?.split?.train?.length ?? 'muchas'} ciudades · desde ${nn.source}`)
+                : tr('could not be loaded — using rule-based', 'no se pudo cargar: se usa el de reglas')}</em>
             </span>
           </label>
           <label className={!(useNeural && nn) ? 'on' : ''}>
             <input type="radio" name="ctl" checked={!(useNeural && nn)}
                    onChange={() => setUseNeural(false)} />
             <span>
-              <b>Rule-based</b>
-              <em>proportional green splits</em>
+              <b>{tr('Rule-based', 'Por reglas')}</b>
+              <em>{tr('proportional green splits', 'reparto proporcional del verde')}</em>
             </span>
           </label>
         </div>
@@ -655,34 +665,35 @@ export default function TryCity({ cityParam = null, onCityParam }) {
       <section className="try-step">
         <details className="try-byo" open={llmOn}>
           <summary onClick={(e) => { e.preventDefault(); setLlmOn((v) => !v) }}>
-            Use your own AI model as the controller <em>optional</em>
+            {tr('Use your own AI model as the controller', 'Usa tu propio modelo de IA como controlador')} <em>{tr('optional', 'opcional')}</em>
           </summary>
           <p className="try-keynote">
-            <b>Your key is not stored.</b> It lives only in this tab’s memory and
-            goes straight from your browser to the provider you pick — this site
-            is static and has no server of its own. Use a key with a spending
-            limit: it is the one protection that does not depend on trusting us.
+            <b>{tr('Your key is not stored.', 'Tu clave no se guarda.')}</b>{' '}
+            {tr('It lives only in this tab’s memory and goes straight from your browser to the provider you pick — this site is static and has no server of its own. Use a key with a spending limit: it is the one protection that does not depend on trusting us.',
+                'Vive solo en la memoria de esta pestaña y va directo de tu navegador al proveedor que elijas: este sitio es estático y no tiene servidor propio. Usa una clave con límite de gasto: es la única protección que no depende de confiar en nosotros.')}
           </p>
           <KeyCard
-            title="Signal controller"
-            what="Your model reads the queues at the busiest junctions and returns green times, in place of the built-in controller. It also picks the city's colours."
+            title={tr('Signal controller', 'Controlador de semáforos')}
+            what={tr("Your model reads the queues at the busiest junctions and returns green times, in place of the built-in controller. It also picks the city's colours.",
+                     'Tu modelo lee las colas de los cruces más cargados y devuelve los tiempos de verde, en lugar del controlador integrado. También elige los colores de la ciudad.')}
             cfg={llm} onChange={setLlm} />
         </details>
       </section>
 
       <div className="try-go glass">
         <div>
-          <b>{city ? `${city.flag ?? '📍'} ${city.name}` : 'No city selected yet'}</b>
+          <b>{city ? `${city.flag ?? '📍'} ${city.name}` : tr('No city selected yet', 'Aún no has elegido ciudad')}</b>
           <span>
-            {!city ? 'Search for a place or pick a ready-made city.'
-              : city.live ? `${city.label}. Its streets are downloaded live from OpenStreetMap, which can take up to a minute.`
-              : 'Ready-made: opens instantly.'}
-            {city && (llmOn && llm.key.trim() ? ' Controller: your model.'
-              : useNeural && nn ? ' Controller: neural network.' : ' Controller: rule-based.')}
+            {!city ? tr('Search for a place or pick a ready-made city.', 'Busca un lugar o elige una ciudad incluida.')
+              : city.live ? tr(`${city.label}. Its streets are downloaded live from OpenStreetMap, which can take up to a minute.`,
+                               `${city.label}. Sus calles se descargan en vivo de OpenStreetMap, lo que puede tardar hasta un minuto.`)
+              : tr('Ready-made: opens instantly.', 'Incluida: se abre al instante.')}
+            {city && (llmOn && llm.key.trim() ? tr(' Controller: your model.', ' Controlador: tu modelo.')
+              : useNeural && nn ? tr(' Controller: neural network.', ' Controlador: red neuronal.') : tr(' Controller: rule-based.', ' Controlador: por reglas.'))}
           </span>
         </div>
         <button className="tl-btn primary" disabled={!city} onClick={launch}>
-          Analyse traffic
+          {tr('Analyse traffic', 'Analizar tráfico')}
         </button>
       </div>
     </div>
@@ -691,21 +702,21 @@ export default function TryCity({ cityParam = null, onCityParam }) {
 
 /** What the neural controller is, with its own held-out result when the model carries one. */
 function NeuralBlurb({ nn }) {
+  const tr = useT()
   const meta = nn?.model?.meta
   const t = meta?.test?.summary
   const pct = (v) => `${v > 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}%`
+  const n = meta?.split?.train?.length
   return (
     <>
-      A small neural network reads each junction’s queues and nudges its green
-      split, keeping the cycle length. It was trained by evolution strategies
-      on this same simulator across {meta?.split?.train?.length ?? 'many'} cities,
-      and loaded from {nn?.source ?? 'the site'}.
-      {t && ` On ${t.cities} cities it never saw in training, time stopped changed by `
-          + `${pct(t.nn_stopped_mean)}, against ${pct(t.rule_stopped_mean)} for the rule-based controller.`}
+      {tr(`A small neural network reads each junction’s queues and nudges its green split, keeping the cycle length. It was trained by evolution strategies on this same simulator across ${n ?? 'many'} cities, and loaded from ${nn?.source ?? 'the site'}.`,
+          `Una pequeña red neuronal lee las colas de cada cruce y ajusta su reparto de verde, sin cambiar la duración del ciclo. Se entrenó con estrategias evolutivas en este mismo simulador con ${n ?? 'muchas'} ciudades, y se cargó desde ${nn?.source ?? 'el sitio'}.`)}
+      {t && tr(` On ${t.cities} cities it never saw in training, time stopped changed by ${pct(t.nn_stopped_mean)}, against ${pct(t.rule_stopped_mean)} for the rule-based controller.`,
+               ` En ${t.cities} ciudades que nunca vio al entrenar, el tiempo detenido cambió un ${pct(t.nn_stopped_mean)}, frente a ${pct(t.rule_stopped_mean)} del controlador por reglas.`)}
       {meta?.extra_tests?.latam && (() => {
         const l = meta.extra_tests.latam.summary
-        return ` On ${l.cities} Latin American cities added after training: ${pct(l.nn_stopped_mean)} `
-          + `(rule-based ${pct(l.rule_stopped_mean)}), better in ${l.nn_beats_rule_cities} of ${l.cities}.`
+        return tr(` On ${l.cities} Latin American cities added after training: ${pct(l.nn_stopped_mean)} (rule-based ${pct(l.rule_stopped_mean)}), better in ${l.nn_beats_rule_cities} of ${l.cities}.`,
+                  ` En ${l.cities} ciudades latinoamericanas añadidas después del entrenamiento: ${pct(l.nn_stopped_mean)} (por reglas ${pct(l.rule_stopped_mean)}), mejor en ${l.nn_beats_rule_cities} de ${l.cities}.`)
       })()}
     </>
   )
@@ -717,6 +728,7 @@ function fmtTime(s) {
 }
 
 function KeyCard({ title, what, cfg, onChange }) {
+  const tr = useT()
   const [state, setState] = useState(null)     // null | checking | ok | bad
   const p = PROVIDERS[cfg.provider]
 
@@ -735,11 +747,11 @@ function KeyCard({ title, what, cfg, onChange }) {
       <p className="try-key-what">{what}</p>
 
       <div className="try-key-row">
-        <select value={cfg.provider} aria-label="Provider"
+        <select value={cfg.provider} aria-label={tr('Provider', 'Proveedor')}
                 onChange={(e) => { onChange({ ...cfg, provider: e.target.value, model: '' }); setState(null) }}>
           {Object.entries(PROVIDERS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
-        <select value={cfg.model || p.models[0]} aria-label="Model"
+        <select value={cfg.model || p.models[0]} aria-label={tr('Model', 'Modelo')}
                 onChange={(e) => onChange({ ...cfg, model: e.target.value })}>
           {p.models.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
@@ -749,19 +761,19 @@ function KeyCard({ title, what, cfg, onChange }) {
         {/* type=password so the key is not readable over a shoulder or in a
             screen share; autoComplete off so the browser never offers to keep
             it. */}
-        <input type="password" autoComplete="off" spellCheck="false" aria-label="API key"
-               placeholder={`API key (${p.hint})`}
+        <input type="password" autoComplete="off" spellCheck="false" aria-label={tr('API key', 'Clave de API')}
+               placeholder={`${tr('API key', 'Clave de API')} (${p.hint})`}
                value={cfg.key}
                onChange={(e) => { onChange({ ...cfg, key: e.target.value }); setState(null) }} />
         <button className="tl-btn" disabled={!cfg.key.trim() || state === 'checking'} onClick={test}>
-          {state === 'checking' ? 'Testing…' : 'Test'}
+          {state === 'checking' ? tr('Testing…', 'Probando…') : tr('Test', 'Probar')}
         </button>
       </div>
 
       <p className="try-key-foot">
-        {state === 'ok' && <span className="ok">✓ The key works</span>}
-        {state === 'bad' && <span className="bad">✗ This key could not be used</span>}
-        {!state && <a href={p.keys} target="_blank" rel="noopener noreferrer">Get a {p.label} key ↗</a>}
+        {state === 'ok' && <span className="ok">✓ {tr('The key works', 'La clave funciona')}</span>}
+        {state === 'bad' && <span className="bad">✗ {tr('This key could not be used', 'No se pudo usar esta clave')}</span>}
+        {!state && <a href={p.keys} target="_blank" rel="noopener noreferrer">{tr(`Get a ${p.label} key ↗`, `Consigue una clave de ${p.label} ↗`)}</a>}
       </p>
     </div>
   )
