@@ -4,7 +4,7 @@
  * No network: the fixture is the shape of a real Flow Segment Data response
  * (trimmed coordinates), and liveCongestion is driven through a stub fetch.
  */
-import { parseFlow, spreadPoints, summarise, vehiclesFor, liveCongestion } from './liveTraffic.js'
+import { parseFlow, spreadPoints, summarise, vehiclesFor, liveCongestion, withDeadline } from './liveTraffic.js'
 
 let failures = 0
 const check = (name, ok, detail = '') => {
@@ -56,6 +56,19 @@ check('second open within 5 minutes is served from cache', urls.length === 8)
 check('no key -> no requests, null', (await liveCongestion(graph, grid, { key: '' })) === null && urls.length === 8)
 globalThis.fetch = async () => { throw new Error('offline') }
 check('network failure -> null, not a crash', (await liveCongestion(graph, grid, { key: 'k' })) === null)
+
+// A provider that never answers until aborted, like the 19 s hang seen live.
+const hang = (signal) => new Promise((_, reject) =>
+  signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))))
+const t0 = Date.now()
+const late = await withDeadline(hang, undefined, 50)
+check('a hung provider times out to null, not forever', late === null && Date.now() - t0 < 1000)
+const user = new AbortController()
+const pending = withDeadline(hang, user.signal, 5000)
+user.abort()
+let threw = false
+try { await pending } catch (e) { threw = e.name === 'AbortError' }
+check('cancelling the run still throws AbortError', threw)
 
 console.log(failures ? `\n${failures} failed` : '\nall passed')
 process.exit(failures ? 1 : 0)
