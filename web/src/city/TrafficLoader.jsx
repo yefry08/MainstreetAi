@@ -11,7 +11,10 @@
  * OpenStreetMap download separately, because they fail for different reasons
  * and a visitor who sees which stage stalled can act on it.
  */
+import { useT } from '../i18n'
+
 export default function TrafficLoader({ stage, steps, detail, error, onRetry, onCancel }) {
+  const tr = useT()
   const idx = steps.findIndex((s) => s.key === stage)
 
   return (
@@ -42,8 +45,8 @@ export default function TrafficLoader({ stage, steps, detail, error, onRetry, on
         <div className="tl-error">
           <p>{error}</p>
           <div className="tl-actions">
-            {onRetry && <button className="tl-btn primary" onClick={onRetry}>Try again</button>}
-            {onCancel && <button className="tl-btn" onClick={onCancel}>Start over</button>}
+            {onRetry && <button className="tl-btn primary" onClick={onRetry}>{tr('Try again', 'Reintentar')}</button>}
+            {onCancel && <button className="tl-btn" onClick={onCancel}>{tr('Start over', 'Empezar de nuevo')}</button>}
           </div>
         </div>
       )}

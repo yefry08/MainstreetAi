@@ -133,6 +133,15 @@
 .light-btn:hover { color: var(--ink-100); }
 .light-btn.on { background: var(--terracota-500); color: #180d08; font-weight: 600; }
 
+/* Language: same pill as the lighting toggle, and kept on phones too. */
+.nav-lang { display: flex; gap: 1px; padding: 2px; border-radius: var(--r-pill); background: rgba(255, 255, 255, 0.05); }
+.nav-lang button {
+  padding: 5px 9px; border: 0; border-radius: var(--r-pill); background: none;
+  color: var(--ink-400); font-family: var(--font-data); font-size: 9.5px; letter-spacing: 0.05em; cursor: pointer;
+}
+.nav-lang button:hover { color: var(--ink-100); }
+.nav-lang button.on { background: var(--terracota-500); color: #180d08; font-weight: 600; }
+
 .nav-chrome {
   padding: 6px 12px;
   border: 1px solid var(--glass-edge);
@@ -1447,6 +1456,9 @@
 .land-capitals .flag { grid-row: span 2; font-size: 20px; }
 .land-capitals b { font-size: 13.5px; font-weight: 500; }
 .land-capitals em { font-style: normal; font-size: 11px; color: var(--ink-400); }
+.land-capitals.featured a { border-color: var(--terracota-500); }
+.land-strip-head { margin: var(--space-3) 0 var(--space-2); font-size: 12px; font-weight: 500;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-400); }
 
 .land-credits { margin-top: var(--space-2); font-size: 11px; color: var(--ink-500); }
 
