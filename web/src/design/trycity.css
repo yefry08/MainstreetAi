@@ -659,3 +659,11 @@
   .hw-metrics { grid-template-columns: 1fr; }
   .hw-stage { aspect-ratio: 4 / 3; }
 }
+
+.try-co2 { margin: var(--space-2) 0 0; font-size: 12.5px; line-height: 1.55; color: var(--ink-300); max-width: 80ch; }
+.try-co2 b { color: #7cc48a; font-weight: 500; }
+
+
+/* Pixel mode: the map renders at low resolution; never smooth it back. */
+.city-3d.pixel canvas { image-rendering: crisp-edges; image-rendering: pixelated; }
+

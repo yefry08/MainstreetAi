@@ -338,6 +338,9 @@ def evaluate_test(args) -> None:
     finally:
         ev.close()
 
+    def per_km(r):
+        return {"v": 1000 * r["co2Kg"] / max(r["distanceKm"], 1e-9)}
+
     def pct(r, b, k):
         return 100 * (r[k] - b[k]) / max(b[k], 1e-9)
 
@@ -349,6 +352,11 @@ def evaluate_test(args) -> None:
             "rule_speed": pct(p, b, "avgSpeed"), "nn_speed": pct(n, b, "avgSpeed"),
             "rule_arrivals": pct(p, b, "arrivals"), "nn_arrivals": pct(n, b, "arrivals"),
             "rule_p95wait": pct(p, b, "p95Wait"), "nn_p95wait": pct(n, b, "p95Wait"),
+            # CO2 PER KM DRIVEN: see sim.js co2GramsPerKm for why not total.
+            "rule_co2": pct(per_km(p), per_km(b), "v"), "nn_co2": pct(per_km(n), per_km(b), "v"),
+            # CO2 avoided per hour for the distance the AI twin drove.
+            "nn_co2_saved_kg_h": (per_km(b)["v"] - per_km(n)["v"]) / 1000
+                                  * n["distanceKm"] * 3600 / TEST_SECONDS,
         })
 
     print(f"\n{(args.label.upper() + ' TEST') if extra else 'HELD-OUT TEST'}: {len(rows)} cities never seen in training, "
@@ -369,6 +377,9 @@ def evaluate_test(args) -> None:
         "rule_stopped_mean": mean("rule_stopped"), "nn_stopped_mean": mean("nn_stopped"),
         "rule_speed_mean": mean("rule_speed"), "nn_speed_mean": mean("nn_speed"),
         "rule_p95wait_mean": mean("rule_p95wait"), "nn_p95wait_mean": mean("nn_p95wait"),
+        "rule_co2_mean": mean("rule_co2"), "nn_co2_mean": mean("nn_co2"),
+        # CO2 avoided per hour in one simulated ~2.5 km city centre, averaged.
+        "nn_co2_saved_kg_h_mean": mean("nn_co2_saved_kg_h"),
         "nn_beats_rule_cities": sum(r["nn_beats_rule"] for r in per_city),
         "nn_consistently_worse_than_fixed": [r["city"] for r in per_city if r["nn_all_worse"]],
     }
@@ -381,6 +392,8 @@ def evaluate_test(args) -> None:
           f"{summary['rule_speed_mean']:>+14.1f}%{summary['nn_speed_mean']:>+14.1f}%")
     print(f"95th-percentile wait vs fixed: rule-based {summary['rule_p95wait_mean']:+.1f}%, "
           f"neural {summary['nn_p95wait_mean']:+.1f}%")
+    print(f"CO2 per km vs fixed: rule-based {summary['rule_co2_mean']:+.1f}%, neural {summary['nn_co2_mean']:+.1f}% "
+          f"(~{summary['nn_co2_saved_kg_h_mean']:.0f} kg CO2 avoided per hour per simulated centre)")
     print(f"\nneural beats rule-based in {summary['nn_beats_rule_cities']} of {len(per_city)} test cities; "
           f"consistently worse than fixed in: {summary['nn_consistently_worse_than_fixed'] or 'none'}")
     print("VERDICT:", "ship it -- better than the current controller on unseen cities"
@@ -475,6 +488,13 @@ The neural controller beats it in **{t['nn_beats_rule_cities']} of {t['cities']}
 drivers wait a very long time. The 95th-percentile continuous wait guards against that. Against fixed
 timing it changes by **{t['nn_p95wait_mean']:+.1f}%** with the neural controller, and by
 {t['rule_p95wait_mean']:+.1f}% with the rule-based one.
+
+**CO2, stated carefully:** per kilometre driven, CO2 changes by **{t.get('nn_co2_mean', float('nan')):+.1f}%**
+(rule-based {t.get('rule_co2_mean', float('nan')):+.1f}%), from a power-based fuel model in the browser simulator.
+Per km rather than in total: with fewer stops the same fleet drives more kilometres in the same time.
+This is a conservative figure -- the simulator's vehicles reach speed almost instantly, so each avoided
+stop saves less fuel than it would on a real street. MainstreetAi's SUMO twins, which model real
+acceleration, show -18% (Barcelona) and -12% (Manhattan).
 
 **How it wins:** it does not shorten the cycle (the realised cycle stays about 60 s, as with fixed
 timing) and never shows a green under 8 s or skips the 3 s amber. It watches the queue on the red side

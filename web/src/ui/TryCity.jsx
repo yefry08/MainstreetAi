@@ -133,7 +133,9 @@ export default function TryCity({ cityParam = null, onCityParam }) {
   const [speed, setSpeed] = useState(1)
   // 3D by default. If the 3D map cannot start (no WebGL, tiles down) the
   // page falls back to the 2D canvas, which needs no network, and says why.
-  const [view3d, setView3d] = useState(true)
+  // '3d' (default), 'pixel' (the same 3D map as SimCity-style pixel art) or
+  // 'map' (the 2D canvas).
+  const [display, setDisplay] = useState('3d')
   const [fail3d, setFail3d] = useState(null)
   const onFail3d = useCallback((why) => setFail3d(why), [])
 
@@ -400,10 +402,13 @@ export default function TryCity({ cityParam = null, onCityParam }) {
               ))}
             </div>
             <div className="try-switch" role="group" aria-label="View">
-              {[[true, '3D'], [false, 'Map']].map(([v, label]) => (
-                <button key={label} className={v === (view3d && !fail3d) ? 'on' : ''}
-                        onClick={() => { setView3d(v); if (v) setFail3d(null) }}>{label}</button>
-              ))}
+              {[['3d', '3D'], ['pixel', 'Pixel'], ['map', 'Map']].map(([v, label]) => {
+                const shown = fail3d ? 'map' : display
+                return (
+                  <button key={v} className={shown === v ? 'on' : ''}
+                          onClick={() => { setDisplay(v); if (v !== 'map') setFail3d(null) }}>{label}</button>
+                )
+              })}
             </div>
             <div className="try-switch" role="group" aria-label="Simulation speed">
               {[1, 4, 10].map((n) => (
@@ -415,8 +420,9 @@ export default function TryCity({ cityParam = null, onCityParam }) {
           </div>
         </div>
 
-        {view3d && !fail3d
-          ? <CityScene3D graph={graph} world={world} hotspots={hot} onFail={onFail3d} />
+        {display !== 'map' && !fail3d
+          ? <CityScene3D graph={graph} world={world} hotspots={hot} onFail={onFail3d}
+                         pixel={display === 'pixel'} />
           : <CityCanvas graph={graph} world={world} palette={palette} running hotspots={hot} />}
         {fail3d && <p className="try-fine">{fail3d}</p>}
 
@@ -432,7 +438,26 @@ export default function TryCity({ cityParam = null, onCityParam }) {
                   a={stats.ai.avgSpeedKmh} b={stats.fixed.avgSpeedKmh} digits={1} />
           <Metric label="Junctions crossed" unit="" settled={settled} d={stats.arrivals}
                   a={stats.ai.arrivals} b={stats.fixed.arrivals} />
+          <Metric label="CO₂ per km driven" unit=" g" settled={settled} d={stats.co2}
+                  a={stats.ai.co2GramsPerKm} b={stats.fixed.co2GramsPerKm} />
         </div>
+        {settled && stats.co2 && (() => {
+          // Per km, not total: with fewer stops the AI twin's vehicles drive
+          // more kilometres in the same time, which raises total CO2 even as
+          // every kilometre gets cleaner. Savings are for the distance driven.
+          const kmPerHour = stats.ai.distanceKm * 3600 / Math.max(stats.ai.simTime, 1)
+          const savedKgH = (stats.fixed.co2GramsPerKm - stats.ai.co2GramsPerKm) / 1000 * kmPerHour
+          return (
+            <p className="try-co2">
+              {savedKgH > 0
+                ? <>≈ <b>{savedKgH.toFixed(0)} kg of CO₂ avoided per hour</b> for the same distance driven
+                    in this ~2.5 km area, from fewer stops and less idling.</>
+                : <>No CO₂ saving per kilometre at this traffic level so far.</>}
+              {' '}Estimated with a power-based fuel model: the comparison is robust, the
+              absolute figures are an order of magnitude.
+            </p>
+          )
+        })()}
 
         <div className="try-analysis">
           <section className="try-hot">

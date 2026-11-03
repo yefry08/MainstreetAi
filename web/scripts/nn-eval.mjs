@@ -71,6 +71,8 @@ function run({ controller, city, seed, seconds }) {
   const m = world.metrics()
   return {
     stopped: m.stoppedVehSeconds, arrivals: m.arrivals, avgSpeed: m.avgSpeedKmh,
+    co2Kg: m.co2Kg,
+    distanceKm: m.distanceKm,
     p95Wait: waits.length ? waits[Math.floor(0.95 * (waits.length - 1))] : 0,
   }
 }

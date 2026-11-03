@@ -16,6 +16,7 @@
  */
 
 import { createWorld, createTwins, compare } from './sim.js'
+import { steadyCo2PerKm, idleCo2PerSecond } from './emissions.js'
 
 let failures = 0
 const check = (name, ok, detail) => {
@@ -235,6 +236,28 @@ console.log('sim: the comparison is only worth anything if the worlds start iden
   }
   check('no phase ever changes without amber, under constant retiming',
         changes > 0 && skipped === 0, `${skipped} of ${changes} changes skipped amber`)
+}
+
+// --- emissions: sane magnitudes, and the twins compare ---------------------
+{
+  const cruise = steadyCo2PerKm(0, 50)
+  check('a car at a steady 50 km/h emits 120-200 g CO2/km', cruise > 120 && cruise < 200,
+        `${cruise.toFixed(0)} g/km`)
+  const idle = idleCo2PerSecond(0)
+  check('an idling car emits 0.5-1.5 g CO2/s', idle > 0.5 && idle < 1.5, `${idle.toFixed(2)} g/s`)
+  check('a bike emits nothing', steadyCo2PerKm(2, 15) === 0 && idleCo2PerSecond(2) === 0)
+  check('a bus emits more than a car', steadyCo2PerKm(1, 30) > 3 * steadyCo2PerKm(0, 30))
+
+  const t = createTwins(G, { vehicles: 100 })
+  run(t.fixed, 400); run(t.ai, 400)
+  const c = compare(t)
+  check('CO2 accumulates over a run', c.fixed.co2Kg > 0, `${c.fixed.co2Kg.toFixed(2)} kg`)
+  // Urban traffic is ~1-2 g CO2 per vehicle-second. The first version read
+  // ~7: the sim's near-instant accelerations were charged as real ones.
+  const perVehSec = (c.fixed.co2Kg * 1000) / (c.fixed.vehicles * c.fixed.simTime)
+  check('the fleet emits a realistic 0.5-4 g CO2 per vehicle-second', perVehSec > 0.5 && perVehSec < 4,
+        `${perVehSec.toFixed(2)} g/s`)
+  check('untouched twins emit identically', c.co2 === null || Math.abs(c.co2.value) < 1e-9)
 }
 
 console.log(`\n${failures === 0 ? 'all passed' : `${failures} FAILED`}`)
