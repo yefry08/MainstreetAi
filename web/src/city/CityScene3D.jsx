@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import {
   BoxGeometry, Color, CylinderGeometry, InstancedMesh, Matrix4, MeshLambertMaterial,
@@ -41,10 +41,78 @@ const COLOR = [
   0, '#241d16', 10, '#33281e', 20, '#413326', 40, '#574433', 80, '#6e5843', 140, '#82684f',
 ]
 
-export default function CityScene3D({ graph, world, hotspots = [], onFail }) {
+/**
+ * PIXEL MODE: the same live 3D city, as SimCity-style pixel art.
+ *
+ * Inspired by SimCABA (Buenos Aires as a SimCity map). Three cheap moves on
+ * the map that is already running, so every city -- and any searched place --
+ * gets it with nothing baked:
+ *   1. render at ~30% resolution and upscale with no smoothing (CSS
+ *      image-rendering: pixelated), so every pixel is a crisp block
+ *   2. a SimCity palette: grass, water, asphalt, and buildings coloured by
+ *      height -- terracotta roofs low, pale stone mid-rise, blue-glass towers
+ *   3. the classic 45-degree isometric-style camera
+ * Street labels are hidden: pixelated text is unreadable and SimCity has none.
+ * Every original paint value is remembered, so leaving pixel mode restores the
+ * normal 3D view exactly.
+ */
+const PIXEL_RATIO = 0.3
+const PIXEL_BUILDINGS = [
+  'interpolate', ['linear'], HEIGHT,
+  0, '#d9a066', 12, '#c9774f', 24, '#d8cdb4', 45, '#a9b8c6', 90, '#7f9fc2', 160, '#5f86b8',
+]
+
+function pixelPaint(layer) {
+  const id = layer.id
+  if (layer.type === 'background') return { 'background-color': '#4c8a3c' }
+  if (layer.type === 'fill') {
+    if (/water/.test(id)) return { 'fill-color': '#3d7fc4' }
+    if (/wood|forest|park|grass|landcover/.test(id)) return { 'fill-color': '#3f7a33' }
+    if (/residential|landuse/.test(id)) return { 'fill-color': '#5d9548' }
+  }
+  if (layer.type === 'line') {
+    if (/water/.test(id)) return { 'line-color': '#3d7fc4' }
+    if (/casing/.test(id)) return { 'line-color': '#3c3c38' }
+    if (/highway|road|street|bridge|tunnel/.test(id)) return { 'line-color': '#8c8b84' }
+    if (/rail/.test(id)) return { 'line-color': '#6d5a4a' }
+  }
+  return null
+}
+
+function setPixelMode(map, on, saved) {
+  if (!map?.getStyle()) return
+  map.setPixelRatio(on ? PIXEL_RATIO : (window.devicePixelRatio || 1))
+  for (const layer of map.getStyle().layers) {
+    if (layer.id === 'city-buildings') {
+      const key = `${layer.id}|fill-extrusion-color`
+      if (on && !saved.has(key)) saved.set(key, map.getPaintProperty(layer.id, 'fill-extrusion-color'))
+      map.setPaintProperty(layer.id, 'fill-extrusion-color', on ? PIXEL_BUILDINGS : saved.get(key))
+      continue
+    }
+    if (layer.type === 'symbol') {
+      const key = `${layer.id}|visibility`
+      if (on && !saved.has(key)) saved.set(key, map.getLayoutProperty(layer.id, 'visibility') ?? 'visible')
+      map.setLayoutProperty(layer.id, 'visibility', on ? 'none' : saved.get(key))
+      continue
+    }
+    const paint = pixelPaint(layer)
+    if (!paint) continue
+    for (const [prop, value] of Object.entries(paint)) {
+      const key = `${layer.id}|${prop}`
+      if (on && !saved.has(key)) saved.set(key, map.getPaintProperty(layer.id, prop))
+      // A layer whose original value was unset restores to its style default.
+      map.setPaintProperty(layer.id, prop, on ? value : (saved.get(key) ?? undefined))
+    }
+  }
+  map.easeTo(on ? { bearing: 45, pitch: 55, duration: 900 } : { bearing: -18, pitch: 58, duration: 900 })
+}
+
+export default function CityScene3D({ graph, world, hotspots = [], onFail, pixel = false }) {
   const ref = useRef(null)
   const worldRef = useRef(world)
   const mapRef = useRef(null)
+  const [styleReady, setStyleReady] = useState(false)
+  const savedPaint = useRef(new Map())
   useEffect(() => { worldRef.current = world }, [world])
 
   useEffect(() => {
@@ -147,6 +215,7 @@ export default function CityScene3D({ graph, world, hotspots = [], onFail }) {
         },
       }, firstSymbol)
       map.setLight({ anchor: 'viewport', color: '#e6d8c6', intensity: 0.38, position: [1.5, 210, 35] })
+      setStyleReady(true)
 
       let cars = null
       let lamps = null
@@ -228,6 +297,14 @@ export default function CityScene3D({ graph, world, hotspots = [], onFail }) {
     }
   }, [graph, onFail])
 
+  // Pixel mode on and off, on the live map.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !styleReady) return
+    if (!pixel && savedPaint.current.size === 0) return   // never switched on
+    setPixelMode(map, pixel, savedPaint.current)
+  }, [pixel, styleReady])
+
   // The worst junctions, as numbered pins -- the same numbers as the list.
   // Rebuilt only when WHICH junctions are listed changes: the list is
   // re-sent several times a second with fresh averages, and recreating the
@@ -249,7 +326,7 @@ export default function CityScene3D({ graph, world, hotspots = [], onFail }) {
   }, [hotKey, graph])
 
   return (
-    <div className="city-3d" ref={ref} role="img"
+    <div className={`city-3d ${pixel ? 'pixel' : ''}`} ref={ref} role="img"
          aria-label="3D view of the city: real buildings, with the simulated traffic and traffic lights." />
   )
 }

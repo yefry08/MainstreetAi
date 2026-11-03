@@ -28,6 +28,8 @@
  * difference between the two is the controller and nothing else.
  */
 
+import { fuelMl, co2Grams } from './emissions.js'
+
 /** Deterministic PRNG (mulberry32). Math.random cannot be seeded, and without
  *  a seed the two worlds diverge on their own and the comparison means nothing. */
 function rng(seed) {
@@ -117,7 +119,8 @@ export function createWorld(graph, { seed = 1, vehicles = 260, adaptive = false 
   // congestion model, and it is why a held green upstream shows up downstream.
   const load = new Int16Array(edges.length)
 
-  const m = { simTime: 0, distance: 0, stoppedTime: 0, arrivals: 0, moving: 0 }
+  const m = { simTime: 0, distance: 0, stoppedTime: 0, arrivals: 0, moving: 0,
+              fuelMl: 0, co2g: 0 }
 
   function capacityOf(i) {
     return Math.max(2, Math.floor((edges[i].len / 7) * edges[i].lanes))
@@ -182,8 +185,15 @@ export function createWorld(graph, { seed = 1, vehicles = 260, adaptive = false 
 
       // Approach the target rather than snapping to it, so queues form and
       // discharge instead of teleporting.
+      const before = v.speed
       v.speed += (target - v.speed) * Math.min(1, dt * 1.8)
       if (v.speed < 0.15) v.speed = 0
+
+      // Fuel and CO2 from what the vehicle actually did this step: idling,
+      // cruising, or accelerating back up after a stop (see emissions.js).
+      const ml = fuelMl(v.kind, v.speed, (v.speed - before) / dt, dt)
+      m.fuelMl += ml
+      m.co2g += co2Grams(v.kind, ml)
 
       if (v.speed === 0) { v.stoppedFor += dt; m.stoppedTime += dt }
       else { v.stoppedFor = 0; m.moving++ }
@@ -273,6 +283,18 @@ export function createWorld(graph, { seed = 1, vehicles = 260, adaptive = false 
       meanSpeedKmh: fleet.length
         ? (fleet.reduce((s, v) => s + v.speed, 0) / fleet.length) * 3.6 : 0,
       stoppedVehSeconds: m.stoppedTime,
+      fuelLitres: m.fuelMl / 1000,
+      co2Kg: m.co2g / 1000,
+      distanceKm: m.distance / 1000,
+      // Per kilometre driven: the fair comparison. The fleet is fixed and
+      // circulates for the whole run, so a controller that stops vehicles
+      // less makes them drive MORE kilometres in the same time -- and total
+      // CO2 then rises with the extra driving even as each trip gets cleaner.
+      // Measured: the neural controller cut stopped time 50% and total CO2
+      // came out +1.2%. Vehicle emissions are quoted per km for this reason.
+      co2GramsPerKm: m.distance > 0 ? m.co2g / (m.distance / 1000) : 0,
+      // Per simulated hour, so runs of different lengths compare.
+      co2KgPerHour: m.simTime > 0 ? (m.co2g / 1000) * (3600 / m.simTime) : 0,
       moving: m.moving,
       queued: fleet.length - m.moving,
       arrivals: m.arrivals,
@@ -308,6 +330,7 @@ export function compare(twins) {
     // Time-averaged: what a journey feels like. The instantaneous one above
     // swings by several percent frame to frame, too much to put a delta on.
     avgSpeed: pct(a.avgSpeedKmh, b.avgSpeedKmh, true),
+    co2: pct(a.co2GramsPerKm, b.co2GramsPerKm, false),
     stopped: pct(a.stoppedVehSeconds, b.stoppedVehSeconds, false),
     queued: pct(a.queued, b.queued, false),
     arrivals: pct(a.arrivals, b.arrivals, true),

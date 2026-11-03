@@ -659,3 +659,19 @@
   .hw-metrics { grid-template-columns: 1fr; }
   .hw-stage { aspect-ratio: 4 / 3; }
 }
+
+.try-co2 { margin: var(--space-2) 0 0; font-size: 12.5px; line-height: 1.55; color: var(--ink-300); max-width: 80ch; }
+.try-co2 b { color: #7cc48a; font-weight: 500; }
+
+/* Live traffic (TomTom): a pulsing dot says "now", not "simulated". */
+.try-live { margin: 0 0 var(--space-2); font-size: 12.5px; line-height: 1.55; color: var(--ink-300); max-width: 90ch; }
+.try-live b { color: var(--ink-100, #fff); font-weight: 500; }
+.try-live-dot { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%;
+  background: #e5484d; vertical-align: 1px; animation: try-live-pulse 1.6s ease-in-out infinite; }
+@keyframes try-live-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .try-live-dot { animation: none; } }
+
+
+/* Pixel mode: the map renders at low resolution; never smooth it back. */
+.city-3d.pixel canvas { image-rendering: crisp-edges; image-rendering: pixelated; }
+

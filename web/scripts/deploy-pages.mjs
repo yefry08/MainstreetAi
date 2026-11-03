@@ -118,6 +118,11 @@ for (const f of ['replay/manifest.json', 'replay/ai.veh.bin', 'replay/ai.sig.bin
 // Nothing secret may be in what is about to become public. Check by name, and
 // by content against the actual values in the local .env -- a key pasted into
 // a source file would otherwise ship inside a bundle.
+//
+// Deliberately NOT checked: web/.env.local's VITE_MAPBOX_TOKEN / VITE_TOMTOM_KEY.
+// They are browser keys and must ship (city/liveTraffic.js); what protects them
+// is the URL restriction set in the provider's dashboard. Never put them in the
+// root .env.
 const badName = files.find((f) => /(^|[\\/])\.env(\.|$)/.test(relative(DIST, f)))
 if (badName) fail(`Refusing to publish ${relative(DIST, badName)}`)
 

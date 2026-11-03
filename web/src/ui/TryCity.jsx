@@ -10,6 +10,7 @@ import { createTwins, compare } from '../city/sim'
 import { cityPalette, startOrchestrator, proportionalPolicy } from '../city/orchestrator'
 import { neuralPolicy } from '../city/neural'
 import { loadSignalModel } from '../city/signalModel'
+import { LIVE_TRAFFIC, liveTraffic, vehiclesFor } from '../city/liveTraffic'
 import TrafficLoader from '../city/TrafficLoader'
 import CityCanvas from '../city/CityCanvas'
 import CityScene3D from '../city/CityScene3D'
@@ -68,6 +69,7 @@ const stepsFor = (city, withLlm) => [
   { key: 'osm', label: city?.live ? 'Downloading real streets from OpenStreetMap'
                                   : 'Loading the city’s real streets' },
   { key: 'graph', label: 'Placing the city’s traffic lights from the map' },
+  ...(LIVE_TRAFFIC ? [{ key: 'live', label: 'Reading live traffic on these streets' }] : []),
   ...(withLlm ? [{ key: 'palette', label: 'Your model picks the city’s palette' }] : []),
   { key: 'sim', label: 'Starting the two twin simulations' },
 ]
@@ -125,6 +127,7 @@ export default function TryCity({ cityParam = null, onCityParam }) {
   const [graph, setGraph] = useState(null)
   const [palette, setPalette] = useState(DEFAULT_PALETTE)
   const [twins, setTwins] = useState(null)
+  const [live, setLive] = useState(null)
   const [view, setView] = useState('ai')
   const [stats, setStats] = useState(null)
   const [hot, setHot] = useState([])
@@ -133,7 +136,9 @@ export default function TryCity({ cityParam = null, onCityParam }) {
   const [speed, setSpeed] = useState(1)
   // 3D by default. If the 3D map cannot start (no WebGL, tiles down) the
   // page falls back to the 2D canvas, which needs no network, and says why.
-  const [view3d, setView3d] = useState(true)
+  // '3d' (default), 'pixel' (the same 3D map as SimCity-style pixel art) or
+  // 'map' (the 2D canvas).
+  const [display, setDisplay] = useState('3d')
   const [fail3d, setFail3d] = useState(null)
   const onFail3d = useCallback((why) => setFail3d(why), [])
 
@@ -217,6 +222,16 @@ export default function TryCity({ cityParam = null, onCityParam }) {
       setGraph(g)
       setDetail(`${g.stats.edges} streets · ${g.stats.signals} junctions with traffic lights`)
 
+      // --- 2b. live traffic, if the site has a Mapbox or TomTom key ----------
+      // Sizes the fleet to how congested these streets are right now. Optional:
+      // no key or no answer means the street-length default, not a failed run.
+      let lv = null
+      if (LIVE_TRAFFIC) {
+        setStage('live'); setDetail('')
+        lv = await liveTraffic(g, g.signals, { signal: ac.signal, cacheKey: paramFor(city) })
+      }
+      setLive(lv)
+
       // --- 3. palette, only with the visitor's model ------------------------
       if (withLlm) {
         setStage('palette')
@@ -234,7 +249,8 @@ export default function TryCity({ cityParam = null, onCityParam }) {
 
       // --- 4. the twins -----------------------------------------------------
       setStage('sim')
-      const vehicles = Math.min(420, Math.max(90, Math.round(g.stats.km * 12)))
+      const base = Math.min(420, Math.max(90, Math.round(g.stats.km * 12)))
+      const vehicles = lv ? vehiclesFor(base, lv.ratio) : base
       const t = createTwins(g, { vehicles })
       setTwins(t)
       setView('ai')
@@ -400,10 +416,13 @@ export default function TryCity({ cityParam = null, onCityParam }) {
               ))}
             </div>
             <div className="try-switch" role="group" aria-label="View">
-              {[[true, '3D'], [false, 'Map']].map(([v, label]) => (
-                <button key={label} className={v === (view3d && !fail3d) ? 'on' : ''}
-                        onClick={() => { setView3d(v); if (v) setFail3d(null) }}>{label}</button>
-              ))}
+              {[['3d', '3D'], ['pixel', 'Pixel'], ['map', 'Map']].map(([v, label]) => {
+                const shown = fail3d ? 'map' : display
+                return (
+                  <button key={v} className={shown === v ? 'on' : ''}
+                          onClick={() => { setDisplay(v); if (v !== 'map') setFail3d(null) }}>{label}</button>
+                )
+              })}
             </div>
             <div className="try-switch" role="group" aria-label="Simulation speed">
               {[1, 4, 10].map((n) => (
@@ -415,8 +434,26 @@ export default function TryCity({ cityParam = null, onCityParam }) {
           </div>
         </div>
 
-        {view3d && !fail3d
-          ? <CityScene3D graph={graph} world={world} hotspots={hot} onFail={onFail3d} />
+        {live && (
+          <p className="try-live">
+            <span className="try-live-dot" aria-hidden="true" />
+            <b>Live traffic now</b>
+            {live.provider === 'mapbox'
+              ? <>: of {live.km.toFixed(0)} km of road here, {Math.round((live.shares.moderate + live.shares.heavy + live.shares.severe) * 100)}% is
+                  {' '}congested ({Math.round(live.shares.heavy * 100 + live.shares.severe * 100)}% heavy or severe);
+                  {' '}estimated speed ~{Math.round(live.ratio * 100)}% of free flow</>
+              : <>: these streets are moving at {Math.round(live.currentKmh)} km/h,
+                  {' '}{Math.round(live.ratio * 100)}% of their free-flow {Math.round(live.freeKmh)} km/h ({live.points} points)</>}
+            {' '}· read at {live.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} your time.
+            {' '}Both twins carry a fleet sized to that congestion, so the comparison below is for
+            the traffic this city has right now. Sizing the fleet from congestion is a rule of thumb, not a calibration.
+            {' '}<span className="try-fine">Traffic data © {live.provider === 'mapbox' ? 'Mapbox' : 'TomTom'}.</span>
+          </p>
+        )}
+
+        {display !== 'map' && !fail3d
+          ? <CityScene3D graph={graph} world={world} hotspots={hot} onFail={onFail3d}
+                         pixel={display === 'pixel'} />
           : <CityCanvas graph={graph} world={world} palette={palette} running hotspots={hot} />}
         {fail3d && <p className="try-fine">{fail3d}</p>}
 
@@ -432,7 +469,26 @@ export default function TryCity({ cityParam = null, onCityParam }) {
                   a={stats.ai.avgSpeedKmh} b={stats.fixed.avgSpeedKmh} digits={1} />
           <Metric label="Junctions crossed" unit="" settled={settled} d={stats.arrivals}
                   a={stats.ai.arrivals} b={stats.fixed.arrivals} />
+          <Metric label="CO₂ per km driven" unit=" g" settled={settled} d={stats.co2}
+                  a={stats.ai.co2GramsPerKm} b={stats.fixed.co2GramsPerKm} />
         </div>
+        {settled && stats.co2 && (() => {
+          // Per km, not total: with fewer stops the AI twin's vehicles drive
+          // more kilometres in the same time, which raises total CO2 even as
+          // every kilometre gets cleaner. Savings are for the distance driven.
+          const kmPerHour = stats.ai.distanceKm * 3600 / Math.max(stats.ai.simTime, 1)
+          const savedKgH = (stats.fixed.co2GramsPerKm - stats.ai.co2GramsPerKm) / 1000 * kmPerHour
+          return (
+            <p className="try-co2">
+              {savedKgH > 0
+                ? <>≈ <b>{savedKgH.toFixed(0)} kg of CO₂ avoided per hour</b> for the same distance driven
+                    in this ~2.5 km area, from fewer stops and less idling.</>
+                : <>No CO₂ saving per kilometre at this traffic level so far.</>}
+              {' '}Estimated with a power-based fuel model: the comparison is robust, the
+              absolute figures are an order of magnitude.
+            </p>
+          )
+        })()}
 
         <div className="try-analysis">
           <section className="try-hot">
