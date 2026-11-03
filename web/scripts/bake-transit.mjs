@@ -46,6 +46,8 @@ const ql = ([s, w, n, e]) => {
 .stops out body;
 relation["route"="bus"](${s},${w},${n},${e});
 out geom;
+node["place"~"^(suburb|neighbourhood|quarter|village)$"](${sb});
+out body;
 way["landuse"="residential"](${s},${w},${n},${e})->.res;
 .res map_to_area->.resArea;
 (
@@ -73,6 +75,16 @@ function simplify(pts, tol = 0.00005) {
   return [...simplify(pts.slice(0, idx + 1), tol).slice(0, -1), ...simplify(pts.slice(idx), tol)]
 }
 
+/** Nearest named place within 1.5 km, as {id, name}, or null. */
+function nearestPlace(places, g) {
+  let best = null, bestD = 1500
+  for (const p of places) {
+    const d = Math.hypot((p.lat - g.lat) * 111320, (p.lon - g.lon) * 111320 * Math.cos((g.lat * Math.PI) / 180))
+    if (d < bestD) { bestD = d; best = p }
+  }
+  return best && { id: best.id, name: best.name }
+}
+
 async function bake(slug) {
   const c = TRANSIT[slug]
   let osm = null
@@ -91,8 +103,11 @@ async function bake(slug) {
   const stops = new Map()
   const routes = []
   const homes = new Map()
+  const places = []
   for (const el of osm.elements) {
-    if (el.type === 'node' && el.lat != null) {
+    if (el.type === 'node' && el.tags?.place) {
+      if (el.tags.name) places.push({ id: `node/${el.id}`, name: el.tags.name, kind: el.tags.place, lat: el.lat, lon: el.lon })
+    } else if (el.type === 'node' && el.lat != null) {
       stops.set(`node/${el.id}`, { id: `node/${el.id}`, lat: r5(el.lat), lon: r5(el.lon), name: el.tags?.name ?? null })
     } else if (el.type === 'relation') {
       const lines = (el.members ?? [])
@@ -115,7 +130,10 @@ async function bake(slug) {
     source: 'OpenStreetMap contributors (ODbL), via Overpass',
     stops: [...stops.values()],
     routes: routes.sort((a, b) => String(a.ref).localeCompare(String(b.ref), 'en', { numeric: true })),
-    gaps: gaps.cells.map((g) => ({ ...g, lat: r5(g.lat), lon: r5(g.lon) })),
+    // Each flag carries the nearest named neighbourhood, so the review list and
+    // the assistant can say "Mati 1" rather than a coordinate.
+    gaps: gaps.cells.map((g) => ({ ...g, lat: r5(g.lat), lon: r5(g.lon), area: nearestPlace(places, g) })),
+    places: places.map((p) => ({ ...p, lat: r5(p.lat), lon: r5(p.lon) })),
     totals: gaps.totals,
   }
   const file = join(OUT, `${slug}.json`)
