@@ -32,6 +32,9 @@ export const CITIES = [
   { country: 'Russia',         flag: '🇷🇺', name: 'Moscow',         lat: 55.7558, lon: 37.6173, pop: 12.6, km: 2.6 },
   { country: 'Turkey',         flag: '🇹🇷', name: 'Istanbul',       lat: 41.0082, lon: 28.9784, pop: 15.6, km: 2.4 },
   { country: 'Portugal',       flag: '🇵🇹', name: 'Lisbon',         lat: 38.7223, lon: -9.1393, pop: 2.9,  km: 2.4 },
+  // For the GenAI for Good Challenge (UNDP / IEEE): Pristina's transit
+  // route-review use case. Centred on Mother Teresa Boulevard.
+  { country: 'Kosovo',         flag: '🇽🇰', name: 'Pristina',       lat: 42.6629, lon: 21.1655, pop: 0.2,  km: 2.6, capital: true },
 
   // --- Americas ---
   { country: 'Mexico',         flag: '🇲🇽', name: 'Mexico City',    lat: 19.4326, lon: -99.1332, pop: 22.0, km: 2.6, capital: true },
@@ -145,7 +148,7 @@ const REGION_OF = {
   'Uruguay': 'Latin America', 'Paraguay': 'Latin America', 'Brazil': 'Latin America',
   'United States': 'North America', 'Canada': 'North America',
   'Spain': 'Europe', 'France': 'Europe', 'United Kingdom': 'Europe', 'Germany': 'Europe',
-  'Italy': 'Europe', 'Russia': 'Europe', 'Turkey': 'Europe', 'Portugal': 'Europe',
+  'Italy': 'Europe', 'Russia': 'Europe', 'Turkey': 'Europe', 'Portugal': 'Europe', 'Kosovo': 'Europe',
   'Japan': 'Asia & Oceania', 'South Korea': 'Asia & Oceania', 'China': 'Asia & Oceania',
   'India': 'Asia & Oceania', 'Thailand': 'Asia & Oceania', 'Indonesia': 'Asia & Oceania',
   'Singapore': 'Asia & Oceania', 'Australia': 'Asia & Oceania',

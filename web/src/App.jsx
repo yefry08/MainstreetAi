@@ -38,6 +38,7 @@ const HowItWorksPage = lazy(() => import('./ui/HowItWorksPage'))
 // open offline, and a built-in controller shows the improvement with no key.
 // Live Overpass remains only for places the visitor searches for.
 const TryCity = lazy(() => import('./ui/TryCity'))
+const Transit = lazy(() => import('./ui/Transit'))
 
 /**
  * Two renderers, two jobs.
@@ -207,7 +208,7 @@ export default function App() {
     }
     if (next !== tab) {
       window.history.pushState(null, '', toHash(next))
-      if (next === 'yours') setCityParam(null)
+      if (next === 'yours' || next === 'transit') setCityParam(null)
     }
     setTab(next)
   }, [tab, map])
@@ -302,6 +303,14 @@ export default function App() {
         <div className="page-layer">
           <Suspense fallback={<p className="page-loading">{lang === 'es' ? 'Cargando…' : 'Loading…'}</p>}>
             <TryCity cityParam={cityParam} onCityParam={onCityParam} />
+          </Suspense>
+        </div>
+      )}
+
+      {tab === 'transit' && (
+        <div className="page-layer">
+          <Suspense fallback={<p className="page-loading">{lang === 'es' ? 'Cargando…' : 'Loading…'}</p>}>
+            <Transit city={cityParam ?? 'pristina'} />
           </Suspense>
         </div>
       )}
