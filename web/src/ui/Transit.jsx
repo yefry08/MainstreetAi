@@ -3,6 +3,8 @@ import maplibregl from 'maplibre-gl'
 import { assetUrl } from '../data/assetUrl'
 import { toHash } from '../data/route'
 import { osmUrl } from '../transit/coverage'
+import { EXAMPLES, SYSTEM, buildEvidence, checkCitations, userPrompt } from '../transit/assistant'
+import { PROVIDERS, complete } from '../city/ai'
 import { useT } from '../i18n'
 
 /**
@@ -130,7 +132,7 @@ export default function Transit({ city = 'pristina' }) {
             {data.gaps.slice(0, SHOWN).map((g, i) => (
               <li key={i} className={pick === i ? 'on' : ''}>
                 <button onClick={() => setPick(i)}>
-                  <b>{g.homes} {tr('homes', 'viviendas')}</b>
+                  <b>{g.homes} {tr('homes', 'viviendas')}{g.area?.name ? ` · ${g.area.name}` : ''}</b>
                   <span>{g.nearestM != null
                     ? tr(`nearest stop ${g.nearestM} m`, `parada más cercana a ${g.nearestM} m`)
                     : tr('no stop found nearby', 'sin parada cercana')}
@@ -164,6 +166,8 @@ export default function Transit({ city = 'pristina' }) {
         </section>
       </div>
 
+      <Ask data={data} onPick={setPick} />
+
       <p className="try-note">
         <b>{tr('What this is not.', 'Qué no es esto.')}</b>{' '}
         {tr('Proof of unmet demand. OpenStreetMap can miss stops (a gap in the map, not in the service), homes stand in for riders, and the distance is straight-line rather than walking. With the city’s own GPS, schedule and complaint data, the same flags would rest on ridership instead.',
@@ -182,5 +186,117 @@ export default function Transit({ city = 'pristina' }) {
         {new Date(data.generated).toLocaleDateString()}.
       </p>
     </div>
+  )
+}
+
+/**
+ * Ask the evidence. The visitor's own model answers from the numbered records
+ * only (transit/assistant.js); every [id] it cites is checked and rendered as
+ * a link to its source, and an id that does not exist is shown as an error.
+ */
+function Ask({ data, onPick }) {
+  const tr = useT()
+  const [cfg, setCfg] = useState({ provider: 'gemini', model: '', key: '' })
+  const [q, setQ] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [out, setOut] = useState(null)       // {question, parts, cited, unknown} | {error}
+  const abortRef = useRef(null)
+  useEffect(() => () => abortRef.current?.abort(), [])
+  const records = buildEvidence(data)
+  const p = PROVIDERS[cfg.provider]
+
+  const ask = async (question) => {
+    if (!question.trim() || !cfg.key.trim()) return
+    abortRef.current?.abort()
+    const ac = new AbortController()
+    abortRef.current = ac
+    setBusy(true); setOut(null)
+    try {
+      const reply = await complete(cfg.provider, cfg.key.trim(), {
+        model: cfg.model || p.models[0], system: SYSTEM, user: userPrompt(question, records),
+        maxTokens: 500, signal: ac.signal,
+      })
+      setOut({ question, ...checkCitations(reply, records) })
+    } catch (err) {
+      if (err.name !== 'AbortError') setOut({ error: err.message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const cite = (id, ok, k) => {
+    if (!ok) return <span key={k} className="ask-cite bad" title={tr('Not in the evidence', 'No está en la evidencia')}>[{id}?]</span>
+    const r = records.get(id)
+    if (r.kind === 'gap') {
+      return <button key={k} className="ask-cite" onClick={() => onPick(r.index)} title={r.text}>{id}</button>
+    }
+    if (r.osm) {
+      return <a key={k} className="ask-cite" href={r.osm} target="_blank" rel="noopener noreferrer" title={r.text}>{id}</a>
+    }
+    return <span key={k} className="ask-cite" title={r.text}>{id}</span>
+  }
+
+  return (
+    <section className="ask glass">
+      <h2>{tr('Ask the evidence', 'Pregunta a la evidencia')}</h2>
+      <p className="try-fine">
+        {tr(`Questions in Albanian, Serbian, English or Spanish. The answer comes only from the ${records.size} numbered records on this page, and every claim is cited: click a citation to see it on the map or at its source. Nothing is recommended.`,
+            `Preguntas en albanés, serbio, inglés o español. La respuesta sale solo de los ${records.size} registros numerados de esta página, y cada afirmación va citada: pulsa una cita para verla en el mapa o en su fuente. No se recomienda nada.`)}
+      </p>
+
+      <div className="try-key-row">
+        <select value={cfg.provider} aria-label={tr('Provider', 'Proveedor')}
+                onChange={(e) => setCfg({ ...cfg, provider: e.target.value, model: '' })}>
+          {Object.entries(PROVIDERS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+        </select>
+        <select value={cfg.model || p.models[0]} aria-label={tr('Model', 'Modelo')}
+                onChange={(e) => setCfg({ ...cfg, model: e.target.value })}>
+          {p.models.map((m) => <option key={m} value={m}>{m}</option>)}
+        </select>
+        {/* Same handling as Your city: memory only, never stored or logged. */}
+        <input type="password" autoComplete="off" spellCheck="false" aria-label={tr('API key', 'Clave de API')}
+               placeholder={`${tr('API key', 'Clave de API')} (${p.hint})`} value={cfg.key}
+               onChange={(e) => setCfg({ ...cfg, key: e.target.value })} />
+      </div>
+      <p className="try-fine">
+        {tr('Your key stays in this tab’s memory and goes only to the provider you pick.',
+            'Tu clave se queda en la memoria de esta pestaña y solo va al proveedor que elijas.')}{' '}
+        <a href={p.keys} target="_blank" rel="noopener noreferrer">{tr(`Get a ${p.label} key ↗`, `Consigue una clave de ${p.label} ↗`)}</a>
+      </p>
+
+      <form className="try-search" onSubmit={(e) => { e.preventDefault(); ask(q) }}>
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} autoComplete="off"
+               aria-label={tr('Your question', 'Tu pregunta')}
+               placeholder={tr('e.g. Which neighbourhoods have homes far from any stop?', 'p. ej. ¿Qué barrios tienen viviendas lejos de toda parada?')} />
+        <button className="tl-btn primary" type="submit" disabled={busy || !q.trim() || !cfg.key.trim()}>
+          {busy ? tr('Asking…', 'Preguntando…') : tr('Ask', 'Preguntar')}
+        </button>
+      </form>
+      <div className="ask-examples">
+        {EXAMPLES.map((ex) => (
+          <button key={ex.lang} className="try-chip" lang={ex.lang} onClick={() => { setQ(ex.q); ask(ex.q) }}
+                  disabled={busy || !cfg.key.trim()} title={!cfg.key.trim() ? tr('Add a key first', 'Añade una clave primero') : undefined}>
+            <b>{ex.lang.toUpperCase()}</b> {ex.q}
+          </button>
+        ))}
+      </div>
+
+      {out?.error && <p className="try-search-error">{out.error}</p>}
+      {out?.parts && (
+        <div className="ask-answer">
+          <p className="ask-q">{out.question}</p>
+          <p>{out.parts.map((x, k) => (x.cite ? cite(x.cite, x.ok, k) : <span key={k}>{x.text}</span>))}</p>
+          <p className="try-fine">
+            {out.unknown.length
+              ? tr(`⚠ ${out.unknown.length} citation(s) do not match any record and are marked — treat those statements as unsupported.`,
+                   `⚠ ${out.unknown.length} cita(s) no corresponden a ningún registro y están marcadas: trata esas afirmaciones como no respaldadas.`)
+              : out.cited.length
+                ? tr(`✓ All ${out.cited.length} cited records exist in the evidence.`, `✓ Los ${out.cited.length} registros citados existen en la evidencia.`)
+                : tr('No records cited: this answer is not backed by the evidence.', 'No cita registros: esta respuesta no está respaldada por la evidencia.')}
+            {' '}{tr('Generated by', 'Generado por')} {p.label}. {tr('Preparatory evidence only; planners decide.', 'Solo evidencia preparatoria; deciden los planificadores.')}
+          </p>
+        </div>
+      )}
+    </section>
   )
 }
