@@ -10,7 +10,7 @@ import { createTwins, compare } from '../city/sim'
 import { cityPalette, startOrchestrator, proportionalPolicy } from '../city/orchestrator'
 import { neuralPolicy } from '../city/neural'
 import { loadSignalModel } from '../city/signalModel'
-import { TOMTOM_KEY, liveCongestion, vehiclesFor } from '../city/liveTraffic'
+import { LIVE_TRAFFIC, liveTraffic, vehiclesFor } from '../city/liveTraffic'
 import TrafficLoader from '../city/TrafficLoader'
 import CityCanvas from '../city/CityCanvas'
 import CityScene3D from '../city/CityScene3D'
@@ -69,7 +69,7 @@ const stepsFor = (city, withLlm) => [
   { key: 'osm', label: city?.live ? 'Downloading real streets from OpenStreetMap'
                                   : 'Loading the city’s real streets' },
   { key: 'graph', label: 'Placing the city’s traffic lights from the map' },
-  ...(TOMTOM_KEY ? [{ key: 'live', label: 'Reading live traffic on these streets (TomTom)' }] : []),
+  ...(LIVE_TRAFFIC ? [{ key: 'live', label: 'Reading live traffic on these streets' }] : []),
   ...(withLlm ? [{ key: 'palette', label: 'Your model picks the city’s palette' }] : []),
   { key: 'sim', label: 'Starting the two twin simulations' },
 ]
@@ -222,13 +222,13 @@ export default function TryCity({ cityParam = null, onCityParam }) {
       setGraph(g)
       setDetail(`${g.stats.edges} streets · ${g.stats.signals} junctions with traffic lights`)
 
-      // --- 2b. live traffic, if the site has a TomTom key ---------------------
+      // --- 2b. live traffic, if the site has a Mapbox or TomTom key ----------
       // Sizes the fleet to how congested these streets are right now. Optional:
       // no key or no answer means the street-length default, not a failed run.
       let lv = null
-      if (TOMTOM_KEY) {
+      if (LIVE_TRAFFIC) {
         setStage('live'); setDetail('')
-        lv = await liveCongestion(g, g.signals, { signal: ac.signal, cacheKey: paramFor(city) })
+        lv = await liveTraffic(g, g.signals, { signal: ac.signal, cacheKey: paramFor(city) })
       }
       setLive(lv)
 
@@ -437,12 +437,17 @@ export default function TryCity({ cityParam = null, onCityParam }) {
         {live && (
           <p className="try-live">
             <span className="try-live-dot" aria-hidden="true" />
-            <b>Live traffic now</b>: these streets are moving at {Math.round(live.currentKmh)} km/h,
-            {' '}{Math.round(live.ratio * 100)}% of their free-flow {Math.round(live.freeKmh)} km/h
-            {' '}({live.points} points, read at {live.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}).
+            <b>Live traffic now</b>
+            {live.provider === 'mapbox'
+              ? <>: of {live.km.toFixed(0)} km of road here, {Math.round((live.shares.moderate + live.shares.heavy + live.shares.severe) * 100)}% is
+                  {' '}congested ({Math.round(live.shares.heavy * 100 + live.shares.severe * 100)}% heavy or severe);
+                  {' '}estimated speed ~{Math.round(live.ratio * 100)}% of free flow</>
+              : <>: these streets are moving at {Math.round(live.currentKmh)} km/h,
+                  {' '}{Math.round(live.ratio * 100)}% of their free-flow {Math.round(live.freeKmh)} km/h ({live.points} points)</>}
+            {' '}· read at {live.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} your time.
             {' '}Both twins carry a fleet sized to that congestion, so the comparison below is for
-            the traffic this city has right now. Sizing the fleet from speed is a rule of thumb, not a calibration.
-            {' '}<span className="try-fine">Traffic data © TomTom.</span>
+            the traffic this city has right now. Sizing the fleet from congestion is a rule of thumb, not a calibration.
+            {' '}<span className="try-fine">Traffic data © {live.provider === 'mapbox' ? 'Mapbox' : 'TomTom'}.</span>
           </p>
         )}
 

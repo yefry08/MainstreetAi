@@ -1,5 +1,6 @@
 /**
- * Live traffic: how congested a city's streets are right now, from TomTom.
+ * Live traffic: how congested a city's streets are right now, from Mapbox
+ * (liveMapbox.js) or TomTom, whichever the site has a key for.
  *
  * WHAT IT IS FOR
  * The twins otherwise run a fleet sized from street length alone, so 3 a.m.
@@ -17,6 +18,7 @@
  * dashboard to the site's domain. Without one, the feature is simply absent.
  */
 import { toLngLat } from './geometry.js'
+import { MAPBOX_TOKEN, mapboxCongestion } from './liveMapbox.js'
 
 export const TOMTOM_KEY = import.meta.env?.VITE_TOMTOM_KEY ?? ''
 
@@ -101,7 +103,29 @@ export async function liveCongestion(graph, points, { key = TOMTOM_KEY, signal, 
     }
   }))
   const value = summarise(readings)
-  if (value) value.at = new Date()
+  if (value) Object.assign(value, { at: new Date(), provider: 'tomtom' })
   if (cacheKey && value) cache.set(cacheKey, { at: Date.now(), value })
+  return value
+}
+
+/**
+ * Whichever provider the site has a key for: Mapbox first, then TomTom.
+ * Same contract as liveCongestion; the result carries `provider` and `ratio`.
+ */
+export const LIVE_TRAFFIC = !!(MAPBOX_TOKEN || TOMTOM_KEY)
+
+export async function liveTraffic(graph, points, { signal, cacheKey } = {}) {
+  if (!MAPBOX_TOKEN) return liveCongestion(graph, points, { signal, cacheKey })
+  const key = cacheKey && `mapbox:${cacheKey}`
+  const hit = key && cache.get(key)
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.value
+  // The extract's extent, from its junctions, plus ~100 m so the edge streets count.
+  const ll = points.map((p) => toLngLat(graph, p.x, p.y))
+  const pad = 0.001
+  const bounds = [Math.min(...ll.map((p) => p[0])) - pad, Math.min(...ll.map((p) => p[1])) - pad,
+                  Math.max(...ll.map((p) => p[0])) + pad, Math.max(...ll.map((p) => p[1])) + pad]
+  const value = await mapboxCongestion(bounds, { signal })
+  if (value) Object.assign(value, { at: new Date(), provider: 'mapbox' })
+  if (key && value) cache.set(key, { at: Date.now(), value })
   return value
 }

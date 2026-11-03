@@ -119,9 +119,10 @@ for (const f of ['replay/manifest.json', 'replay/ai.veh.bin', 'replay/ai.sig.bin
 // by content against the actual values in the local .env -- a key pasted into
 // a source file would otherwise ship inside a bundle.
 //
-// Deliberately NOT checked: web/.env.local's VITE_TOMTOM_KEY. It is a browser
-// key and must ship (city/liveTraffic.js); what protects it is the domain
-// restriction set in the TomTom dashboard. Never put it in the root .env.
+// Deliberately NOT checked: web/.env.local's VITE_MAPBOX_TOKEN / VITE_TOMTOM_KEY.
+// They are browser keys and must ship (city/liveTraffic.js); what protects them
+// is the URL restriction set in the provider's dashboard. Never put them in the
+// root .env.
 const badName = files.find((f) => /(^|[\\/])\.env(\.|$)/.test(relative(DIST, f)))
 if (badName) fail(`Refusing to publish ${relative(DIST, badName)}`)
 
