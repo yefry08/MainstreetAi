@@ -114,7 +114,36 @@ export async function liveCongestion(graph, points, { key = TOMTOM_KEY, signal, 
  */
 export const LIVE_TRAFFIC = !!(MAPBOX_TOKEN || TOMTOM_KEY)
 
-export async function liveTraffic(graph, points, { signal, cacheKey } = {}) {
+// Live data is a nicety, so it gets a deadline: on a bad connection the tile
+// requests hung ~19 s before failing, holding the whole run on "Reading live
+// traffic". Past this, the run starts with the default fleet.
+const LIVE_TIMEOUT_MS = 6000
+
+/**
+ * run(signal) with a deadline. A timeout resolves null; the caller's own
+ * abort still throws AbortError, so cancelling a run still cancels it.
+ */
+export async function withDeadline(run, signal, ms = LIVE_TIMEOUT_MS) {
+  const ac = new AbortController()
+  const onAbort = () => ac.abort()
+  signal?.addEventListener('abort', onAbort)
+  const timer = setTimeout(() => ac.abort(), ms)
+  try {
+    return await run(ac.signal)
+  } catch (err) {
+    if (err.name === 'AbortError' && !signal?.aborted) return null
+    throw err
+  } finally {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', onAbort)
+  }
+}
+
+export function liveTraffic(graph, points, { signal, cacheKey, timeoutMs } = {}) {
+  return withDeadline((s) => liveTrafficNow(graph, points, { signal: s, cacheKey }), signal, timeoutMs)
+}
+
+async function liveTrafficNow(graph, points, { signal, cacheKey }) {
   if (!MAPBOX_TOKEN) return liveCongestion(graph, points, { signal, cacheKey })
   const key = cacheKey && `mapbox:${cacheKey}`
   const hit = key && cache.get(key)
