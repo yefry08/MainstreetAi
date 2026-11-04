@@ -260,7 +260,9 @@ function Scenario({ data, gap }) {
           <table className="scn-table">
             <thead><tr><th /><th>{tr('Stopped time per car', 'Tiempo detenido por coche')}</th></tr></thead>
             <tbody>
-              <tr><th>{tr(`${Math.round(atOnce)} fewer cars in the centre, fixed timing`, `${Math.round(atOnce)} coches menos en el centro, horario fijo`)}</th>
+              <tr><th>{Math.round(atOnce) === 1
+                    ? tr('1 fewer car in the centre, fixed timing', '1 coche menos en el centro, horario fijo')
+                    : tr(`${Math.round(atOnce)} fewer cars in the centre, fixed timing`, `${Math.round(atOnce)} coches menos en el centro, horario fijo`)}</th>
                   {/* Fewer cars making each remaining one wait longer is seed noise
                       (measured: +3..+27% at 13%, -9..+26% at 30%), not an effect. */}
                   <td>{c.mode[0] > 0 ? <em className="scn-none">{tr('no measurable change', 'sin cambio medible')}</em> : verdict(c.mode, true)}</td></tr>
