@@ -5,6 +5,7 @@ import { toHash } from '../data/route'
 import { osmUrl } from '../transit/coverage'
 import { EXAMPLES, SYSTEM, buildEvidence, checkCitations, userPrompt } from '../transit/assistant'
 import { PROVIDERS, complete } from '../city/ai'
+import { CROSS_MIN, modeShift, modeShiftAll, noEffect, readCurve, simultaneous } from '../transit/scenario'
 import { useT } from '../i18n'
 
 /**
@@ -166,6 +167,8 @@ export default function Transit({ city = 'pristina' }) {
         </section>
       </div>
 
+      {pick != null && data.gaps[pick] && <Scenario key={pick} data={data} gap={data.gaps[pick]} />}
+
       <Ask data={data} onPick={setPick} />
 
       <p className="try-note">
@@ -186,6 +189,100 @@ export default function Transit({ city = 'pristina' }) {
         {new Date(data.generated).toLocaleDateString()}.
       </p>
     </div>
+  )
+}
+
+/**
+ * "If this area got a bus". The arithmetic (cars, km, CO2) follows the
+ * sliders; the centre's response is read from a curve baked once over three
+ * seeds (scripts/bake-transit-sim.mjs), so it is instant and shown as a range
+ * -- and called "no measurable change" when that range spans zero. See
+ * transit/scenario.js for why the two halves are kept apart.
+ */
+function Scenario({ data, gap }) {
+  const tr = useT()
+  const [drive, setDrive] = useState(0.4)
+  const [sw, setSw] = useState(0.25)
+  const [all, setAll] = useState(false)       // this area, or every flagged area together
+  const s = all
+    ? modeShiftAll({ gaps: data.gaps, centre: data.centre, driveShare: drive, switchShare: sw })
+    : modeShift({ gap, centre: data.centre, driveShare: drive, switchShare: sw })
+  const sim = data.sim
+  const atOnce = simultaneous(s.cars)
+  const share = sim ? atOnce / sim.vehicles : 0
+  const c = sim && readCurve(sim, share)
+
+  const f = (v) => (v > 0.5 ? '+' : v < -0.5 ? '−' : '±') + Math.abs(v).toFixed(0) + '%'
+  const range = ([lo, hi]) => (Math.round(lo) === Math.round(hi) ? f(lo) : `${f(lo)} … ${f(hi)}`)
+  const verdict = (r, good) => (noEffect(r)
+    ? <em className="scn-none">{tr('no measurable change', 'sin cambio medible')}</em>
+    : <em className={(r[1] < 0) === good ? 'scn-good' : 'scn-bad'}>{range(r)}</em>)
+  const slider = (label, v, set) => (
+    <label className="scn-slider">
+      <span>{label}: <b>{Math.round(v * 100)}%</b></span>
+      <input type="range" min="0" max="1" step="0.05" value={v} onChange={(e) => set(+e.target.value)} />
+    </label>
+  )
+  return (
+    <section className="scn glass">
+      <h2>{all ? tr(`If all ${data.gaps.length} flagged areas got a bus`, `Si las ${data.gaps.length} zonas marcadas tuvieran bus`)
+               : tr(`If ${gap.area?.name ?? 'this area'} got a bus`, `Si ${gap.area?.name ?? 'esta zona'} tuviera bus`)}</h2>
+      <div className="try-switch" role="group" aria-label={tr('Scope', 'Alcance')}>
+        <button className={!all ? 'on' : ''} onClick={() => setAll(false)}>
+          {gap.area?.name ?? tr('This area', 'Esta zona')} · {gap.homes}
+        </button>
+        <button className={all ? 'on' : ''} onClick={() => setAll(true)}>
+          {tr(`All ${data.gaps.length} areas`, `Las ${data.gaps.length} zonas`)} · {data.totals.flaggedHomes.toLocaleString()}
+        </button>
+      </div>
+      <p className="try-fine">
+        {tr(`${all ? data.totals.flaggedHomes : gap.homes} homes. The two shares below are assumptions, not data about Pristina — replace them with the municipality’s travel survey or GPS data.`,
+            `${all ? data.totals.flaggedHomes : gap.homes} viviendas. Los dos porcentajes de abajo son supuestos, no datos de Pristina: sustitúyelos por la encuesta de movilidad o los datos GPS de la municipalidad.`)}
+      </p>
+      <div className="scn-sliders">
+        {slider(tr('Homes that drive to the centre at peak', 'Viviendas que van en coche al centro en hora pico'), drive, setDrive)}
+        {slider(tr('Of those, would switch to a new bus', 'De ellas, cambiarían a un bus nuevo'), sw, setSw)}
+      </div>
+      <dl className="land-stats">
+        <div><dt>{tr('Cars off the road at peak', 'Coches menos en hora pico')}</dt><dd className="good">{s.cars}</dd></div>
+        <div><dt>{all ? tr('Average trip to the centre', 'Viaje medio al centro') : tr('Trip to the centre', 'Viaje al centro')}</dt><dd>{s.tripKm.toFixed(1)} km</dd></div>
+        <div><dt>{tr('Car-km avoided per weekday', 'Km en coche evitados por día laborable')}</dt><dd className="good">{Math.round(s.kmPerDay).toLocaleString()}</dd></div>
+        <div><dt>{tr('CO₂ avoided per weekday', 'CO₂ evitado por día laborable')}</dt><dd className="good">{s.co2KgPerDay.toFixed(0)} kg</dd></div>
+      </dl>
+      <p className="try-fine">
+        {tr(`≈ ${(s.co2KgPerDay * 250 / 1000).toFixed(1)} t of CO₂ a year over 250 weekdays (the morning trip and the return). Distance is straight line × 1.3; CO₂ per km from the site’s fuel model at 30 km/h.`,
+            `≈ ${(s.co2KgPerDay * 250 / 1000).toFixed(1)} t de CO₂ al año en 250 días laborables (ida y vuelta). Distancia en línea recta × 1,3; CO₂ por km del modelo de consumo del sitio a 30 km/h.`)}
+      </p>
+
+      {c && (
+        <>
+          <h3 className="land-strip-head">{tr('And in the centre’s traffic', 'Y en el tráfico del centro')}</h3>
+          <table className="scn-table">
+            <thead><tr><th /><th>{tr('Stopped time per car', 'Tiempo detenido por coche')}</th></tr></thead>
+            <tbody>
+              <tr><th>{Math.round(atOnce) === 1
+                    ? tr('1 fewer car in the centre, fixed timing', '1 coche menos en el centro, horario fijo')
+                    : tr(`${Math.round(atOnce)} fewer cars in the centre, fixed timing`, `${Math.round(atOnce)} coches menos en el centro, horario fijo`)}</th>
+                  {/* Fewer cars making each remaining one wait longer is seed noise
+                      (measured: +3..+27% at 13%, -9..+26% at 30%), not an effect. */}
+                  <td>{c.mode[0] > 0 ? <em className="scn-none">{tr('no measurable change', 'sin cambio medible')}</em> : verdict(c.mode, true)}</td></tr>
+              <tr><th>{tr('AI signals, same traffic', 'Semáforos IA, mismo tráfico')}</th><td>{verdict(c.ai, true)}</td></tr>
+              <tr className="scn-both"><th>{tr('Both, against today', 'Ambos, frente a hoy')}</th><td>{verdict(c.both, true)}</td></tr>
+            </tbody>
+          </table>
+          <p className="try-note">
+            {(noEffect(c.mode) || c.mode[0] > 0) && !noEffect(c.ai)
+              ? tr('The two levers do different things. At this traffic level the waiting in Pristina’s centre comes from red lights, not crowding, so fewer cars barely changes it while retiming the lights does. The bus’s gain is the car-km and CO₂ above, and its residents’ access; the signals’ gain is the waiting.',
+                   'Las dos palancas hacen cosas distintas. A este nivel de tráfico, la espera en el centro de Pristina viene de los semáforos en rojo, no de la saturación, así que menos coches apenas la cambia y reprogramar los semáforos sí. La ganancia del bus son los km en coche y el CO₂ de arriba, y el acceso de sus vecinos; la de los semáforos, la espera.')
+              : tr('Ranges are the spread over three simulation seeds.', 'Los rangos son la dispersión entre tres semillas de simulación.')}
+          </p>
+          <p className="try-fine">
+            {tr(`Pristina’s real centre (2.5 km, ${sim.vehicles} vehicles), 5 simulated minutes per run, three seeds, neural controller; baked ${sim.generated.slice(0, 10)}. ${s.cars} cars an hour that each spend ~${CROSS_MIN} min crossing the centre are ${atOnce.toFixed(1)} fewer in it at any moment (Little’s law) — ${(share * 100).toFixed(1)}% of the fleet. Per remaining car, so fewer cars does not count as less waiting by itself. A range that spans zero is reported as no measurable change.`,
+                `Centro real de Pristina (2,5 km, ${sim.vehicles} vehículos), 5 minutos simulados por corrida, tres semillas, controlador neuronal; calculado el ${sim.generated.slice(0, 10)}. ${s.cars} coches por hora que pasan ~${CROSS_MIN} min cruzando el centro son ${atOnce.toFixed(1)} menos dentro en cada momento (ley de Little): el ${(share * 100).toFixed(1)}% de la flota. Por coche que queda, para que tener menos coches no cuente por sí solo como menos espera. Un rango que cruza el cero se indica como sin cambio medible.`)}
+          </p>
+        </>
+      )}
+    </section>
   )
 }
 
