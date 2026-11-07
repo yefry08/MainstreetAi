@@ -62,7 +62,7 @@ If the records do not answer the question, say so plainly and say what data woul
 Do NOT recommend new routes, stops or changes: describe the evidence; planners decide.
 Remember the evidence is OpenStreetMap: a missing stop may be a gap in the map, not
 in the service, and distances are straight-line.
-Reply in the language of the question (Albanian, Serbian, English or Spanish).
+Reply in the language of the question.
 Be concise: at most about 150 words.`
 
 export function userPrompt(question, records) {
@@ -91,10 +91,11 @@ export function checkCitations(reply, records) {
   return { parts, cited: [...cited], unknown: [...unknown] }
 }
 
-/** Example questions in the four languages the page offers. */
-export const EXAMPLES = [
-  { lang: 'sq', q: 'Cilat zona kanë më shumë banesa pa stacion autobusi afër?' },
-  { lang: 'sr', q: 'Koja područja imaju najviše stanova bez autobuske stanice u blizini?' },
-  { lang: 'en', q: 'Which areas have the most homes with no bus stop within 400 m?' },
-  { lang: 'es', q: '¿Qué líneas de bus pasan cerca de las zonas marcadas?' },
-]
+/** One example question per language; the site picks which (SITE.askLangs). */
+export const EXAMPLES = {
+  sq: { name: ['Albanian', 'albanés', 'shqip'], q: 'Cilat zona kanë më shumë banesa pa stacion autobusi afër?' },
+  sr: { name: ['Serbian', 'serbio', 'serbisht'], q: 'Koja područja imaju najviše stanova bez autobuske stanice u blizini?' },
+  en: { name: ['English', 'inglés', 'anglisht'], q: 'Which areas have the most homes with no bus stop within 400 m?' },
+  es: { name: ['Spanish', 'español', 'spanjisht'], q: '¿Qué zonas tienen más viviendas sin parada de bus a menos de 400 m?' },
+  pt: { name: ['Portuguese', 'portugués', 'portugalisht'], q: 'Quais áreas têm mais moradias sem ponto de ônibus a menos de 400 m?' },
+}

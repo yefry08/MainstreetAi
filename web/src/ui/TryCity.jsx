@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { CITIES, bbox, byRegion, citySlug } from '../city/cities'
+﻿import { useCallback, useEffect, useRef, useState } from 'react'
+import { bbox, byRegion, citySlug } from '../city/cities'
+import { SITE_CITIES } from '../site'
 import { assetUrl } from '../data/assetUrl'
 import { parsePlaceParam, placeParam } from '../data/route'
 import { PROVIDERS, verifyKey } from '../city/ai'
@@ -118,8 +119,8 @@ export default function TryCity({ cityParam = null, onCityParam }) {
       .catch(() => { if (alive) setReady(false) })
     return () => { alive = false }
   }, [])
-  const readyCities = ready ? CITIES.filter((c) => ready.has(citySlug(c)))
-    : ready === false ? CITIES : []
+  const readyCities = ready ? SITE_CITIES.filter((c) => ready.has(citySlug(c)))
+    : ready === false ? SITE_CITIES : []
   useEffect(() => {
     let alive = true
     loadSignalModel().then((r) => { if (alive) setNn(r) })
@@ -358,7 +359,7 @@ export default function TryCity({ cityParam = null, onCityParam }) {
   useEffect(() => {
     if (!cityParam) return
     if (city && paramFor(city) === cityParam) return
-    const c = parsePlaceParam(cityParam) ?? CITIES.find((x) => citySlug(x) === cityParam)
+    const c = parsePlaceParam(cityParam) ?? SITE_CITIES.find((x) => citySlug(x) === cityParam)
     if (!c) return
     stopRun()
     setPhase('pick')

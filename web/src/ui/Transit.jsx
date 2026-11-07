@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+﻿import { useEffect, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import { assetUrl } from '../data/assetUrl'
 import { toHash } from '../data/route'
@@ -7,6 +7,7 @@ import { EXAMPLES, SYSTEM, buildEvidence, checkCitations, userPrompt } from '../
 import { PROVIDERS, complete } from '../city/ai'
 import { CROSS_MIN, modeShift, modeShiftAll, noEffect, readCurve, simultaneous } from '../transit/scenario'
 import { useT } from '../i18n'
+import { SITE } from '../site'
 
 /**
  * Transit: where people live far from a bus stop, as route-review flags.
@@ -31,6 +32,13 @@ export default function Transit({ city = 'pristina' }) {
   const [pick, setPick] = useState(null)
   const ref = useRef(null)
   const mapRef = useRef(null)
+
+  // Which cities have transit data (scripts/bake-transit.mjs writes the index).
+  const [cities, setCities] = useState([])
+  useEffect(() => {
+    fetch(assetUrl('transit/index.json')).then((r) => (r.ok ? r.json() : null))
+      .then((j) => setCities(j?.cities ?? [])).catch(() => setCities([]))
+  }, [])
 
   useEffect(() => {
     let alive = true
@@ -97,7 +105,7 @@ export default function Transit({ city = 'pristina' }) {
       <div className="transit-page">
         <h1>{tr('Transit', 'Transporte')}</h1>
         <p>{tr(`No transit data for “${city}” yet.`, `Todavía no hay datos de transporte para “${city}”.`)}{' '}
-          <a href={toHash('transit', 'pristina')}>Pristina →</a></p>
+          <a href={toHash('transit', SITE.defaultCity.transit)}>{tr('Open the default city →', 'Abrir la ciudad por defecto →', 'Hap qytetin kryesor →')}</a></p>
       </div>
     )
   }
@@ -110,6 +118,12 @@ export default function Transit({ city = 'pristina' }) {
       <header className="try-head">
         <p className="land-eyebrow">{tr('Route review · open data', 'Revisión de rutas · datos abiertos')}</p>
         <h1>{data.city}: {tr('who lives far from a bus stop', 'quién vive lejos de una parada de bus')}</h1>
+        {cities.length > 1 && (
+          <select className="green-pick" value={data.slug} aria-label={tr('City', 'Ciudad')}
+                  onChange={(e) => { window.location.hash = toHash('transit', e.target.value) }}>
+            {cities.map((x) => <option key={x.slug} value={x.slug}>{x.name}</option>)}
+          </select>
+        )}
         <p>
           {tr(`Every home in OpenStreetMap, checked against every bus stop: ${pct(t.coveredShare)} of ${t.homes.toLocaleString()} homes are within ${t.walkM} m of a stop. The red circles are ${data.gaps.length} places where ${t.minHomes} or more homes have none — ${t.flaggedHomes.toLocaleString()} homes in all. Each is a prompt for review, linked to the map data behind it; none is a recommendation.`,
               `Cada vivienda de OpenStreetMap, comparada con cada parada de bus: el ${pct(t.coveredShare)} de ${t.homes.toLocaleString('es')} viviendas está a menos de ${t.walkM} m de una parada. Los círculos rojos son ${data.gaps.length} lugares donde ${t.minHomes} o más viviendas no tienen ninguna — ${t.flaggedHomes.toLocaleString('es')} viviendas en total. Cada uno es un aviso para revisar, enlazado a los datos del mapa que lo sostienen; ninguno es una recomendación.`)}
@@ -178,14 +192,14 @@ export default function Transit({ city = 'pristina' }) {
       </p>
       <p className="try-note">
         <b>{tr('Traffic in the centre.', 'El tráfico del centro.')}</b>{' '}
-        <a href={toHash('yours', 'pristina')}>
-          {tr('Open Pristina’s traffic twin: real streets, live traffic, and what adaptive signals change →',
-              'Abre el gemelo de tráfico de Pristina: calles reales, tráfico en vivo y lo que cambian los semáforos adaptativos →')}
+        <a href={toHash('yours', data.slug)}>
+          {tr(`Open ${data.city}’s traffic twin: real streets, live traffic, and what adaptive signals change →`,
+              `Abre el gemelo de tráfico de ${data.city}: calles reales, tráfico en vivo y lo que cambian los semáforos adaptativos →`)}
         </a>
       </p>
       <p className="land-credits">
-        {tr('Homes, stops and Trafiku Urban routes © OpenStreetMap contributors (ODbL), read',
-            'Viviendas, paradas y rutas de Trafiku Urban © colaboradores de OpenStreetMap (ODbL), leídos el')}{' '}
+        {tr('Homes, stops and bus routes © OpenStreetMap contributors (ODbL), read',
+            'Viviendas, paradas y rutas de bus © colaboradores de OpenStreetMap (ODbL), leídos el')}{' '}
         {new Date(data.generated).toLocaleDateString()}.
       </p>
     </div>
@@ -236,8 +250,8 @@ function Scenario({ data, gap }) {
         </button>
       </div>
       <p className="try-fine">
-        {tr(`${all ? data.totals.flaggedHomes : gap.homes} homes. The two shares below are assumptions, not data about Pristina — replace them with the municipality’s travel survey or GPS data.`,
-            `${all ? data.totals.flaggedHomes : gap.homes} viviendas. Los dos porcentajes de abajo son supuestos, no datos de Pristina: sustitúyelos por la encuesta de movilidad o los datos GPS de la municipalidad.`)}
+        {tr(`${all ? data.totals.flaggedHomes : gap.homes} homes. The two shares below are assumptions, not data about ${data.city} — replace them with the municipality’s travel survey or GPS data.`,
+            `${all ? data.totals.flaggedHomes : gap.homes} viviendas. Los dos porcentajes de abajo son supuestos, no datos de ${data.city}: sustitúyelos por la encuesta de movilidad o los datos GPS de la municipalidad.`)}
       </p>
       <div className="scn-sliders">
         {slider(tr('Homes that drive to the centre at peak', 'Viviendas que van en coche al centro en hora pico'), drive, setDrive)}
@@ -272,13 +286,13 @@ function Scenario({ data, gap }) {
           </table>
           <p className="try-note">
             {(noEffect(c.mode) || c.mode[0] > 0) && !noEffect(c.ai)
-              ? tr('The two levers do different things. At this traffic level the waiting in Pristina’s centre comes from red lights, not crowding, so fewer cars barely changes it while retiming the lights does. The bus’s gain is the car-km and CO₂ above, and its residents’ access; the signals’ gain is the waiting.',
-                   'Las dos palancas hacen cosas distintas. A este nivel de tráfico, la espera en el centro de Pristina viene de los semáforos en rojo, no de la saturación, así que menos coches apenas la cambia y reprogramar los semáforos sí. La ganancia del bus son los km en coche y el CO₂ de arriba, y el acceso de sus vecinos; la de los semáforos, la espera.')
+              ? tr('The two levers do different things. At this traffic level the waiting in this city’s centre comes from red lights, not crowding, so fewer cars barely changes it while retiming the lights does. The bus’s gain is the car-km and CO₂ above, and its residents’ access; the signals’ gain is the waiting.',
+                   'Las dos palancas hacen cosas distintas. A este nivel de tráfico, la espera en el centro de esta ciudad viene de los semáforos en rojo, no de la saturación, así que menos coches apenas la cambia y reprogramar los semáforos sí. La ganancia del bus son los km en coche y el CO₂ de arriba, y el acceso de sus vecinos; la de los semáforos, la espera.')
               : tr('Ranges are the spread over three simulation seeds.', 'Los rangos son la dispersión entre tres semillas de simulación.')}
           </p>
           <p className="try-fine">
-            {tr(`Pristina’s real centre (2.5 km, ${sim.vehicles} vehicles), 5 simulated minutes per run, three seeds, neural controller; baked ${sim.generated.slice(0, 10)}. ${s.cars} cars an hour that each spend ~${CROSS_MIN} min crossing the centre are ${atOnce.toFixed(1)} fewer in it at any moment (Little’s law) — ${(share * 100).toFixed(1)}% of the fleet. Per remaining car, so fewer cars does not count as less waiting by itself. A range that spans zero is reported as no measurable change.`,
-                `Centro real de Pristina (2,5 km, ${sim.vehicles} vehículos), 5 minutos simulados por corrida, tres semillas, controlador neuronal; calculado el ${sim.generated.slice(0, 10)}. ${s.cars} coches por hora que pasan ~${CROSS_MIN} min cruzando el centro son ${atOnce.toFixed(1)} menos dentro en cada momento (ley de Little): el ${(share * 100).toFixed(1)}% de la flota. Por coche que queda, para que tener menos coches no cuente por sí solo como menos espera. Un rango que cruza el cero se indica como sin cambio medible.`)}
+            {tr(`${data.city}’s real centre (2.5 km, ${sim.vehicles} vehicles), 5 simulated minutes per run, three seeds, neural controller; baked ${sim.generated.slice(0, 10)}. ${s.cars} cars an hour that each spend ~${CROSS_MIN} min crossing the centre are ${atOnce.toFixed(1)} fewer in it at any moment (Little’s law) — ${(share * 100).toFixed(1)}% of the fleet. Per remaining car, so fewer cars does not count as less waiting by itself. A range that spans zero is reported as no measurable change.`,
+                `Centro real de ${data.city} (2,5 km, ${sim.vehicles} vehículos), 5 minutos simulados por corrida, tres semillas, controlador neuronal; calculado el ${sim.generated.slice(0, 10)}. ${s.cars} coches por hora que pasan ~${CROSS_MIN} min cruzando el centro son ${atOnce.toFixed(1)} menos dentro en cada momento (ley de Little): el ${(share * 100).toFixed(1)}% de la flota. Por coche que queda, para que tener menos coches no cuente por sí solo como menos espera. Un rango que cruza el cero se indica como sin cambio medible.`)}
           </p>
         </>
       )}
@@ -293,6 +307,11 @@ function Scenario({ data, gap }) {
  */
 function Ask({ data, onPick }) {
   const tr = useT()
+  const askNames = (i) => {
+    const n = SITE.askLangs.map((l) => EXAMPLES[l].name[i])
+    const and = [' or ', ' o ', ' ose '][i]
+    return n.length > 1 ? `${n.slice(0, -1).join(', ')}${and}${n.at(-1)}` : n[0]
+  }
   const [cfg, setCfg] = useState({ provider: 'gemini', model: '', key: '' })
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
@@ -337,8 +356,8 @@ function Ask({ data, onPick }) {
     <section className="ask glass">
       <h2>{tr('Ask the evidence', 'Pregunta a la evidencia')}</h2>
       <p className="try-fine">
-        {tr(`Questions in Albanian, Serbian, English or Spanish. The answer comes only from the ${records.size} numbered records on this page, and every claim is cited: click a citation to see it on the map or at its source. Nothing is recommended.`,
-            `Preguntas en albanés, serbio, inglés o español. La respuesta sale solo de los ${records.size} registros numerados de esta página, y cada afirmación va citada: pulsa una cita para verla en el mapa o en su fuente. No se recomienda nada.`)}
+        {tr(`Questions in ${askNames(0)}. The answer comes only from the ${records.size} numbered records on this page, and every claim is cited: click a citation to see it on the map or at its source. Nothing is recommended.`,
+            `Preguntas en ${askNames(1)}. La respuesta sale solo de los ${records.size} registros numerados de esta página, y cada afirmación va citada: pulsa una cita para verla en el mapa o en su fuente. No se recomienda nada.`)}
       </p>
 
       <div className="try-key-row">
@@ -370,7 +389,7 @@ function Ask({ data, onPick }) {
         </button>
       </form>
       <div className="ask-examples">
-        {EXAMPLES.map((ex) => (
+        {SITE.askLangs.map((lang) => ({ lang, q: EXAMPLES[lang].q })).map((ex) => (
           <button key={ex.lang} className="try-chip" lang={ex.lang} onClick={() => { setQ(ex.q); ask(ex.q) }}
                   disabled={busy || !cfg.key.trim()} title={!cfg.key.trim() ? tr('Add a key first', 'Añade una clave primero') : undefined}>
             <b>{ex.lang.toUpperCase()}</b> {ex.q}

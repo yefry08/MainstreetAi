@@ -11,18 +11,30 @@
  * The area is the whole city, not the 2.5 km traffic extract: coverage gaps
  * are on the edge, in exactly the new neighbourhoods the use case is about.
  */
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { fetchCity } from '../src/city/osm.js'
+import { CITIES, citySlug } from '../src/city/cities.js'
 import { coverageGaps } from '../src/transit/coverage.js'
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'transit')
 mkdirSync(OUT, { recursive: true })
 
 // [south, west, north, east]: Pristina's built-up area, centre to ring road.
+// A box `km` across around a catalogue city's centre: big enough to reach the
+// edge neighbourhoods a 2.5 km traffic extract never sees.
+const around = (slug, km = 8) => {
+  const c = CITIES.find((x) => citySlug(x) === slug)
+  const dLat = km / 2 / 111.32, dLon = km / 2 / (111.32 * Math.cos((c.lat * Math.PI) / 180))
+  return { name: c.name, centre: [c.lat, c.lon], bbox: [c.lat - dLat, c.lon - dLon, c.lat + dLat, c.lon + dLon] }
+}
+
 export const TRANSIT = {
   pristina: { name: 'Pristina', centre: [42.6629, 21.1655], bbox: [42.615, 21.100, 42.700, 21.230] },
+  medellin: around('medellin'),
+  montevideo: around('montevideo'),
+  quito: around('quito'),
 }
 
 // Buildings people live in. Most of Pristina's are tagged plain building=yes,
@@ -144,5 +156,18 @@ async function bake(slug) {
               `(${t.flaggedHomes} homes)`)
 }
 
-const names = process.argv.slice(2)
-for (const slug of names.length ? names : Object.keys(TRANSIT)) await bake(slug)
+// --index-only rewrites the index without fetching anything.
+const names = process.argv.slice(2).filter((a) => !a.startsWith('--'))
+if (!process.argv.includes('--index-only')) {
+  for (const slug of names.length ? names : Object.keys(TRANSIT)) await bake(slug)
+}
+writeIndex()
+
+/** public/transit/index.json: every city with a file, for the page's picker. */
+export function writeIndex() {
+  const cities = readdirSync(OUT).filter((f) => f.endsWith('.json') && f !== 'index.json')
+    .map((f) => { const d = JSON.parse(readFileSync(join(OUT, f), 'utf8')); return { slug: d.slug, name: d.city } })
+    .sort((a, b) => a.name.localeCompare(b.name))
+  writeFileSync(join(OUT, 'index.json'), JSON.stringify({ cities }))
+  console.log(`index  ${cities.length} cities`)
+}
