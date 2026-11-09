@@ -32,9 +32,22 @@
  *
  * BENEFITS, per tree AT MATURITY (10-20 years), as ranges from the literature,
  * not measurements of these trees, and before mortality:
- *   CO2     15-40 kg/yr sequestered (i-Tree urban averages; central 25)
- *   water   ~3.8 m3/yr of rain intercepted (i-Tree, a mature street tree)
- *   heat    0.3-1 C cooler daytime air per +10 points of canopy in a cell
+ *   CO2     10-38 kg/yr net, central 20. Low: Medellin, the nearest
+ *           neotropical i-Tree study, 177-320 g CO2/m2 of canopy/yr net
+ *           (Reynolds et al. 2017, doi:10.3390/su9050785) x 50 m2 = 9-16 kg.
+ *           High: US urban average 0.205 kg C/m2/yr net (Nowak et al. 2013,
+ *           Environ. Pollut. 178) x 3.67 x 50 m2 = 38 kg. The first version
+ *           used 15-40 (central 25), above the tropical evidence.
+ *   water   ~3.8 m3/yr of rain intercepted (i-Tree, a mature street tree);
+ *           conservative: ~11% of rain on canopy (i-Tree Streets) x ~1.4 m/yr
+ *           in Santo Domingo x 50 m2 would be ~7.7 m3.
+ *   heat    0.1-0.6 C cooler air per +10 points of canopy, central 0.3: the
+ *           WRI global meta-analysis gives ~0.3 C per +10%; McDonald et al.
+ *           2026 (Nature Communications, 8,919 cities) find smaller
+ *           city-wide averages. The first version's 1 C high end was local
+ *           and street-level, not a district average.
+ * Local calibration to do: the i-Tree inventory of 206 plots in this district
+ * (Melendez-Ackerman et al. 2022, Front. Sustain. Cities, 10.3389/frsc.2021.764073).
  */
 
 export const TARGET = 0.30
@@ -43,9 +56,9 @@ export const SPACING_M = 10
 export const STREET_FEASIBLE = 0.5
 export const OPEN_USABLE = 0.25
 export const BENEFIT = {
-  co2KgYr: [15, 25, 40],            // low, central, high
+  co2KgYr: [10, 20, 38],            // low, central, high
   waterM3Yr: 3.8,
-  coolingCPer10pts: [0.3, 0.5, 1.0],
+  coolingCPer10pts: [0.1, 0.3, 0.6],
 }
 
 /** Ground area of a WorldCover (1/12000 degree) pixel at a latitude, in m2. */
