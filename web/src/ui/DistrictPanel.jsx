@@ -21,7 +21,7 @@ import { useLang, useT } from '../i18n'
 const DAYS = [['Sun', 'Dom'], ['Mon', 'Lun'], ['Tue', 'Mar'], ['Wed', 'Mié'], ['Thu', 'Jue'], ['Fri', 'Vie'], ['Sat', 'Sáb']]
 const KIND_COLOR = { school_private: '#ff8a5c', school_public: '#ffb38a', university: '#c58aff', office: '#8ab4ff',
   mall: '#ffd84d', supermarket: '#e6c86e', hospital: '#ff6b81', stadium: '#ff3d3d', church: '#b0b0b0' }
-const SRC = { gen: 'dn-gen', hot: 'dn-hot', bike: 'dn-bike', conn: 'dn-conn' }
+const SRC = { gen: 'dn-gen', hot: 'dn-hot', bike: 'dn-bike', conn: 'dn-conn', trees: 'dn-trees' }
 const fc = (features) => ({ type: 'FeatureCollection', features })
 // Santo Domingo is UTC-4 all year.
 const nowDR = () => { const d = new Date(Date.now() - 4 * 3600e3); return { day: d.getUTCDay(), hour: d.getUTCHours() } }
@@ -33,6 +33,7 @@ export default function DistrictPanel({ map, district = 'santo_domingo', slug = 
   const [pred, setPred] = useState(null)
   const [green, setGreen] = useState(null)
   const [shade, setShade] = useState(null)
+  const [trees, setTrees] = useState(null)
   const [rainMm, setRainMm] = useState(null)       // live forecast, mm per hour of today
   const [{ day, hour }, setWhen] = useState(nowDR)
   const [game, setGame] = useState(false)
@@ -43,6 +44,7 @@ export default function DistrictPanel({ map, district = 'santo_domingo', slug = 
     get(`predict/${district}.json`, setPred)
     get(`green/${slug}.json`, setGreen)
     get(`shade/${slug}.json`, setShade)
+    get(`trees/${slug}.json`, setTrees)
     // Live rain for the next two days (Open-Meteo: free, no key).
     fetch('https://api.open-meteo.com/v1/forecast?latitude=18.4745&longitude=-69.9395&hourly=precipitation' +
           '&timezone=America%2FSanto_Domingo&forecast_days=2')
@@ -63,6 +65,10 @@ export default function DistrictPanel({ map, district = 'santo_domingo', slug = 
       if (!map.isStyleLoaded()) return false
       for (const id of Object.values(SRC)) if (!map.getSource(id)) map.addSource(id, { type: 'geojson', data: fc([]) })
       if (!map.getLayer(SRC.bike)) {
+        // Canopy cells under everything else: red where the deficit is worst.
+        map.addLayer({ id: SRC.trees, type: 'fill', source: SRC.trees, paint: {
+          'fill-color': ['interpolate', ['linear'], ['get', 'canopy'], 0, '#d9412b', 0.15, '#e8a33d', 0.3, '#3fbf6f'],
+          'fill-opacity': 0.42, 'fill-outline-color': 'rgba(0,0,0,0)' } })
         map.addLayer({ id: SRC.bike, type: 'line', source: SRC.bike, paint: {
           'line-width': 4, 'line-color': ['interpolate', ['linear'], ['get', 'shade'], 0, '#ff7a3d', 0.5, '#e6d34d', 1, '#3fbf6f'] } })
         map.addLayer({ id: SRC.conn, type: 'line', source: SRC.conn, paint: { 'line-width': 5, 'line-color': '#ffd84d', 'line-dasharray': [1.5, 1] } })
@@ -79,7 +85,7 @@ export default function DistrictPanel({ map, district = 'santo_domingo', slug = 
     const t = setInterval(() => { if (ensure() || ++tries > 40) clearInterval(t) }, 250)
     return () => {
       clearInterval(t)
-      for (const id of [SRC.gen, SRC.hot, SRC.conn, SRC.bike]) {
+      for (const id of [SRC.gen, SRC.hot, SRC.conn, SRC.bike, SRC.trees]) {
         try { if (map.getLayer(id)) map.removeLayer(id); if (map.getSource(id)) map.removeSource(id) } catch { /* style swap */ }
       }
     }
@@ -99,7 +105,15 @@ export default function DistrictPanel({ map, district = 'santo_domingo', slug = 
       properties: { shade: sh?.bike[i] ?? 0.5 }, geometry: { type: 'LineString', coordinates: l } })) : []))
     map.getSource(SRC.conn).setData(fc(showBike ? green.bike.connectors.flatMap((c) => c.lines.map((l) => ({
       type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: l } }))) : []))
-  }, [map, view, p, green, shade, shadeHour])
+    const showTrees = view === 'trees' && trees
+    const half = trees ? trees.cellM / 2 : 0
+    map.getSource(SRC.trees).setData(fc(showTrees ? trees.cells.map((c) => {
+      const dy = half / 110540, dx = half / (111320 * Math.cos((c.lat * Math.PI) / 180))
+      return { type: 'Feature', properties: { canopy: c.canopy },
+        geometry: { type: 'Polygon', coordinates: [[[c.lon - dx, c.lat - dy], [c.lon + dx, c.lat - dy],
+          [c.lon + dx, c.lat + dy], [c.lon - dx, c.lat + dy], [c.lon - dx, c.lat - dy]]] } }
+    }) : []))
+  }, [map, view, p, green, shade, shadeHour, trees])
 
   const max = line ? Math.max(...line, 1) : 1
   const sh = shade?.hours.find((x) => x.hour === shadeHour)
@@ -108,7 +122,59 @@ export default function DistrictPanel({ map, district = 'santo_domingo', slug = 
       <div className="try-switch" role="group">
         <button className={view === 'predict' ? 'on' : ''} onClick={() => setView('predict')}>{tr('Prediction', 'Predicción')}</button>
         <button className={view === 'bike' ? 'on' : ''} onClick={() => setView('bike')}>{tr('Bike lanes & shade', 'Ciclovías y sombra')}</button>
+        <button className={view === 'trees' ? 'on' : ''} onClick={() => setView('trees')}>{tr('Trees', 'Árboles')}</button>
       </div>
+
+      {view === 'trees' && (trees ? (() => {
+        const t = trees.totals
+        const n = (v) => Math.round(v).toLocaleString(lang === 'es' ? 'es' : 'en')
+        const pct = (v) => `${(v * 100).toFixed(1)}%`
+        return (
+          <>
+            <p className="dn-sub">{tr('Tree canopy measured from satellite, against the 30% every neighbourhood should have.',
+                                     'Copa arbórea medida desde satélite, frente al 30 % que debería tener cada barrio.')}</p>
+            <dl className="land-stats dn-stats">
+              <div><dt>{tr('Canopy today', 'Copa hoy')}</dt><dd className="bad">{pct(t.canopyNow)}</dd></div>
+              <div><dt>{tr('Trees today, about', 'Árboles hoy, aprox.')}</dt><dd>{n(t.treesNow)}</dd></div>
+              <div><dt>{tr('Missing to reach 30%', 'Faltan para llegar al 30 %')}</dt><dd className="bad">{n(t.missing)}</dd></div>
+              <div><dt>{tr('Room to plant', 'Se pueden plantar')}</dt><dd className="good">{n(t.plant)}</dd></div>
+            </dl>
+            <p className="try-fine">
+              {tr(`${n(t.onStreets)} along streets (one every 10 m) and ${n(t.onOpen)} on open ground. Planting them all takes canopy from ${pct(t.canopyNow)} to ${pct(t.canopyAfter)}.`,
+                  `${n(t.onStreets)} a lo largo de las calles (uno cada 10 m) y ${n(t.onOpen)} en terrenos abiertos. Plantarlos todos lleva la copa de ${pct(t.canopyNow)} a ${pct(t.canopyAfter)}.`)}
+            </p>
+            <h3 className="land-strip-head">{tr('Climate benefits, at maturity', 'Beneficios climáticos, en madurez')}</h3>
+            <dl className="land-stats dn-stats">
+              <div><dt>{tr('CO₂ absorbed a year', 'CO₂ absorbido al año')}</dt><dd className="good">{n(t.co2TYr[1])} t</dd></div>
+              <div><dt>{tr('Rain intercepted a year', 'Lluvia interceptada al año')}</dt><dd className="good">{n(t.waterM3Yr)} m³</dd></div>
+              <div><dt>{tr('Cooler air, district average', 'Aire más fresco, media del distrito')}</dt><dd className="good">−{t.coolingC[1]} °C</dd></div>
+            </dl>
+            <p className="try-fine">
+              {tr(`Ranges: CO₂ ${n(t.co2TYr[0])}–${n(t.co2TYr[2])} t/yr; cooling ${t.coolingC[0]}–${t.coolingC[2]} °C, and well above that in the neighbourhoods with least canopy.`,
+                  `Rangos: CO₂ ${n(t.co2TYr[0])}–${n(t.co2TYr[2])} t/año; enfriamiento ${t.coolingC[0]}–${t.coolingC[2]} °C, y bastante más en los barrios con menos copa.`)}
+            </p>
+            <h3 className="land-strip-head">{tr('Where to plant first', 'Dónde plantar primero')}</h3>
+            <ol className="dn-hot">
+              {trees.neighbourhoods.slice(0, 8).map((g) => {
+                const gain = (g.plant * 50) / (g.cells * trees.cellM * trees.cellM)
+                return (
+                  <li key={g.name}>
+                    <button className="dn-link" onClick={() => map?.flyTo({ center: [g.lon, g.lat], zoom: 15, duration: 900 })}>
+                      <b>{g.name}</b> <em>{tr('canopy', 'copa')} {Math.round(g.canopy * 100)}%</em>
+                    </button>
+                    <span>{tr(`plant ${n(g.plant)} (${n(g.onStreets)} on streets) · missing ${n(g.missing)} · ~${(gain * 100 * 0.05).toFixed(1)} °C cooler`,
+                              `plantar ${n(g.plant)} (${n(g.onStreets)} en calles) · faltan ${n(g.missing)} · ~${(gain * 100 * 0.05).toFixed(1)} °C más fresco`)}</span>
+                  </li>
+                )
+              })}
+            </ol>
+            <p className="try-fine">
+              {tr('Canopy: ESA WorldCover 10 m (2021), so single street trees narrower than a pixel are undercounted. Mature crown 50 m²; “room” is an upper bound — pavement width, cables and pipes decide the final number on each street. Benefits are literature averages (i-Tree; cooling studies), not measurements of these trees.',
+                  'Copa: ESA WorldCover 10 m (2021), así que los árboles de calle aislados, más estrechos que un píxel, se cuentan de menos. Copa madura de 50 m²; el “espacio” es un máximo: el ancho de acera, los cables y las tuberías deciden la cifra final en cada calle. Los beneficios son promedios de la literatura (i-Tree; estudios de enfriamiento), no mediciones de estos árboles.')}
+            </p>
+          </>
+        )
+      })() : <p className="try-fine">{tr('Tree analysis not computed yet for this area.', 'Análisis de árboles aún no calculado para esta zona.')}</p>)}
 
       {view === 'predict' && (
         <>
