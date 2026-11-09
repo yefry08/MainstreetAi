@@ -22,10 +22,11 @@
  */
 const TAB_PATH = {
   landing: '', home: 'barcelona', manhattan: 'manhattan', yours: 'your-city',
-  how: 'how-it-works', research: 'research', contact: 'contact', transit: 'transit',
+  how: 'how-it-works', research: 'research', contact: 'contact', transit: 'transit', green: 'green', santodomingo: 'santo-domingo',
 }
-// Tabs that take a city after the slash: #/your-city/lima, #/transit/pristina.
-const CITY_TABS = new Set(['yours', 'transit'])
+// Tabs that take a city after the slash: #/your-city/lima, #/transit/pristina,
+// #/green/medellin.
+const CITY_TABS = new Set(['yours', 'transit', 'green'])
 const PATH_TAB = Object.fromEntries(Object.entries(TAB_PATH).map(([k, v]) => [v, k]))
 
 export function parseHash(hash = window.location.hash) {

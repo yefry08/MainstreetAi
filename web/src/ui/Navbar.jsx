@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { MODES, LIGHTING } from '../pixel/lighting.js'
 import { useT } from '../i18n'
+import { SITE, hasScene } from '../site'
 
 /**
  * Top navigation: tabs, lighting, and the chrome toggle.
@@ -10,15 +11,23 @@ import { useT } from '../i18n'
  * no resize handler re-rendering the tree.
  */
 
-export const TABS = [
-  { key: 'home', label: 'Barcelona', es: 'Barcelona' },
-  { key: 'manhattan', label: 'Manhattan', es: 'Manhattan' },
-  { key: 'yours', label: 'Your city', es: 'Tu ciudad' },
-  { key: 'transit', label: 'Transit', es: 'Transporte' },
-  { key: 'how', label: 'How it works', es: 'Cómo funciona' },
-  { key: 'research', label: 'Research', es: 'Investigación' },
-  { key: 'contact', label: 'Contact', es: 'Contacto' },
+const ALL_TABS = [
+  { key: 'home', scene: 'barcelona', label: 'Barcelona', es: 'Barcelona', sq: 'Barcelona' },
+  { key: 'manhattan', scene: 'manhattan', label: 'Manhattan', es: 'Manhattan', sq: 'Manhattan' },
+  { key: 'santodomingo', scene: 'santo_domingo', label: 'Santo Domingo', es: 'Santo Domingo', sq: 'Santo Domingo' },
+  { key: 'yours', label: 'Your city', es: 'Tu ciudad', sq: 'Qyteti yt' },
+  { key: 'transit', label: 'Transit', es: 'Transporte', sq: 'Transporti' },
+  { key: 'green', label: 'Green', es: 'Verde', sq: 'E gjelbër' },
+  { key: 'how', label: 'How it works', es: 'Cómo funciona', sq: 'Si funksionon' },
+  { key: 'research', label: 'Research', es: 'Investigación', sq: 'Kërkimi' },
+  { key: 'contact', label: 'Contact', es: 'Contacto', sq: 'Kontakti' },
 ]
+// Only the tabs this site has (site.js), in its order; a scene tab not named
+// in SITE.tabs goes first.
+const rank = (t) => (SITE.tabs.includes(t.key) ? SITE.tabs.indexOf(t.key) : -1)
+export const TABS = ALL_TABS
+  .filter((t) => (t.scene ? hasScene(t.scene) : SITE.tabs.includes(t.key)))
+  .sort((a, b) => rank(a) - rank(b))
 
 export default function Navbar({
   tab, onTab, mode, onMode, chrome, onChrome, lang = 'en', onLang,
@@ -49,10 +58,10 @@ export default function Navbar({
         <button
           className="nav-brand"
           onClick={() => onTab?.('landing')}
-          title="MainstreetAi — overview"
+          title={SITE.name}
         >
           <span className="nav-mark" />
-          <span className="nav-name">MainstreetAi</span>
+          <span className="nav-name">{SITE.name}</span>
         </button>
 
         <nav className={`nav-tabs ${open ? 'open' : ''}`}>
@@ -62,14 +71,14 @@ export default function Navbar({
               className={`nav-tab ${tab === t.key ? 'on' : ''}`}
               onClick={() => onTab?.(t.key)}
             >
-              {lang === 'es' ? t.es : t.label}
+              {t[lang] ?? t.label}
             </button>
           ))}
         </nav>
 
         <div className="nav-right">
           <div className="nav-lang" role="group" aria-label={tr('Language', 'Idioma')}>
-            {[['es', 'ES'], ['en', 'EN']].map(([l, label]) => (
+            {SITE.langs.map((l) => [l, l.toUpperCase()]).map(([l, label]) => (
               <button key={l} className={lang === l ? 'on' : ''} aria-pressed={lang === l}
                       onClick={() => onLang?.(l)}>{label}</button>
             ))}
@@ -78,7 +87,7 @@ export default function Navbar({
           {/* Lighting only means anything over a map. */}
           {/* Not on Your city either: it draws its own 2D canvas, which the
               lighting modes do not touch. */}
-          {tab !== 'contact' && tab !== 'research' && tab !== 'how' && tab !== 'yours' && tab !== 'transit' &&
+          {tab !== 'contact' && tab !== 'research' && tab !== 'how' && tab !== 'yours' && tab !== 'transit' && tab !== 'green' &&
            tab !== 'landing' && (
             <div className="nav-light" role="group" aria-label="Lighting">
               {MODES.map((m) => (

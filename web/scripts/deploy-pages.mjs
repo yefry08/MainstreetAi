@@ -33,6 +33,7 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { replayDir } from '../vite.config.js'
 
 const WEB = join(dirname(fileURLToPath(import.meta.url)), '..')
 const REPO = join(WEB, '..')
@@ -106,12 +107,16 @@ if (/(src|href)="\/assets\//.test(index)) {
 }
 // The city with no traffic: replay mode injects these preloads and nothing else
 // does, so their absence means the build will wait for a server.
-if (!index.includes('replay/manifest.json')) {
+// The scene this site opens on (src/site.js): its recording must be preloaded
+// and shipped, or the page waits for a server that does not exist.
+const dir = replayDir()
+if (dir && !index.includes(`${dir}/manifest.json`)) {
   fail('This build is not in replay mode (VITE_REPLAY_ONLY missing), so the deployed page ' +
        'would wait for a simulation server that does not exist and show no traffic.')
 }
-for (const f of ['replay/manifest.json', 'replay/ai.veh.bin', 'replay/ai.sig.bin',
-                 'data/buildings.geojson', 'cities/madrid.json']) {
+const required = ['cities/index.json', 'predict/santo_domingo.json']
+if (dir) required.push(`${dir}/manifest.json`, `${dir}/ai.veh.bin`, `${dir}/ai.sig.bin`)
+for (const f of required) {
   if (!existsSync(join(DIST, f))) fail(`Missing from the build: ${f}`)
 }
 

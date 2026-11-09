@@ -38,8 +38,11 @@ HIGHWAY_RE = (
 
 ENDPOINTS = [
     "https://overpass-api.de/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
-    "https://overpass.osm.ch/api/interpreter",
+    # Not overpass.osm.ch: it holds Switzerland only, so any other district
+    # comes back as a valid, nearly empty extract (see web/src/city/osm.js).
 ]
 
 def build_query(bbox) -> str:
@@ -65,7 +68,72 @@ def bbox_for(district: str):
              f"(have: {', '.join(x.key for x in DISTRICTS)})")
 
 
-def fetch(district: str = "barcelona") -> None:
+def _post(query: str, floor: int) -> bytes | None:
+    """One query, every mirror, a few rounds of patience. None if all fail."""
+    for rnd, pause in enumerate((0, 30, 90, 180)):
+        if pause:
+            print(f"[overpass] round {rnd + 1}: waiting {pause}s")
+            time.sleep(pause)
+        for url in ENDPOINTS:
+            try:
+                resp = requests.post(url, data={"data": query}, timeout=300,
+                                     headers={"User-Agent": "mainstreetai-sim/1.0"})
+                # A complete answer ends with </osm>; size alone is not the test,
+                # because a tile over the sea is legitimately empty (~270 bytes).
+                if resp.status_code == 200 and (len(resp.content) >= floor
+                                                or resp.content.rstrip().endswith(b"</osm>")):
+                    return resp.content
+                print(f"[overpass] {url.split('/')[2]}: HTTP {resp.status_code}, "
+                      f"{len(resp.content)} bytes")
+            except requests.RequestException as exc:
+                print(f"[overpass] {url.split('/')[2]}: {type(exc).__name__}")
+    return None
+
+
+def fetch_tiled(district: str, bbox, n: int) -> None:
+    """
+    A whole city district in one query failed on every mirror (502/504, and
+    connections cut mid-response). n x n tiles each succeed; ways crossing a
+    tile edge come back from both tiles, so nodes and ways are merged by id.
+    """
+    import xml.etree.ElementTree as ET
+    s, w, nn, e = bbox
+    dlat, dlon = (nn - s) / n, (e - w) / n
+    nodes, ways = {}, {}
+    for i in range(n):
+        for j in range(n):
+            tb = (s + i * dlat, w + j * dlon, s + (i + 1) * dlat, w + (j + 1) * dlon)
+            # Each tile is kept, so a rerun after a network failure resumes.
+            tile = NET_DIR / f"tiles_{district}" / f"{n}x{n}_{i}_{j}.osm.xml"
+            tile.parent.mkdir(exist_ok=True)
+            if tile.exists():
+                raw = tile.read_bytes()
+            else:
+                raw = _post(build_query(tb), 2_000)
+                if raw is None:
+                    sys.exit(f"FATAL: tile {i * n + j + 1}/{n * n} failed on every mirror "
+                             "(finished tiles are kept; run again to resume)")
+                tile.write_bytes(raw)
+            root = ET.fromstring(raw)
+            for el in root:
+                if el.tag == "node":
+                    nodes[el.get("id")] = el
+                elif el.tag == "way":
+                    ways[el.get("id")] = el
+            print(f"[overpass] tile {i * n + j + 1}/{n * n}: "
+                  f"{len(nodes)} nodes, {len(ways)} ways so far")
+    out = ET.Element("osm", version="0.6", generator="mainstreetai fetch_osm (tiled)")
+    ET.SubElement(out, "bounds", minlat=str(s), minlon=str(w), maxlat=str(nn), maxlon=str(e))
+    # netconvert wants nodes before the ways that use them.
+    out.extend(sorted(nodes.values(), key=lambda x: int(x.get("id"))))
+    out.extend(sorted(ways.values(), key=lambda x: int(x.get("id"))))
+    path = NET_DIR / f"{district}.osm.xml"
+    ET.ElementTree(out).write(path, encoding="utf-8", xml_declaration=True)
+    print(f"[overpass] OK  {path.stat().st_size / 1e6:.1f} MB, "
+          f"{len(nodes)} nodes, {len(ways)} ways -> {path}")
+
+
+def fetch(district: str = "barcelona", tiles: int = 1) -> None:
     OSM_OUT = NET_DIR / f"{district}.osm.xml"
     BBOX = bbox_for(district)
     QUERY = build_query(BBOX)
@@ -78,6 +146,10 @@ def fetch(district: str = "barcelona") -> None:
         mb = OSM_OUT.stat().st_size / 1e6
         print(f"[cache] {OSM_OUT.name} already present ({mb:.1f} MB) - skipping download.")
         print("        Delete the file to force a re-fetch.")
+        return
+
+    if tiles > 1:
+        fetch_tiled(district, BBOX, tiles)
         return
 
     last_err = None
@@ -116,4 +188,7 @@ def fetch(district: str = "barcelona") -> None:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--district", default="barcelona")
-    fetch(ap.parse_args().district)
+    ap.add_argument("--tiles", type=int, default=1,
+                    help="split the box into N x N queries (a whole city district needs 4)")
+    a = ap.parse_args()
+    fetch(a.district, a.tiles)

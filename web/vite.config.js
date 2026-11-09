@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import { SITE } from './src/site.js'
 
 /**
  * Start the recording downloading while the HTML is still being parsed.
@@ -19,15 +20,24 @@ import react from '@vitejs/plugin-react'
  * something never used wastes the bandwidth it was meant to save, on top of a
  * console warning.
  */
+// The recording this site opens on (src/site.js): Barcelona's lives in
+// replay/, every other district in replay_<district>/. A site with no scene
+// preloads nothing.
+export const replayDir = () => {
+  const first = SITE.scenes[0]
+  return !first ? null : first === 'barcelona' ? 'replay' : `replay_${first}`
+}
+
 function preloadReplay(enabled) {
   return {
     name: 'preload-replay',
     transformIndexHtml() {
-      if (!enabled) return []
+      const dir = replayDir()
+      if (!enabled || !dir) return []
       // Relative hrefs, so this survives being served from /MainstreetAi/.
       // `as: fetch` (not `image`/`script`) is what makes the preloaded bytes
       // reusable by a later fetch() rather than downloaded a second time.
-      return ['replay/manifest.json', 'replay/ai.veh.bin', 'replay/ai.sig.bin']
+      return [`${dir}/manifest.json`, `${dir}/ai.veh.bin`, `${dir}/ai.sig.bin`]
         .map((href) => ({
           tag: 'link',
           attrs: { rel: 'preload', as: 'fetch', crossorigin: 'anonymous', href: `./${href}` },

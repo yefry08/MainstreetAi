@@ -10,6 +10,8 @@ import HowItWorks from './ui/HowItWorks'
 // Eager, not lazy: it is the first page, and lazy-loading it would put a
 // second request in front of the first paint.
 import Landing from './ui/Landing'
+import { SITE, hasScene } from './site'
+import DistrictPanel from './ui/DistrictPanel'
 import { parseHash, toHash } from './data/route'
 import { LangContext, initialLang, saveLang } from './i18n'
 
@@ -39,6 +41,7 @@ const HowItWorksPage = lazy(() => import('./ui/HowItWorksPage'))
 // Live Overpass remains only for places the visitor searches for.
 const TryCity = lazy(() => import('./ui/TryCity'))
 const Transit = lazy(() => import('./ui/Transit'))
+const Green = lazy(() => import('./ui/Green'))
 
 /**
  * Two renderers, two jobs.
@@ -74,10 +77,16 @@ const basemapLabel = (status, city) => ({
   offline: 'Basemap · offline',
 }[status])
 
+// A tab this site does not have (an old #/barcelona link on the Latin America
+// site, say) opens the landing page rather than an empty scene.
+const SCENE_OF = { home: 'barcelona', manhattan: 'manhattan', santodomingo: 'santo_domingo' }
+const siteTab = (t) => (t === 'landing' || SITE.tabs.includes(t) || hasScene(SCENE_OF[t]) ? t : 'landing')
+const SCENES = SITE.scenes.length > 0
+
 export default function App() {
   // The landing page comes first; the 3D scene keeps loading behind it, so
   // Barcelona is already running by the time anyone clicks through.
-  const [tab, setTab] = useState(() => parseHash().tab)
+  const [tab, setTab] = useState(() => siteTab(parseHash().tab))
   // The city named in the address, for Your city: a ready-made slug or an
   // "@lat,lon,Name" place. TryCity opens and analyses it.
   const [cityParam, setCityParam] = useState(() => parseHash().city)
@@ -87,7 +96,7 @@ export default function App() {
 
   // Back and Forward move between tabs instead of leaving the site.
   useEffect(() => {
-    const sync = () => { const r = parseHash(); setTab(r.tab); setCityParam(r.city) }
+    const sync = () => { const r = parseHash(); setTab(siteTab(r.tab)); setCityParam(r.city) }
     window.addEventListener('popstate', sync)
     window.addEventListener('hashchange', sync)
     return () => {
@@ -103,6 +112,10 @@ export default function App() {
     setCityParam(param)
     window.history.replaceState(null, '', toHash('yours', param))
   }, [])
+  const onGreenCity = useCallback((param) => {
+    setCityParam(param)
+    window.history.replaceState(null, '', toHash('green', param))
+  }, [])
   const [mode, setMode] = useState('night')
   const [chrome, setChrome] = useState(true)
   const [district, setDistrict] = useState('barcelona')
@@ -114,19 +127,20 @@ export default function App() {
   const onMapReady = useCallback((m) => setMap(m), [])
   const onBasemapStatus = useCallback((s) => setBasemap(s), [])
 
-  const { frameRef: liveRef, header, status } = useSimSocket({ enabled: !REPLAY_ONLY })
+  const { frameRef: liveRef, header, status } = useSimSocket({ enabled: !REPLAY_ONLY && SCENES })
 
   // Which city the 3D scene is standing in. Declared up here because the replay
   // hook below needs it: Manhattan has its own recording, and the scene showing
   // New York while the traffic came from Barcelona is precisely the
   // wrong-city-over-the-wrong-map failure this project has hit before.
-  const sceneCity = tab === 'manhattan' ? 'manhattan' : 'barcelona'
+  // The scene this site opens on behind the landing page is its first one.
+  const sceneCity = SCENE_OF[tab] ?? SITE.scenes[0] ?? 'barcelona'
 
   // On a static host the 3D hero has no socket to draw from. Both recordings
   // are in the identical frame shape, so they drive the same ref and the scene
   // never learns the difference.
   const { frameRef: recordedRef, meta: recordedMeta } =
-    useReplayFrames({ enabled: REPLAY_ONLY, district: sceneCity, twin })
+    useReplayFrames({ enabled: REPLAY_ONLY && SCENES, district: sceneCity, twin })
   const frameRef = REPLAY_ONLY ? recordedRef : liveRef
 
   // Live metrics for the impact panel. Skipped in replay builds -- there is no
@@ -165,9 +179,10 @@ export default function App() {
   const isHome = tab === 'home'
   const isLanding = tab === 'landing'
   const isManhattan = tab === 'manhattan'
+  const isSantoDomingo = tab === 'santodomingo'
   // Both tabs are the same 3D scene, anchored in a different city. Everything
   // that reads camera state or twin metrics belongs to either of them.
-  const isScene = isHome || isManhattan
+  const isScene = isHome || isManhattan || isSantoDomingo
   const isCity = tab === 'how'
 
   // The tab title follows what is actually on screen. Try your city used to
@@ -177,14 +192,17 @@ export default function App() {
   // fewer request.
   useEffect(() => {
     document.title =
-      isLanding ? 'MainstreetAi · Smarter traffic lights, tested on real cities'
-      : isHome ? 'MainstreetAi · Barcelona'
-      : isManhattan ? 'MainstreetAi · Manhattan'
-      : isCity ? 'MainstreetAi · How it works'
-      : tab === 'yours' ? 'MainstreetAi · Your city'
-      : tab === 'research' ? 'MainstreetAi · Research'
-      : 'MainstreetAi · Contact'
-  }, [isLanding, isHome, isManhattan, isCity, tab])
+      isLanding ? `${SITE.name} · ${SITE.tagline[lang] ?? SITE.tagline.en}`
+      : isHome ? `${SITE.name} · Barcelona`
+      : isManhattan ? `${SITE.name} · Manhattan`
+      : isSantoDomingo ? `${SITE.name} · Santo Domingo`
+      : isCity ? `${SITE.name} · How it works`
+      : tab === 'yours' ? `${SITE.name} · Your city`
+      : tab === 'research' ? `${SITE.name} · Research`
+      // Transit and Green set their own titles, with the city in them.
+      : tab === 'transit' || tab === 'green' ? document.title
+      : `${SITE.name} · Contact`
+  }, [isLanding, isHome, isManhattan, isSantoDomingo, isCity, tab, lang])
 
   // Picking a district shows it in the pixel view, which lives on this tab. It
   // used to jump to Home, which now belongs to the 3D scene instead.
@@ -201,14 +219,12 @@ export default function App() {
     // destination is indistinguishable from a broken one -- which is how it got
     // reported -- and after panning across a city, "take me back" is the thing
     // people actually want from it.
-    const sceneTab = next === 'home' || next === 'manhattan'
-    if (sceneTab && next === tab && map) {
-      map.easeTo({ ...cityConfig(next === 'manhattan' ? 'manhattan' : 'barcelona').home,
-                   duration: 900 })
+    if (SCENE_OF[next] && next === tab && map) {
+      map.easeTo({ ...cityConfig(SCENE_OF[next]).home, duration: 900 })
     }
     if (next !== tab) {
       window.history.pushState(null, '', toHash(next))
-      if (next === 'yours' || next === 'transit') setCityParam(null)
+      if (next === 'yours' || next === 'transit' || next === 'green') setCityParam(null)
     }
     setTab(next)
   }, [tab, map])
@@ -222,7 +238,7 @@ export default function App() {
           sight, aria-hidden from a screen reader. */}
       {/* Also visible -- but not interactive -- behind the landing page, so
           the first screen has the live city moving under it. */}
-      <div className="scene-layer"
+      {SCENES && <div className="scene-layer"
            aria-hidden={!isScene}
            style={{ opacity: isScene || isLanding ? 1 : 0,
                     pointerEvents: isScene ? 'auto' : 'none' }}>
@@ -234,7 +250,7 @@ export default function App() {
           active={isScene || isLanding}
         />
         <Atmosphere map={map} />
-      </div>
+      </div>}
 
       {/* The pixel view, only under Try your city. Unlike the 3D scene this one
           is cheap to rebuild, and mounting it only when shown keeps a second
@@ -275,6 +291,7 @@ export default function App() {
               three sentences would be a second explanation of a thing the
               visitor has already been told. */}
           {isHome && <HowItWorks onOpen={() => onTab('how')} />}
+          {isSantoDomingo && <DistrictPanel map={map} />}
           <CameraControls map={map} />
           <Bezel map={map} header={header} />
           {!chrome && (
@@ -310,7 +327,15 @@ export default function App() {
       {tab === 'transit' && (
         <div className="page-layer">
           <Suspense fallback={<p className="page-loading">{lang === 'es' ? 'Cargando…' : 'Loading…'}</p>}>
-            <Transit city={cityParam ?? 'pristina'} />
+            <Transit city={cityParam ?? SITE.defaultCity.transit} />
+          </Suspense>
+        </div>
+      )}
+
+      {tab === 'green' && (
+        <div className="page-layer">
+          <Suspense fallback={<p className="page-loading">{lang === 'es' ? 'Cargando…' : 'Loading…'}</p>}>
+            <Green city={cityParam ?? SITE.defaultCity.green} onCityParam={onGreenCity} />
           </Suspense>
         </div>
       )}

@@ -91,6 +91,27 @@ export const CITIES = {
   },
 }
 
+CITIES.santo_domingo = {
+  key: 'santo_domingo',
+  label: 'Santo Domingo',
+  district: 'santo_domingo',
+  // The whole Distrito Nacional is the network; the camera opens on its
+  // densest stretch, the 27 de Febrero / Winston Churchill area.
+  origin: [-69.9375, 18.475],
+  home: { center: [-69.935, 18.469], zoom: 14.6, pitch: 62, bearing: 0 },
+  // ~190 km2 is too many buildings for one file: streamed from the basemap's
+  // vector tiles instead (scene/buildings.js).
+  buildings: 'vector',
+  signals: 'data/signal_approaches_santo_domingo.geojson',
+  signalsFallback: null,
+  // Mostly low- and mid-rise with a band of towers in Piantini and Naco; a
+  // light lift reads as 3D without inventing skyscrapers.
+  exaggeration: 1.2,
+  supertall: false,
+  hasSignalStates: true,
+  label3d: 'Santo Domingo · Distrito Nacional · Signal Twin',
+}
+
 export const DEFAULT_CITY = 'barcelona'
 
 export const cityConfig = (key) => CITIES[key] ?? CITIES[DEFAULT_CITY]

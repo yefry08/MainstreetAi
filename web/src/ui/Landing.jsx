@@ -1,9 +1,10 @@
-import { Suspense, lazy, useEffect, useState } from 'react'
+﻿import { Suspense, lazy, useEffect, useState } from 'react'
 import { assetUrl } from '../data/assetUrl'
 import { loadSignalModel } from '../city/signalModel'
 import { CITIES as CATALOGUE, citySlug, regionOf } from '../city/cities'
 import { toHash } from '../data/route'
 import { useT } from '../i18n'
+import { SITE, SITE_CITIES, hasScene } from '../site'
 
 // Lazy: three.js scene setup should not hold up the headline. The text paints
 // first and the city arrives a moment later.
@@ -30,15 +31,15 @@ const HeroCity = lazy(() => import('./HeroCity'))
 // Rule-based controller, 37 cities x 3 seeds, after the amber fix in sim.js.
 const ANY_CITY = { cities: 37, improved: 24, meanStopped: -16 }
 
-const CITIES = [
+const SCENE_CITIES = [
   {
-    key: 'home', name: 'Barcelona', dir: 'replay',
+    key: 'home', scene: 'barcelona', name: 'Barcelona', dir: 'replay',
     where: ['Eixample, Spain', 'Eixample, España'],
     blurb: ['Cerdà’s grid of chamfered blocks: 3,230 signalised approaches, with traffic demand shaped by the city’s own published traffic data.',
             'La cuadrícula de Cerdà con sus manzanas achaflanadas: 3.230 accesos con semáforo y una demanda de tráfico basada en los datos que publica la propia ciudad.'],
   },
   {
-    key: 'manhattan', name: 'Manhattan', dir: 'replay_manhattan',
+    key: 'manhattan', scene: 'manhattan', name: 'Manhattan', dir: 'replay_manhattan',
     where: ['Midtown, New York', 'Midtown, Nueva York'],
     blurb: ['A near-perfect grid with avenue-length green waves, the textbook case for signal coordination. 5,598 buildings at surveyed height.',
             'Una cuadrícula casi perfecta con olas verdes a lo largo de las avenidas, el caso de manual de coordinación semafórica. 5.598 edificios con su altura medida.'],
@@ -215,7 +216,7 @@ function CapitalsStrip() {
         </p>
       )}
       <p className="land-card-note">
-        <a href={toHash('yours')}>{tr('All 89 cities, and search for any other →', 'Las 89 ciudades, y busca cualquier otra →')}</a>
+        <a href={toHash('yours')}>{tr(`All ${SITE_CITIES.length} cities, and search for any other →`, `Las ${SITE_CITIES.length} ciudades, y busca cualquier otra →`)}</a>
       </p>
     </section>
   )
@@ -227,18 +228,18 @@ export default function Landing({ onTab }) {
     <div className="land">
       <section className="land-hero">
         <div className="land-hero-text">
-          <p className="land-eyebrow">{tr('Adaptive traffic signals · real cities · digital twins',
-                                          'Semáforos adaptativos · ciudades reales · gemelos digitales')}</p>
-          <h1>{tr('Same streets. Same traffic.', 'Mismas calles. Mismo tráfico.')}<br />
-              {tr('Smarter traffic lights.', 'Semáforos más inteligentes.')}</h1>
+          <p className="land-eyebrow">{tr('Open data · AI for climate · Latin America',
+                                          'Datos abiertos · IA para el clima · América Latina')}</p>
+          <h1>{tr('Real streets. Open data.', 'Calles reales. Datos abiertos.')}<br />
+              {tr('Cleaner cities.', 'Ciudades más limpias.')}</h1>
           <p className="land-lede">
-            {tr('MainstreetAi runs two identical simulations of a real city side by side. One keeps today’s fixed signal timings. In the other, AI reads the queues at every junction and retimes the lights. Everything else is held equal, so the difference you see is the signals and nothing else.',
-                'MainstreetAi ejecuta lado a lado dos simulaciones idénticas de una ciudad real. Una mantiene los tiempos fijos de los semáforos de hoy. En la otra, la IA lee las colas en cada cruce y reprograma los semáforos. Todo lo demás es igual, así que la diferencia que ves son los semáforos y nada más.')}
+            {tr('MainstreetAi turns open data on Latin America’s cities into evidence for climate action: traffic lights timed by AI and the CO₂ they save, where to plant street trees and build bike lanes, and who lives too far from a bus. Every figure is measured on real streets and linked to its source.',
+                'MainstreetAi convierte los datos abiertos de las ciudades de América Latina en evidencia para la acción climática: semáforos programados por IA y el CO₂ que ahorran, dónde plantar árboles y hacer ciclovías, y quién vive demasiado lejos de un bus. Cada cifra se mide sobre calles reales y enlaza a su fuente.')}
           </p>
           <div className="land-cta">
-            <button className="land-btn primary" onClick={() => onTab('home')}>{tr('Watch Barcelona', 'Ver Barcelona')}</button>
-            <button className="land-btn" onClick={() => onTab('yours')}>{tr('Try your own city', 'Prueba tu ciudad')}</button>
-            <button className="land-btn ghost" onClick={() => onTab('how')}>{tr('How it works', 'Cómo funciona')}</button>
+            <button className="land-btn primary" onClick={() => onTab('yours')}>{tr('Try your city', 'Prueba tu ciudad')}</button>
+            <button className="land-btn" onClick={() => onTab('green')}>{tr('Trees and bike lanes', 'Árboles y ciclovías')}</button>
+            <button className="land-btn ghost" onClick={() => onTab('transit')}>{tr('Bus coverage', 'Cobertura de bus')}</button>
           </div>
         </div>
         <figure className="land-hero-city">
@@ -251,14 +252,36 @@ export default function Landing({ onTab }) {
       </section>
 
       <section className="land-section">
-        <h2>{tr('What the twins found', 'Lo que encontraron los gemelos')}</h2>
+        <h2>{tr('Three tools, one map', 'Tres herramientas, un mapa')}</h2>
         <p className="land-sub">
-          {tr('AI-timed signals against fixed timing, on the same simulated traffic. Figures come from the recorded runs shown in each city.',
-              'Semáforos programados por IA frente a tiempos fijos, con el mismo tráfico simulado. Las cifras salen de las simulaciones grabadas que se muestran en cada ciudad.')}
+          {tr('All built on open data, all free, all in your browser. No account and no key needed.',
+              'Todas con datos abiertos, gratis y en tu navegador. Sin cuenta y sin clave.')}
         </p>
         <div className="land-grid">
-          {CITIES.map((c) => <CityCard key={c.key} city={c} onTab={onTab} />)}
+          {SCENE_CITIES.filter((c) => hasScene(c.scene)).map((c) => <CityCard key={c.key} city={c} onTab={onTab} />)}
           <AnyCityCard onTab={onTab} />
+          {SITE.tabs.includes('green') && (
+            <article className="land-card glass">
+              <p className="land-card-where">{tr('Climate adaptation', 'Adaptación climática')}</p>
+              <h3>{tr('Trees and bike lanes', 'Árboles y ciclovías')}</h3>
+              <p className="land-card-blurb">
+                {tr('Which streets have no shade and room for trees, and which short stretches of bike lane would join a city’s separate pieces into a network. Every proposal links to the map data behind it.',
+                    'Qué calles no tienen sombra y tienen espacio para árboles, y qué tramos cortos de ciclovía unirían las piezas sueltas de la red. Cada propuesta enlaza a los datos del mapa que la sostienen.')}
+              </p>
+              <button className="land-btn" onClick={() => onTab('green')}>{tr('Plan greener streets →', 'Planificar calles más verdes →')}</button>
+            </article>
+          )}
+          {SITE.tabs.includes('transit') && (
+            <article className="land-card glass">
+              <p className="land-card-where">{tr('Public transport', 'Transporte público')}</p>
+              <h3>{tr('Who lives far from a bus', 'Quién vive lejos de un bus')}</h3>
+              <p className="land-card-blurb">
+                {tr('Every home checked against every bus stop, the gaps flagged for review, and what serving them would save in car-km and CO₂. Ask the evidence in your own words; every answer is cited.',
+                    'Cada vivienda comparada con cada parada de bus, los huecos marcados para revisar, y lo que ahorraría darles servicio en km en coche y CO₂. Pregunta a la evidencia con tus palabras; cada respuesta va citada.')}
+              </p>
+              <button className="land-btn" onClick={() => onTab('transit')}>{tr('See bus coverage →', 'Ver cobertura de bus →')}</button>
+            </article>
+          )}
         </div>
       </section>
 
@@ -292,8 +315,11 @@ export default function Landing({ onTab }) {
       <footer className="land-foot">
         <p>
           <b>{tr('A simulation, said plainly.', 'Una simulación, dicho claramente.')}</b>{' '}
-          {tr('Barcelona and Manhattan run in SUMO, the open-source traffic simulator used in research. Your city runs a simpler model in the browser. Results show how adaptive timing behaves on each network; they are not a forecast of real-world traffic.',
-              'Barcelona y Manhattan corren en SUMO, el simulador de tráfico de código abierto que se usa en investigación. Tu ciudad corre un modelo más simple en el navegador. Los resultados muestran cómo se comportan los semáforos adaptativos en cada red; no son un pronóstico del tráfico real.')}
+          {SITE.scenes.length
+            ? tr('The recorded cities run in SUMO, the open-source traffic simulator used in research. Your city runs a simpler model in the browser. Results show how adaptive timing behaves on each network; they are not a forecast of real-world traffic.',
+                 'Las ciudades grabadas corren en SUMO, el simulador de tráfico de código abierto que se usa en investigación. Tu ciudad corre un modelo más simple en el navegador. Los resultados muestran cómo se comportan los semáforos adaptativos en cada red; no son un pronóstico del tráfico real.')
+            : tr('Traffic runs in a simulator in your browser, on each city’s real streets. Results show how adaptive timing behaves on that network; they are not a forecast of real-world traffic. Trees, bike lanes and bus stops come from OpenStreetMap, which can be incomplete — each page says where.',
+                 'El tráfico corre en un simulador en tu navegador, sobre las calles reales de cada ciudad. Los resultados muestran cómo se comportan los semáforos adaptativos en esa red; no son un pronóstico del tráfico real. Árboles, ciclovías y paradas vienen de OpenStreetMap, que puede estar incompleto: cada página dice dónde.')}
         </p>
         <p className="land-links">
           <button onClick={() => onTab('research')}>{tr('Research', 'Investigación')}</button>
