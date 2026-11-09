@@ -685,6 +685,10 @@
 .dn-panel { position: fixed; top: 64px; right: 14px; width: 340px; max-height: calc(100vh - 90px); overflow-y: auto;
   padding: 12px 14px; border-radius: var(--r-md); z-index: 6; font-size: 12.5px; color: var(--ink-200); }
 .dn-sub { margin: 8px 0; color: var(--ink-300); }
+.dn-scenario { margin: 0 0 10px; padding: 6px 8px; border: 1px solid rgba(240,163,94,.5); border-radius: 8px;
+  background: rgba(240,163,94,.08); font-size: 11.5px; color: var(--ink-300); }
+.dn-scenario summary { cursor: pointer; color: #f0a35e; font-weight: 500; }
+.dn-scenario p { margin: 6px 0 0; line-height: 1.5; }
 .dn-row { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
 .dn-row select { padding: 4px 8px; border-radius: 6px; background: rgba(255,255,255,.06); color: inherit; border: 1px solid var(--glass-edge); }
 .dn-game { display: flex; gap: 6px; align-items: center; }
