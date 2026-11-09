@@ -1,0 +1,1 @@
+const a=t=>t*Math.PI/180;function e(t,r){const c=6371e3*Math.cos(a(t))*(Math.PI/180),n=6371e3*(Math.PI/180);return{xy:(o,s)=>[(s-r)*c,(o-t)*n],ll:(o,s)=>[t+s/n,r+o/c]}}const p=t=>`https://www.openstreetmap.org/${t}`;export{p as o,e as p};

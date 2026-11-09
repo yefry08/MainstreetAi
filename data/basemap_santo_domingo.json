@@ -1,0 +1,46 @@
+{
+  "png": null,
+  "note": "Extent only: no illustrated basemap was baked (see sim/write_extent.py).",
+  "width_px": 7127,
+  "height_px": 6632,
+  "px_per_m": 0.5,
+  "sim_extent": [
+    -70.005,
+    18.415,
+    -69.87,
+    18.535
+  ],
+  "lonlat_to_px": {
+    "kx": [
+      3695661.6606117534,
+      52791.39576618461,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "ky": [
+      1024429.45,
+      0.0,
+      -55270.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "basis": [
+      "1",
+      "lon",
+      "lat",
+      "lon*lon",
+      "lon*lat",
+      "lat*lat"
+    ],
+    "max_error_px": 0.0,
+    "fitted_over": [
+      -70.005,
+      18.415,
+      -69.87,
+      18.535
+    ]
+  }
+}
