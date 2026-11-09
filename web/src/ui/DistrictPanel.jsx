@@ -38,6 +38,9 @@ export default function DistrictPanel({ map, district = 'santo_domingo', slug = 
   const [{ day, hour }, setWhen] = useState(nowDR)
   const [game, setGame] = useState(false)
   const [shadeHour, setShadeHour] = useState(15)
+  const [shadeDate, setShadeDate] = useState('07-15')
+  // The year's dates (equinoxes, solstices, mid-July); older files hold July only.
+  const shadeHours = (shade?.dates?.find((d) => d.date === shadeDate) ?? { hours: shade?.hours ?? [] }).hours
 
   useEffect(() => {
     const get = (u, set) => fetch(assetUrl(u)).then((r) => (r.ok ? r.json() : null)).then(set).catch(() => set(null))
@@ -100,7 +103,7 @@ export default function DistrictPanel({ map, district = 'santo_domingo', slug = 
     map.getSource(SRC.hot).setData(fc(showPredict ? p.hotspots.slice(0, 15).map((h) =>
       pt(h.signal.lon, h.signal.lat, { cars: h.cars })) : []))
     const showBike = view === 'bike' && green
-    const sh = shade?.hours.find((x) => x.hour === shadeHour)
+    const sh = shadeHours.find((x) => x.hour === shadeHour)
     map.getSource(SRC.bike).setData(fc(showBike ? green.bike.lines.map((l, i) => ({ type: 'Feature',
       properties: { shade: sh?.bike[i] ?? 0.5 }, geometry: { type: 'LineString', coordinates: l } })) : []))
     map.getSource(SRC.conn).setData(fc(showBike ? green.bike.connectors.flatMap((c) => c.lines.map((l) => ({
@@ -113,12 +116,23 @@ export default function DistrictPanel({ map, district = 'santo_domingo', slug = 
         geometry: { type: 'Polygon', coordinates: [[[c.lon - dx, c.lat - dy], [c.lon + dx, c.lat - dy],
           [c.lon + dx, c.lat + dy], [c.lon - dx, c.lat + dy], [c.lon - dx, c.lat - dy]]] } }
     }) : []))
-  }, [map, view, p, green, shade, shadeHour, trees])
+  }, [map, view, p, green, shade, shadeHour, shadeDate, trees]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const max = line ? Math.max(...line, 1) : 1
-  const sh = shade?.hours.find((x) => x.hour === shadeHour)
+  const sh = shadeHours.find((x) => x.hour === shadeHour)
   return (
     <aside className="dn-panel glass">
+      {/* What kind of experiment the twin's numbers come from. An external
+          audit (2026-11-09) found them communicated more firmly than the
+          evidence supports; this is the label until calibration and an
+          ablation are done. */}
+      <details className="dn-scenario">
+        <summary>{tr('About these results: a synthetic scenario', 'Sobre estos resultados: escenario sintético')}</summary>
+        <p>{tr('The twin’s traffic is synthetic and below saturation (~0.8 vehicles per lane-km, average 43 km/h): far freer than the real Distrito Nacional at 7:30. The hourly demand curve is Barcelona’s, not Santo Domingo’s. One run, one seed, ~30 simulated minutes. The fixed-time reference is a generic 88 s plan, not the INTRANT’s real timings. The AI result mixes reactive control, bus priority and forecast anticipation; their separate effects are not yet measured.',
+               'El tráfico del gemelo es sintético y está por debajo de la saturación (~0,8 vehículos por carril-km, media de 43 km/h): mucho más fluido que el Distrito Nacional real a las 7:30. La curva horaria de demanda es la de Barcelona, no la de Santo Domingo. Una sola corrida, una semilla, ~30 minutos simulados. La referencia de horario fijo es un plan genérico de 88 s, no los planes reales del INTRANT. El resultado de la IA mezcla control reactivo, prioridad a buses y anticipación; su efecto por separado aún no se ha medido.')}</p>
+        <p>{tr('Next: demand from the INTRANT 2025-26 mobility survey and its counts, edge traffic from SDE/SDN/SDO, ≥10 seeds, a saturation sweep, stronger baselines (optimised fixed, actuated, max-pressure) and an ablation of each AI component.',
+               'Siguiente: demanda a partir de la encuesta de movilidad INTRANT 2025-26 y sus conteos, tráfico de borde desde SDE/SDN/SDO, ≥10 semillas, barrido de saturación, referencias más fuertes (fijo optimizado, actuado, max-pressure) y ablación de cada componente de la IA.')}</p>
+      </details>
       <div className="try-switch" role="group">
         <button className={view === 'predict' ? 'on' : ''} onClick={() => setView('predict')}>{tr('Prediction', 'Predicción')}</button>
         <button className={view === 'bike' ? 'on' : ''} onClick={() => setView('bike')}>{tr('Bike lanes & shade', 'Ciclovías y sombra')}</button>
@@ -136,41 +150,41 @@ export default function DistrictPanel({ map, district = 'santo_domingo', slug = 
             <dl className="land-stats dn-stats">
               <div><dt>{tr('Canopy today', 'Copa hoy')}</dt><dd className="bad">{pct(t.canopyNow)}</dd></div>
               <div><dt>{tr('Trees today, about', 'Árboles hoy, aprox.')}</dt><dd>{n(t.treesNow)}</dd></div>
-              <div><dt>{tr('Missing to reach 30%', 'Faltan para llegar al 30 %')}</dt><dd className="bad">{n(t.missing)}</dd></div>
+              <div><dt>{tr('Missing: every neighbourhood to 30%', 'Faltan: cada barrio al 30 %')}</dt><dd className="bad">{n(t.missingByCell)}</dd></div>
               <div><dt>{tr('Room to plant', 'Se pueden plantar')}</dt><dd className="good">{n(t.plant)}</dd></div>
             </dl>
             <p className="try-fine">
-              {tr(`${n(t.onStreets)} along streets (one every 10 m) and ${n(t.onOpen)} on open ground. Planting them all takes canopy from ${pct(t.canopyNow)} to ${pct(t.canopyAfter)}.`,
-                  `${n(t.onStreets)} a lo largo de las calles (uno cada 10 m) y ${n(t.onOpen)} en terrenos abiertos. Plantarlos todos lleva la copa de ${pct(t.canopyNow)} a ${pct(t.canopyAfter)}.`)}
+              {tr(`For the district as a whole to reach 30%, ~${n(t.missingDistrict)} would do (leafy areas offset bare ones); for every neighbourhood to reach it, ~${n(t.missingByCell)}. Room: ${n(t.onStreets)} along streets (one every 10 m on half the street length — pavements, cables and driveways take the rest) and ${n(t.onOpen)} on open ground. Planting them all takes canopy from ${pct(t.canopyNow)} to ${pct(t.canopyAfter)} over ${t.landKm2} km² of land.`,
+                  `Para que el distrito en conjunto llegue al 30 % bastarían ~${n(t.missingDistrict)} (las zonas arboladas compensan a las peladas); para que cada barrio llegue, ~${n(t.missingByCell)}. Espacio: ${n(t.onStreets)} en calles (uno cada 10 m en la mitad del largo de calle: aceras, cables y entradas ocupan el resto) y ${n(t.onOpen)} en terrenos abiertos. Plantarlos todos lleva la copa de ${pct(t.canopyNow)} a ${pct(t.canopyAfter)} en ${t.landKm2} km² de tierra.`)}
             </p>
-            <h3 className="land-strip-head">{tr('Climate benefits, at maturity', 'Beneficios climáticos, en madurez')}</h3>
+            <h3 className="land-strip-head">{tr('Climate benefits, at maturity (10-20 years)', 'Beneficios climáticos, en madurez (10-20 años)')}</h3>
             <dl className="land-stats dn-stats">
-              <div><dt>{tr('CO₂ absorbed a year', 'CO₂ absorbido al año')}</dt><dd className="good">{n(t.co2TYr[1])} t</dd></div>
+              <div><dt>{tr('CO₂ absorbed a year', 'CO₂ absorbido al año')}</dt><dd className="good">{n(t.co2TYr[0])}–{n(t.co2TYr[2])} t</dd></div>
               <div><dt>{tr('Rain intercepted a year', 'Lluvia interceptada al año')}</dt><dd className="good">{n(t.waterM3Yr)} m³</dd></div>
-              <div><dt>{tr('Cooler air, district average', 'Aire más fresco, media del distrito')}</dt><dd className="good">−{t.coolingC[1]} °C</dd></div>
+              <div><dt>{tr('Cooler air, district average', 'Aire más fresco, media del distrito')}</dt><dd className="good">−{t.coolingC[0]} a −{t.coolingC[2]} °C</dd></div>
             </dl>
             <p className="try-fine">
-              {tr(`Ranges: CO₂ ${n(t.co2TYr[0])}–${n(t.co2TYr[2])} t/yr; cooling ${t.coolingC[0]}–${t.coolingC[2]} °C, and well above that in the neighbourhoods with least canopy.`,
-                  `Rangos: CO₂ ${n(t.co2TYr[0])}–${n(t.co2TYr[2])} t/año; enfriamiento ${t.coolingC[0]}–${t.coolingC[2]} °C, y bastante más en los barrios con menos copa.`)}
+              {tr('Ranges from the literature, for trees that survive to maturity; no growth curve or mortality is modelled yet. Cooling is larger in the neighbourhoods with least canopy.',
+                  'Rangos de la literatura, para árboles que llegan a la madurez; aún no se modelan la curva de crecimiento ni la mortalidad. El enfriamiento es mayor en los barrios con menos copa.')}
             </p>
             <h3 className="land-strip-head">{tr('Where to plant first', 'Dónde plantar primero')}</h3>
             <ol className="dn-hot">
               {trees.neighbourhoods.slice(0, 8).map((g) => {
-                const gain = (g.plant * 50) / (g.cells * trees.cellM * trees.cellM)
+                const gain = (g.plant * 50) / ((t.landKm2 * 1e6 / trees.totals.cells) * g.cells)
                 return (
                   <li key={g.name}>
                     <button className="dn-link" onClick={() => map?.flyTo({ center: [g.lon, g.lat], zoom: 15, duration: 900 })}>
                       <b>{g.name}</b> <em>{tr('canopy', 'copa')} {Math.round(g.canopy * 100)}%</em>
                     </button>
-                    <span>{tr(`plant ${n(g.plant)} (${n(g.onStreets)} on streets) · missing ${n(g.missing)} · ~${(gain * 100 * 0.05).toFixed(1)} °C cooler`,
-                              `plantar ${n(g.plant)} (${n(g.onStreets)} en calles) · faltan ${n(g.missing)} · ~${(gain * 100 * 0.05).toFixed(1)} °C más fresco`)}</span>
+                    <span>{tr(`plant ${n(g.plant)} (${n(g.onStreets)} on streets) · neighbourhood deficit ${n(g.missing)} · ~${(gain * 100 * 0.03).toFixed(1)}–${(gain * 100 * 0.1).toFixed(1)} °C cooler`,
+                              `plantar ${n(g.plant)} (${n(g.onStreets)} en calles) · déficit del barrio ${n(g.missing)} · ~${(gain * 100 * 0.03).toFixed(1)}–${(gain * 100 * 0.1).toFixed(1)} °C más fresco`)}</span>
                   </li>
                 )
               })}
             </ol>
             <p className="try-fine">
-              {tr('Canopy: ESA WorldCover 10 m (2021), so single street trees narrower than a pixel are undercounted. Mature crown 50 m²; “room” is an upper bound — pavement width, cables and pipes decide the final number on each street. Benefits are literature averages (i-Tree; cooling studies), not measurements of these trees.',
-                  'Copa: ESA WorldCover 10 m (2021), así que los árboles de calle aislados, más estrechos que un píxel, se cuentan de menos. Copa madura de 50 m²; el “espacio” es un máximo: el ancho de acera, los cables y las tuberías deciden la cifra final en cada calle. Los beneficios son promedios de la literatura (i-Tree; estudios de enfriamiento), no mediciones de estos árboles.')}
+              {tr('Canopy: ESA WorldCover 10 m (2021), pixel area at this latitude (~81 m²); isolated street trees narrower than a pixel are undercounted. Mature crown 50 m². Street room assumes half the street length is plantable until pavement and utility data exist. Priority uses built-up share as a heat proxy, not measured temperature. Benefits are literature averages (i-Tree; cooling studies), not measurements of these trees.',
+                  'Copa: ESA WorldCover 10 m (2021), con el área real del píxel a esta latitud (~81 m²); los árboles de calle aislados, más estrechos que un píxel, se cuentan de menos. Copa madura de 50 m². El espacio en calle supone plantable la mitad del largo de calle hasta tener datos de aceras y redes. La prioridad usa la fracción construida como aproximación al calor, no temperatura medida. Los beneficios son promedios de la literatura (i-Tree; estudios de enfriamiento), no mediciones de estos árboles.')}
             </p>
           </>
         )
@@ -219,9 +233,17 @@ export default function DistrictPanel({ map, district = 'santo_domingo', slug = 
 
       {view === 'bike' && (
         <>
-          <p className="dn-sub">{tr('How much of the bike network is in shade, 15 July.', 'Cuánta red ciclista está a la sombra, 15 de julio.')}</p>
+          <p className="dn-sub">{tr('How much of the bike network is in shade, by date and hour.', 'Cuánta red ciclista está a la sombra, por fecha y hora.')}</p>
+          {shade?.dates && (
+            <div className="dn-row">
+              <select value={shadeDate} onChange={(e) => setShadeDate(e.target.value)} aria-label={tr('Date', 'Fecha')}>
+                {shade.dates.map((d) => <option key={d.date} value={d.date}>{{ '03-21': tr('21 March', '21 de marzo'), '06-21': tr('21 June', '21 de junio'),
+                  '07-15': tr('15 July', '15 de julio'), '09-21': tr('21 September', '21 de septiembre'), '12-21': tr('21 December', '21 de diciembre') }[d.date] ?? d.date}</option>)}
+              </select>
+            </div>
+          )}
           <div className="try-switch" role="group">
-            {(shade?.hours ?? []).map((x) => (
+            {shadeHours.map((x) => (
               <button key={x.hour} className={shadeHour === x.hour ? 'on' : ''} onClick={() => setShadeHour(x.hour)}>{x.hour}:00</button>
             ))}
           </div>
@@ -238,8 +260,8 @@ export default function DistrictPanel({ map, district = 'santo_domingo', slug = 
           </p>
           {shade && (
             <p className="try-fine">
-              {tr(`${shade.buildings.toLocaleString()} buildings (${Math.round(shade.heightAssumedShare * 100)}% with height assumed at two storeys) and ${shade.trees.toLocaleString()} mapped trees cast the shadows.`,
-                  `Proyectan la sombra ${shade.buildings.toLocaleString('es')} edificios (al ${Math.round(shade.heightAssumedShare * 100)}% se le supone una altura de dos pisos) y ${shade.trees.toLocaleString('es')} árboles mapeados.`)}
+              {tr(`Shadows from ${shade.buildings.toLocaleString()} OpenStreetMap buildings (${Math.round(shade.heightAssumedShare * 100)}% with height assumed at two storeys; OSM is missing many buildings here) and the tree canopy measured from satellite (${(shade.canopyPixels ?? 0).toLocaleString()} WorldCover pixels) plus ${shade.trees.toLocaleString()} mapped trees.${shade.loopsExcluded ? ` ${shade.loopsExcluded} closed loops (tracks, park circuits) are left out of the network share.` : ''}`,
+                  `Sombras de ${shade.buildings.toLocaleString('es')} edificios de OpenStreetMap (al ${Math.round(shade.heightAssumedShare * 100)}% se le supone una altura de dos pisos; a OSM le faltan muchos edificios aquí) y de la copa arbórea medida desde satélite (${(shade.canopyPixels ?? 0).toLocaleString('es')} píxeles de WorldCover) más ${shade.trees.toLocaleString('es')} árboles mapeados.${shade.loopsExcluded ? ` Se excluyen ${shade.loopsExcluded} circuitos cerrados (pistas, parques) del porcentaje de la red.` : ''}`)}
             </p>
           )}
         </>

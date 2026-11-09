@@ -16,6 +16,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { fromFile } from 'geotiff'
 import { fetchCity } from '../src/city/osm.js'
 import { projector } from '../src/transit/coverage.js'
 import { heightOf, localDate, shadedShare, shadeIndex, shadows, sunPosition } from '../src/green/shade.js'
@@ -82,30 +83,65 @@ for (const el of els.values()) {
 }
 console.log(`buildings ${buildings.length} (${Math.round((assumed / Math.max(buildings.length, 1)) * 100)}% height assumed), trees ${trees.length}`)
 
-// ---- shade per hour -----------------------------------------------------------
+// ---- the measured canopy casts shade too ---------------------------------------
+// OSM maps ~460 trees here; WorldCover measures ~15 km2 of canopy. An external
+// audit (2026-11-09) found the first version shading with the 460 alone. Every
+// WorldCover tree pixel near a street now stands in for a canopy (TREE_R disc
+// at TREE_H), so the shade includes the trees that are actually there.
+const tiff = await fromFile(join(WEB, '.cache', 'worldcover', 'N18W072.tif'))
+const img = await tiff.getImage()
+const [ox, oy] = img.getOrigin()
+const [rx, ry] = img.getResolution()
+const [S, W, N, E] = area.box
+const x0 = Math.floor((W - ox) / rx), x1 = Math.ceil((E - ox) / rx)
+const y0 = Math.floor((N - oy) / ry), y1 = Math.ceil((S - oy) / ry)
+const [band] = await img.readRasters({ window: [x0, y0, x1, y1] })
+const width = x1 - x0
+let canopyPx = 0
+for (let i = 0; i < band.length; i++) {
+  if (band[i] !== 10 && band[i] !== 95) continue
+  const lon = ox + (x0 + (i % width) + 0.5) * rx, lat = oy + (y0 + Math.floor(i / width) + 0.5) * ry
+  trees.push(p.xy(lat, lon)); canopyPx++
+}
+console.log(`canopy pixels from WorldCover: ${canopyPx.toLocaleString()} (plus ${els.size - buildings.length} OSM tree nodes)`)
+
+// ---- shade per date and hour ------------------------------------------------------
 const toXY = (line) => line.map(([lon, lat]) => p.xy(lat, lon))
 const len = (l) => l.slice(1).reduce((s, q, i) => s + Math.hypot(q[0] - l[i][0], q[1] - l[i][1]), 0)
-const bike = green.bike.lines.map(toXY)
+// A closed loop is a track or a park circuit, not a way to get anywhere: one
+// 310 m loop by the Centro Olimpico read 86-100% shaded at every hour.
+const isLoop = (l) => l.length > 3 && Math.hypot(l[0][0] - l.at(-1)[0], l[0][1] - l.at(-1)[1]) < 5
+const bikeAll = green.bike.lines.map(toXY)
+const bikeKeep = bikeAll.map((l) => !isLoop(l))
 const plant = green.planting.map((g) => g.lines.map(toXY))
-const hours = []
-for (const hour of HOURS) {
-  const sun = sunPosition(localDate(Y, M, D, hour), centre[0], centre[1])
-  const isShaded = shadeIndex(shadows(buildings, trees, sun))
-  let shadedM = 0, totalM = 0
-  const bikeShare = bike.map((l) => {
-    const s = shadedShare(l, isShaded), L = len(l)
-    shadedM += s * L; totalM += L
-    return Math.round(s * 100) / 100
-  })
-  const plantShare = plant.map((ls) => {
-    const L = ls.reduce((s, l) => s + len(l), 0)
-    return Math.round((ls.reduce((s, l) => s + shadedShare(l, isShaded) * len(l), 0) / Math.max(L, 1)) * 100) / 100
-  })
-  hours.push({ hour, altitude: Math.round((sun.altitude * 180) / Math.PI), azimuth: Math.round((sun.azimuth * 180) / Math.PI),
-               bikeShaded: Math.round((shadedM / Math.max(totalM, 1)) * 100) / 100, bike: bikeShare, planting: plantShare })
-  console.log(`  ${hour}:00  sun ${hours.at(-1).altitude} deg  bike network ${Math.round(hours.at(-1).bikeShaded * 100)}% in shade`)
+// The year's extremes and middles: equinoxes and solstices, plus mid-July heat.
+const DATES = [[3, 21], [6, 21], [7, 15], [9, 21], [12, 21]]
+const dates = []
+for (const [mm, dd] of DATES) {
+  const hours = []
+  for (const hour of HOURS) {
+    const sun = sunPosition(localDate(Y, mm, dd, hour), centre[0], centre[1])
+    const isShaded = shadeIndex(shadows(buildings, trees, sun))
+    let shadedM = 0, totalM = 0
+    const bikeShare = bikeAll.map((l, i) => {
+      const s = shadedShare(l, isShaded)
+      if (bikeKeep[i]) { const L = len(l); shadedM += s * L; totalM += L }
+      return Math.round(s * 100) / 100
+    })
+    const plantShare = plant.map((ls) => {
+      const L = ls.reduce((s, l) => s + len(l), 0)
+      return Math.round((ls.reduce((s, l) => s + shadedShare(l, isShaded) * len(l), 0) / Math.max(L, 1)) * 100) / 100
+    })
+    hours.push({ hour, altitude: Math.round((sun.altitude * 180) / Math.PI), azimuth: Math.round((sun.azimuth * 180) / Math.PI),
+                 bikeShaded: Math.round((shadedM / Math.max(totalM, 1)) * 100) / 100, bike: bikeShare, planting: plantShare })
+  }
+  dates.push({ date: `${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`, hours })
+  console.log(`  ${dates.at(-1).date}: ` + hours.map((h) => `${h.hour}h ${Math.round(h.bikeShaded * 100)}%`).join('  '))
 }
-writeFileSync(join(OUT, `${slug}.json`), JSON.stringify({ slug, date: `${Y}-${String(M).padStart(2, '0')}-${String(D).padStart(2, '0')}`,
+const july = dates.find((d) => d.date === '07-15')
+writeFileSync(join(OUT, `${slug}.json`), JSON.stringify({ slug, date: `${Y}-07-15`,
   buildings: buildings.length, heightAssumedShare: Math.round((assumed / Math.max(buildings.length, 1)) * 100) / 100,
-  trees: trees.length, hours, generated: new Date().toISOString() }))
+  trees: els.size - buildings.length, canopyPixels: canopyPx, loopsExcluded: bikeKeep.filter((k) => !k).length,
+  // `hours` stays mid-July for the existing view; `dates` holds the year.
+  hours: july.hours, dates, generated: new Date().toISOString() }))
 console.log(`baked  shade ${slug}`)

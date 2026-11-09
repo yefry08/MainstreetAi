@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { fromFile } from 'geotiff'
 import { fetchCity } from '../src/city/osm.js'
-import { WC, benefits, cellPlan, treesFromCanopy, TARGET } from '../src/green/canopy.js'
+import { CROWN_M2, WC, benefits, cellPlan, districtDeficit, pixelArea, TARGET } from '../src/green/canopy.js'
 
 const WEB = join(dirname(fileURLToPath(import.meta.url)), '..')
 const CACHE = join(WEB, '.cache', 'trees')
@@ -124,22 +124,26 @@ for (const w of streets) {
 
 // ---- plan ----------------------------------------------------------------------------------
 const cells = []
-const tot = { missing: 0, plant: 0, onStreets: 0, onOpen: 0, treePx: 0, landM2: 0, plantedM2: 0 }
+const tot = { missing: 0, plant: 0, onStreets: 0, onOpen: 0, treeM2: 0, landM2: 0, plantedM2: 0 }
 for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
   const lat = S + (r + 0.5) * dLat, lon = W + (c + 0.5) * dLon
   if (!inDistrict(lat, lon)) continue
   const k = r * cols + c
-  const plan = cellPlan(px[k], streetM[k])
+  // The pixel's real ground area at this cell's latitude (~81 m2 here).
+  const pxM2 = pixelArea(lat)
+  const plan = cellPlan(px[k], streetM[k], pxM2)
   if (!plan) continue
-  treePx += px[k].tree; landPx += plan.landM2 / 100
+  treePx += px[k].tree; landPx += plan.landM2 / pxM2
+  tot.treeM2 += px[k].tree * pxM2
   tot.missing += plan.missing; tot.plant += plan.plant; tot.onStreets += plan.onStreets; tot.onOpen += plan.onOpen
-  tot.landM2 += plan.landM2; tot.plantedM2 += plan.plant * 50
+  tot.landM2 += plan.landM2; tot.plantedM2 += plan.plant * CROWN_M2
   cells.push({ lat: +lat.toFixed(5), lon: +lon.toFixed(5), canopy: +plan.canopy.toFixed(3), after: +plan.canopyAfter.toFixed(3),
                built: +plan.builtShare.toFixed(2), missing: plan.missing, plant: plan.plant, onStreets: plan.onStreets,
                priority: +plan.priority.toFixed(4) })
 }
 const canopyNow = treePx / landPx
-const canopyAfter = (treePx * 100 + tot.plantedM2) / tot.landM2
+const canopyAfter = (tot.treeM2 + tot.plantedM2) / tot.landM2
+const pxMid = pixelArea((S + N) / 2)
 // Ranked lists by neighbourhood: sum the cells under each nearest place name.
 const byPlace = new Map()
 for (const cell of cells) {
@@ -159,8 +163,11 @@ const out = {
   sources: ['ESA WorldCover 10 m 2021 v200 (CC-BY 4.0)', 'OpenStreetMap contributors (ODbL)'],
   totals: {
     cells: cells.length, canopyNow: +canopyNow.toFixed(3), canopyAfter: +canopyAfter.toFixed(3),
-    treesNow: treesFromCanopy(treePx), osmTrees: 459,
-    missing: tot.missing, plant: tot.plant, onStreets: tot.onStreets, onOpen: tot.onOpen,
+    landKm2: +(tot.landM2 / 1e6).toFixed(1), treesNow: Math.round(tot.treeM2 / CROWN_M2),
+    // Two deficits, named apart (see canopy.js): every neighbourhood to 30%,
+    // and the district as a whole to 30%.
+    missingByCell: tot.missing, missingDistrict: districtDeficit(treePx, landPx, pxMid),
+    plant: tot.plant, onStreets: tot.onStreets, onOpen: tot.onOpen,
     co2TYr: b.co2TYr.map((x) => Math.round(x)), waterM3Yr: Math.round(b.waterM3Yr),
     coolingC: b.coolingC.map((x) => +x.toFixed(2)),
   },
@@ -170,7 +177,8 @@ const out = {
 writeFileSync(join(OUT, `${slug}.json`), JSON.stringify(out))
 const t = out.totals
 console.log(`baked  trees ${slug}: ${cells.length} cells, canopy ${(t.canopyNow * 100).toFixed(1)}% now ` +
-  `(~${t.treesNow.toLocaleString()} trees), ${t.missing.toLocaleString()} missing to 30%, room to plant ` +
+  `(~${t.treesNow.toLocaleString()} trees, ${t.landKm2} km2 of land), every neighbourhood to 30%: ${t.missingByCell.toLocaleString()}; ` +
+  `district to 30%: ${t.missingDistrict.toLocaleString()}; room to plant ` +
   `${t.plant.toLocaleString()} (${t.onStreets.toLocaleString()} on streets) -> ${(t.canopyAfter * 100).toFixed(1)}%; ` +
   `CO2 ${t.co2TYr.join('/')} t/yr, water ${t.waterM3Yr.toLocaleString()} m3/yr, cooling ${t.coolingC.join('/')} C`)
 console.log('top:', out.neighbourhoods.slice(0, 6).map((n) => `${n.name} (${(n.canopy * 100).toFixed(0)}%, plant ${n.plant})`).join('; '))
