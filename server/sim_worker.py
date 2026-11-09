@@ -528,7 +528,10 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
                 # network at a chosen load during a demo. None = follow the
                 # measured profile again.
                 v = c.get("value")
-                manual_scale = None if v is None else max(0.02, min(1.5, float(v)))
+                # Up to 3x: calibrating a whole city district against its real
+                # peak (sim/calibrate_district.py) can need more than the 1.5x
+                # the Barcelona core ever did. The API still caps at 5.
+                manual_scale = None if v is None else max(0.02, min(3.0, float(v)))
                 last_scale = -1.0
             elif t == "clock":
                 # Jump the simulated clock to a chosen day and hour. This

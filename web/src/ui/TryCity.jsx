@@ -455,8 +455,15 @@ export default function TryCity({ cityParam = null, onCityParam }) {
               if (live.provider === 'mapbox') {
                 const jam = pc(live.shares.moderate + live.shares.heavy + live.shares.severe)
                 const bad = pc(live.shares.heavy + live.shares.severe)
+                // Mapbox draws every road "low" where it has no probe data --
+                // Santo Domingo at 07:05 on a Monday read 0% congested on 751
+                // km of main road. A perfectly free city is said to be possibly
+                // a missing feed, not reported as a fact.
+                const allLow = live.shares.low >= 0.999
                 return tr(`: of ${live.km.toFixed(0)} km of road here, ${jam}% is congested (${bad}% heavy or severe); estimated speed ~${pc(live.ratio)}% of free flow · read at ${at} your time.`,
-                          `: de ${live.km.toFixed(0)} km de calles aquí, el ${jam}% está congestionado (${bad}% denso o severo); velocidad estimada ~${pc(live.ratio)}% de la normal · leído a las ${at} (tu hora).`)
+                          `: de ${live.km.toFixed(0)} km de calles aquí, el ${jam}% está congestionado (${bad}% denso o severo); velocidad estimada ~${pc(live.ratio)}% de la normal · leído a las ${at} (tu hora).`) +
+                  (allLow ? tr(' Mapbox marks every street as free-flowing, which in some cities means it has no live data there; treat this as no reading.',
+                               ' Mapbox marca todas las calles como fluidas, lo que en algunas ciudades significa que no tiene datos en vivo; tómalo como sin lectura.') : '')
               }
               return tr(`: these streets are moving at ${Math.round(live.currentKmh)} km/h, ${pc(live.ratio)}% of their free-flow ${Math.round(live.freeKmh)} km/h (${live.points} points) · read at ${at} your time.`,
                         `: estas calles van a ${Math.round(live.currentKmh)} km/h, el ${pc(live.ratio)}% de sus ${Math.round(live.freeKmh)} km/h sin tráfico (${live.points} puntos) · leído a las ${at} (tu hora).`)
