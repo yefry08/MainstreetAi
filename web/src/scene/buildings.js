@@ -116,6 +116,22 @@ export function addBuildings(map, city) {
   if (!style?.layers) return false
 
   const { HEIGHT_EXPR, BASE_EXPR, COLOR_EXPR, ROOF_COLOR_EXPR } = exprsFor(city)
+
+  // A whole city district (Santo Domingo's Distrito Nacional, ~190 km2) has
+  // far too many buildings for one GeoJSON file. Those cities set
+  // buildings: 'vector' and draw the basemap's own OpenMapTiles building layer,
+  // which streams by tile and carries render_height (RAW_HEIGHT reads it).
+  if (city?.buildings === 'vector') {
+    const vec = Object.entries(style.sources).find(([, s]) => s.type === 'vector')?.[0]
+    if (!vec) return false
+    for (const l of style.layers) {
+      if (l['source-layer'] === 'building' && l.id !== BUILDING_LAYER_ID && l.id !== ROOF_LAYER_ID) {
+        map.setLayoutProperty(l.id, 'visibility', 'none')
+      }
+    }
+    return addBuildingLayers(map, style, vec, { HEIGHT_EXPR, BASE_EXPR, COLOR_EXPR, ROOF_COLOR_EXPR }, 'building')
+  }
+
   const sourceUrl = assetUrl(city?.buildings ?? 'data/buildings.geojson')
 
   if (!map.getSource(SOURCE_ID)) {
@@ -132,7 +148,13 @@ export function addBuildings(map, city) {
     // Barcelona's buildings standing in the water.
     map.getSource(SOURCE_ID).setData(sourceUrl)
   }
-  const source = SOURCE_ID
+  return addBuildingLayers(map, style, SOURCE_ID,
+    { HEIGHT_EXPR, BASE_EXPR, COLOR_EXPR, ROOF_COLOR_EXPR })
+}
+
+/** The wall and roof extrusions, on a GeoJSON source or a vector one's layer. */
+function addBuildingLayers(map, style, source, { HEIGHT_EXPR, BASE_EXPR, COLOR_EXPR, ROOF_COLOR_EXPR }, sourceLayer) {
+  const fromLayer = sourceLayer ? { 'source-layer': sourceLayer } : {}
 
   // Beneath the first symbol layer, so street labels stay readable at street
   // level rather than being buried inside the blocks.
@@ -143,6 +165,7 @@ export function addBuildings(map, city) {
       {
         id: BUILDING_LAYER_ID,
         source,
+        ...fromLayer,
         type: 'fill-extrusion',
         minzoom: 12,
         paint: {
@@ -164,6 +187,7 @@ export function addBuildings(map, city) {
       {
         id: ROOF_LAYER_ID,
         source,
+        ...fromLayer,
         type: 'fill-extrusion',
         minzoom: 13,
         paint: {
@@ -215,6 +239,11 @@ export function growBuildings(map, { duration = 1900, fps = 30, city } = {}) {
 
   return new Promise((resolve) => {
     if (!map?.getLayer(BUILDING_LAYER_ID)) return resolve(false)
+    // No intro for streamed (vector-tile) buildings: every ramp step re-lays
+    // the extrusions of every loaded tile on the main thread, and across a
+    // whole city district that froze the page for over 45 s. They simply stand
+    // at full height.
+    if (city?.buildings === 'vector') return resolve(false)
 
     /** @returns true if the paint updates actually landed. */
     const setRamp = (prog) => {

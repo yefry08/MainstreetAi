@@ -14,6 +14,7 @@ one simulation per process, which is exactly why each twin gets its own process.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import sys
@@ -217,10 +218,14 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
     # Modes are optional on disk: a route file that has not been generated is
     # skipped rather than crashing the worker, so adding a mode does not force
     # everyone to rebuild demand before the sim will start.
+    # "events" is the traffic predicted from the district's generators -- school
+    # runs, office hours, malls, game nights (web/scripts/build-events.mjs).
+    # Both twins load it, so the comparison stays fair; only the AI twin is
+    # given the forecast of it, below.
     routes = ",".join(
         str(p) for p in (
             SIM / "net" / f"{m}{tag}.rou.xml"
-            for m in ("car", "moto", "bike", "truck", "bus")
+            for m in ("car", "moto", "bike", "truck", "bus", "events")
         ) if p.exists()
     )
     ls.start([
@@ -256,8 +261,17 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
     tls_ids = list(ls.trafficlight.getIDList())
     plans = build_plans(ls, tls_ids)
 
+    # The forecast of predicted waves per signal, if the district has one.
+    forecast = None
+    fc_path = SIM / "net" / f"forecast_{DISTRICT}.json"
+    if mode == "ai" and fc_path.exists():
+        try:
+            forecast = json.loads(fc_path.read_text(encoding="utf-8")).get("signals")
+        except Exception:
+            forecast = None
+
     controller = (
-        AdaptiveController(ls, plans, start_hour=start_hour)
+        AdaptiveController(ls, plans, start_hour=start_hour, forecast=forecast)
         if mode == "ai" else
         FixedTimeController(ls, plans)
     )

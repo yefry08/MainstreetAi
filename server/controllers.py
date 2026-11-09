@@ -302,10 +302,15 @@ class AdaptiveController:
     name = "ai"
     label = "AI-adaptive"
 
-    def __init__(self, conn, plans: dict[str, JunctionPlan], *, start_hour: float = 7.0):
+    def __init__(self, conn, plans: dict[str, JunctionPlan], *, start_hour: float = 7.0,
+                 forecast: dict | None = None):
         self.conn = conn
         self.plans = plans
         self.start_hour = start_hour
+        # Predicted waves per signal (web/scripts/build-events.mjs): which lanes
+        # lead TOWARD a school/office/stadium about to fill, or AWAY from one
+        # about to empty, and when. See _anticipate.
+        self.forecast = self._prepare_forecast(forecast or {})
 
         # --- tunable policy parameters ---
         self.min_green = 8.0          # never truncate below this
@@ -379,6 +384,20 @@ class AdaptiveController:
             served = sum(q[l] for l in green_lanes if l in q)
             waiting = sum(q.values()) - served
 
+            # Anticipation: cars predicted to reach this junction in the next
+            # minute count as queued already, on the approaches they will use.
+            # A reactive controller sees the colegio's 13:00 wave only once it
+            # has backed up; this one starts favouring those approaches as the
+            # wave begins.
+            if tid in self.forecast:
+                ahead_green, ahead_red, why = self._anticipate(tid, green_lanes, sim_time)
+                served += ahead_green
+                waiting += ahead_red
+                if why and served >= waiting * self.imbalance and elapsed < max_green:
+                    self._hold(tid, plan, sim_time, f"forecast: {why}")
+                    self.stats["anticipations"] = self.stats.get("anticipations", 0) + 1
+                    continue
+
             req = bus_requests.get(tid)
             bus_here = bus_wait = False
             if req:
@@ -419,6 +438,72 @@ class AdaptiveController:
                 continue
 
             self._release(tid, plan, sim_time, f"queue {served} vs {waiting}: switching")
+
+    # ---------------------------------------------------------------
+    # Lead time: a wave is anticipated from this many seconds before it starts.
+    FORECAST_LEAD_S = 600.0
+    # Horizon: the cars expected over this many seconds count as queued now.
+    FORECAST_HORIZON_S = 60.0
+
+    def _prepare_forecast(self, raw: dict) -> dict:
+        """
+        Turn the forecast's places into lanes. For each signal and wave, the
+        lanes whose direction of travel points at the place (an arrival wave)
+        or away from it (a departure wave) are the ones the wave will use.
+        """
+        out = {}
+        conn = self.conn
+        for tid, waves in raw.items():
+            plan = self.plans.get(tid)
+            if not plan:
+                continue
+            prepared = []
+            for w in waves:
+                try:
+                    gx, gy = conn.simulation.convertGeo(w["lon"], w["lat"], fromGeo=True)
+                except Exception:
+                    continue
+                lanes = set()
+                for lane in plan.all_lanes:
+                    try:
+                        shape = conn.lane.getShape(lane)
+                    except Exception:
+                        continue
+                    if len(shape) < 2:
+                        continue
+                    (x0, y0), (x1, y1) = shape[0], shape[-1]
+                    # Direction of travel against the vector from the stop line
+                    # to the place: positive means the lane heads toward it.
+                    toward = (x1 - x0) * (gx - x1) + (y1 - y0) * (gy - y1) > 0
+                    if toward == (w["dir"] == "in"):
+                        lanes.add(lane)
+                if lanes:
+                    label = w.get("name") or w.get("kind", "place")
+                    prepared.append((w["begin"], w["end"], w["vph"], frozenset(lanes),
+                                     f"{'arrivals at' if w['dir'] == 'in' else 'departures from'} {label}"))
+            if prepared:
+                out[tid] = prepared
+        return out
+
+    def _anticipate(self, tid: str, green_lanes, sim_time: float) -> tuple[float, float, str]:
+        """Predicted cars over the horizon on green lanes, on red lanes, and why."""
+        g = r = 0.0
+        why, best = "", 0.0
+        green = set(green_lanes)
+        for begin, end, vph, lanes, label in self.forecast[tid]:
+            if not (begin - self.FORECAST_LEAD_S <= sim_time <= end):
+                continue
+            cars = vph * self.FORECAST_HORIZON_S / 3600.0
+            # Ramp in over the lead time, so the controller leans before the
+            # wave rather than lurching at its first second.
+            if sim_time < begin:
+                cars *= 1.0 - (begin - sim_time) / self.FORECAST_LEAD_S
+            on_green = len(lanes & green) / max(len(lanes), 1)
+            g += cars * on_green
+            r += cars * (1.0 - on_green)
+            if cars * on_green > best:
+                best, why = cars * on_green, label
+        return g, r, why
 
     # ---------------------------------------------------------------
     def apply_policy(self, policy: dict, source: str = "ai", rationale: str = "") -> dict:

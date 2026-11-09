@@ -105,6 +105,19 @@ DISTRICTS: list[District] = [
             "per km2 is among the highest here.",
     ),
     District(
+        key="santo_domingo",
+        city="Santo Domingo",
+        name="Distrito Nacional",
+        # The Distrito Nacional's extent: the Caribbean coast to Villa Mella's
+        # edge, the Ozama river to the Autopista Duarte. ~14 x 13 km -- a
+        # whole city district rather than a neighbourhood, like Barcelona's
+        # full-extent build and unlike the five ~2.5 km boxes.
+        bbox=(18.4150, -70.0050, 18.5350, -69.8700),
+        why="The capital of the Dominican Republic, modelled whole: the "
+            "Ciudad Colonial's grid, the 27 de Febrero and Kennedy corridors, "
+            "and the signalised avenues of Piantini, Naco and Gazcue.",
+    ),
+    District(
         key="london_city",
         city="London",
         name="City & Westminster",

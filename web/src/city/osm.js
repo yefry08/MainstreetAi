@@ -69,7 +69,7 @@ out body geom;`
  * nothing.
  */
 export function fetchCity(bbox, {
-  signal, onProgress, headers = {}, hedgeMs = 6000, timeoutMs = 120000, ql,
+  signal, onProgress, headers = {}, hedgeMs = 6000, timeoutMs = 120000, ql, allowEmpty = false,
 } = {}) {
   // `ql` replaces the street query (scripts/bake-transit.mjs asks for stops,
   // routes and homes instead) while keeping the mirror fallback.
@@ -132,7 +132,9 @@ export function fetchCity(bbox, {
         .then(async (res) => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`)
           const json = await res.json()
-          if (!json.elements?.length) throw new Error('empty response')
+          // Empty is an error for a city's streets, but a real answer for a
+          // tile of a district that lies over the sea (allowEmpty).
+          if (!json.elements?.length && !(allowEmpty && Array.isArray(json.elements))) throw new Error('empty response')
           finish(null, json)
         })
         .catch((e) => {

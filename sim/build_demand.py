@@ -86,6 +86,26 @@ DISTRICT_MODES = {
         "bus":   dict(vclass="bus",        vtype="bus",   period=13.6, fringe=1.2, min_dist=900),  # ~6%
         "moto":  dict(vclass="motorcycle", vtype="moto",  period=27.3, fringe=2.0, min_dist=250),  # ~3%
     },
+    # SANTO DOMINGO, DISTRITO NACIONAL
+    # A whole city district (~14 x 13 km), not a 2.5 km core, so trips are
+    # longer and the network bigger: ~3x Barcelona's extract. The split is an
+    # informed estimate of Distrito Nacional street traffic, not a published
+    # modal-share table -- stated so the assumption is visible:
+    #   moto  motorcycles and motoconchos are a very large share of the fleet,
+    #         closer to Barcelona's third than to Manhattan's rounding error
+    #   bus   guaguas and carros públicos -- the city's collective transport
+    #         runs largely on these rather than on scheduled lines -- plus OMSA
+    #   bike  a small share; the network is fragmented (see the Green tab)
+    # Volume (~18,000 trips/h at peak) is a first setting to be checked against
+    # concurrency in a short run before the full record, as Shibuya's was.
+    "santo_domingo": {
+        #  name    vclass          vType    period  fringe  min_dist  share
+        "car":   dict(vclass="passenger",  vtype="car",   period=0.36, fringe=2.0, min_dist=800),   # ~55%
+        "moto":  dict(vclass="motorcycle", vtype="moto",  period=0.62, fringe=2.0, min_dist=500),   # ~32%
+        "bus":   dict(vclass="bus",        vtype="bus",   period=4.50, fringe=1.2, min_dist=2500),  # ~4%
+        "truck": dict(vclass="delivery",   vtype="truck", period=3.80, fringe=2.0, min_dist=800),   # ~5%
+        "bike":  dict(vclass="bicycle",    vtype="bike",  period=30.0, fringe=1.5, min_dist=300),   # ~1%
+    },
     "shibuya": {
         #  name    vclass          vType    period  fringe  min_dist  share
         "car":   dict(vclass="passenger",  vtype="car",   period=1.22, fringe=2.2, min_dist=140),  # ~66%
@@ -99,6 +119,8 @@ DISTRICT_MODES = {
 # Fewer distinct O-D pairs on a smaller network: 1,600 car routes over 1,938
 # edges would revisit the same streets so often the variety buys nothing.
 DISTRICT_FLOW_COUNT = {
+    # A bigger network than Barcelona's needs more distinct O-D pairs.
+    "santo_domingo": {"car": 3000, "moto": 1800, "bike": 150, "truck": 500, "bus": 500},
     "manhattan": {"car": 700, "moto": 90, "bike": 260, "truck": 260, "bus": 120},
     "shibuya": {"car": 500, "moto": 120, "bike": 200, "truck": 160, "bus": 90},
 }

@@ -91,3 +91,6 @@ media/generated/
 # Neural controller training scratch: checkpoints, logs, intermediate models.
 # The published model goes to Hugging Face and to web/public/models/.
 training/out/
+
+# Raw Overpass responses cached by the bake scripts (re-fetch with --refresh).
+web/.cache/

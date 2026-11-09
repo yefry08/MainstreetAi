@@ -57,7 +57,7 @@ export default function Green({ city = 'pristina', onCityParam }) {
   useEffect(() => {
     if (!data || !ref.current) return
     const map = new maplibregl.Map({ container: ref.current, style: STYLE,
-      center: [data.centre[1], data.centre[0]], zoom: 14.2, attributionControl: { compact: true } })
+      center: [data.centre[1], data.centre[0]], zoom: data.zoom ?? 14.2, attributionControl: { compact: true } })
     mapRef.current = map
     map.on('load', () => {
       map.addSource('trees', { type: 'geojson', data: fc(data.trees.points.map((pt) => ({
@@ -113,6 +113,11 @@ export default function Green({ city = 'pristina', onCityParam }) {
   }
 
   const t = { ...data.trees, sparse: data.trees.perKm < SPARSE_TREES_PER_KM }
+  // A whole district (a baked administrative area) gets a longer list.
+  const shown = data.area ? 20 : SHOWN
+  const where = data.area
+    ? tr(`the whole of ${data.city} (its official boundary in OpenStreetMap)`, `todo ${data.city} (su límite oficial en OpenStreetMap)`)
+    : tr('the ~2.5 km area', 'la zona de ~2,5 km')
   const b = data.bike
   const pt = data.plantingTotal
   return (
@@ -163,7 +168,7 @@ export default function Green({ city = 'pristina', onCityParam }) {
               <h2>{tr('Streets to plant first', 'Calles para plantar primero')}</h2>
               <p className="try-fine"><span className="green-key plant" /> {tr('no mapped tree within 12 m', 'sin árbol mapeado a menos de 12 m')} · <span className="green-key tree" /> {tr('trees', 'árboles')}</p>
               <ol>
-                {data.planting.slice(0, SHOWN).map((g, i) => (
+                {data.planting.slice(0, shown).map((g, i) => (
                   <li key={i}>
                     <button onClick={() => fly(g.lines)}>
                       <b>{g.name ?? tr('Unnamed street', 'Calle sin nombre')}</b>
@@ -180,7 +185,7 @@ export default function Green({ city = 'pristina', onCityParam }) {
               <h2>{tr('Bike lanes that join the network', 'Ciclovías que unen la red')}</h2>
               <p className="try-fine"><span className="green-key conn" /> {tr('joins two separate pieces', 'une dos tramos separados')} · <span className="green-key bike" /> {tr('existing', 'existente')} · <span className="green-key main" /> {tr('main street, no lane', 'avenida sin ciclovía')}</p>
               <ol>
-                {b.connectors.slice(0, SHOWN).map((x) => (
+                {b.connectors.slice(0, shown).map((x) => (
                   <li key={x.id}>
                     <button onClick={() => fly(x.lines)}>
                       <b>{x.name ?? tr('Unnamed street', 'Calle sin nombre')}</b>
@@ -205,8 +210,8 @@ export default function Green({ city = 'pristina', onCityParam }) {
       <p className="try-note">
         <b>{tr('How this is worked out.', 'Cómo se calcula.')}</b>{' '}
         {mode === 'trees'
-          ? tr('Every street in the ~2.5 km area is checked for mapped trees within 12 m. Streets of 60 m or more with under one tree per 100 m are listed, longest first; “room for” assumes one tree every 10 m on one side, and knows nothing of pavement width or pipes below.',
-               'Cada calle de la zona de ~2,5 km se compara con los árboles mapeados a menos de 12 m. Se listan las calles de 60 m o más con menos de un árbol por cada 100 m, de la más larga a la más corta; el “espacio para” supone un árbol cada 10 m en un lado, y no sabe nada del ancho de la acera ni de las tuberías.')
+          ? tr(`Every street in ${where} is checked for mapped trees within 12 m. Streets of 60 m or more with under one tree per 100 m are listed, longest first; “room for” assumes one tree every 10 m on one side, and knows nothing of pavement width or pipes below.`,
+               `Cada calle de ${where} se compara con los árboles mapeados a menos de 12 m. Se listan las calles de 60 m o más con menos de un árbol por cada 100 m, de la más larga a la más corta; el “espacio para” supone un árbol cada 10 m en un lado, y no sabe nada del ancho de la acera ni de las tuberías.`)
           : tr('The bike network is every way OpenStreetMap marks for cycling. A street with no lane that touches two separate pieces of it is listed first, ranked by how much network it would join per metre built.',
                'La red ciclista es todo lo que OpenStreetMap marca para bicicleta. Primero se listan las calles sin ciclovía que tocan dos tramos separados de esa red, ordenadas por cuánta red unirían por cada metro construido.')}
         {' '}{tr('These are prompts for a planner to look at, not designs.', 'Son avisos para que un planificador los revise, no diseños.')}

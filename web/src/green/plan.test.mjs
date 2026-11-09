@@ -58,5 +58,13 @@ const lg = clipped.planting.find((x) => x.name === 'Long')
 check('a way is measured only inside the box', lg && Math.abs(lg.lengthM - 100) < 2, `${lg?.lengthM} m`)
 check('and drawn only inside it', lg && lg.lines.length === 1 && lg.lines[0].length === 2)
 
+// Two separate streets that share a name are two candidates, not one.
+const c1 = { type: 'way', id: 30, tags: { highway: 'residential', name: 'Calle 1a' }, nodes: [701, 702], geometry: [g(0, 2000), g(200, 2000)] }
+const c2 = { type: 'way', id: 31, tags: { highway: 'residential', name: 'Calle 1a' }, nodes: [703, 704], geometry: [g(0, 3000), g(200, 3000)] }
+const c3 = { type: 'way', id: 32, tags: { highway: 'residential', name: 'Calle 1a' }, nodes: [702, 705], geometry: [g(200, 2000), g(400, 2000)] }
+const same = analyseGreen([c1, c2, c3], centre).planting.filter((x) => x.name === 'Calle 1a')
+check('same-named streets apart are separate; connected ones merge', same.length === 2 &&
+  same.map((x) => x.lengthM).sort((a, b) => a - b).join() === '200,400', same.map((x) => x.lengthM).join())
+
 console.log(failures ? `\n${failures} failed` : '\nall passed')
 process.exit(failures ? 1 : 0)

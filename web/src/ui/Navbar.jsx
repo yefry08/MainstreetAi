@@ -14,6 +14,7 @@ import { SITE, hasScene } from '../site'
 const ALL_TABS = [
   { key: 'home', scene: 'barcelona', label: 'Barcelona', es: 'Barcelona', sq: 'Barcelona' },
   { key: 'manhattan', scene: 'manhattan', label: 'Manhattan', es: 'Manhattan', sq: 'Manhattan' },
+  { key: 'santodomingo', scene: 'santo_domingo', label: 'Santo Domingo', es: 'Santo Domingo', sq: 'Santo Domingo' },
   { key: 'yours', label: 'Your city', es: 'Tu ciudad', sq: 'Qyteti yt' },
   { key: 'transit', label: 'Transit', es: 'Transporte', sq: 'Transporti' },
   { key: 'green', label: 'Green', es: 'Verde', sq: 'E gjelbër' },
@@ -21,8 +22,12 @@ const ALL_TABS = [
   { key: 'research', label: 'Research', es: 'Investigación', sq: 'Kërkimi' },
   { key: 'contact', label: 'Contact', es: 'Contacto', sq: 'Kontakti' },
 ]
-// Only the tabs this site has (site.js).
-export const TABS = ALL_TABS.filter((t) => (t.scene ? hasScene(t.scene) : SITE.tabs.includes(t.key)))
+// Only the tabs this site has (site.js), in its order; a scene tab not named
+// in SITE.tabs goes first.
+const rank = (t) => (SITE.tabs.includes(t.key) ? SITE.tabs.indexOf(t.key) : -1)
+export const TABS = ALL_TABS
+  .filter((t) => (t.scene ? hasScene(t.scene) : SITE.tabs.includes(t.key)))
+  .sort((a, b) => rank(a) - rank(b))
 
 export default function Navbar({
   tab, onTab, mode, onMode, chrome, onChrome, lang = 'en', onLang,

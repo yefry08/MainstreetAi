@@ -22,7 +22,7 @@
  */
 const TAB_PATH = {
   landing: '', home: 'barcelona', manhattan: 'manhattan', yours: 'your-city',
-  how: 'how-it-works', research: 'research', contact: 'contact', transit: 'transit', green: 'green',
+  how: 'how-it-works', research: 'research', contact: 'contact', transit: 'transit', green: 'green', santodomingo: 'santo-domingo',
 }
 // Tabs that take a city after the slash: #/your-city/lima, #/transit/pristina,
 // #/green/medellin.

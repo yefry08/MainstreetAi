@@ -79,6 +79,28 @@ function components(ways) {
 }
 
 /**
+ * Group key for streets: same name AND connected through shared nodes. Name
+ * alone merged every "Calle 1a" in Santo Domingo's Distrito Nacional -- one in
+ * each neighbourhood -- into a single 12.6 km "street". Unnamed ways stay apart.
+ */
+function streetGroups(ways) {
+  const parent = new Map()
+  const find = (x) => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x) } return x }
+  const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent.set(ra, rb) }
+  const byNode = new Map()     // `${name}|${node}` -> first way id seen there
+  for (const w of ways) {
+    parent.set(w.id, w.id)
+    if (!w.tags.name) continue
+    for (const n of w.nodes) {
+      const k = `${w.tags.name}|${n}`
+      if (byNode.has(k)) union(w.id, byNode.get(k))
+      else byNode.set(k, w.id)
+    }
+  }
+  return (w) => (w.tags.name ? `${w.tags.name}|${find(w.id)}` : w.id)
+}
+
+/**
  * elements: Overpass JSON elements. centre: [lat, lon]. box: the
  * [south, west, north, east] the query used -- ways are clipped to it.
  * Returns { trees, planting, bike } -- see the module comment.
@@ -150,11 +172,12 @@ export function analyseGreen(elements, centre, box = null) {
   }
   const perKm = streetM ? trees.length / (streetM / 1000) : 0
 
+  const plantable = streets.filter((w) => w.len >= PLANT_MIN_M && (w.trees / w.len) * 100 < 1)
+  const plantKey = streetGroups(plantable)
   const byName = new Map()
-  for (const w of streets) {
-    if (w.len < PLANT_MIN_M || (w.trees / w.len) * 100 >= 1) continue
+  for (const w of plantable) {
     const name = w.tags.name ?? null
-    const key = name ?? w.id
+    const key = plantKey(w)
     const g = byName.get(key) ?? { name, lengthM: 0, ways: [], lines: [], highway: w.tags.highway }
     g.lengthM += w.len; g.ways.push(w.id); g.lines.push(...w.lines)
     byName.set(key, g)
@@ -184,10 +207,11 @@ export function analyseGreen(elements, centre, box = null) {
   // Most network joined per metre built.
   connectors.sort((a, b) => b.joinsKm / Math.max(b.lengthM, 1) - a.joinsKm / Math.max(a.lengthM, 1))
 
+  const mains = streets.filter((w) => MAIN.test(w.tags.highway) && !isBike(w.tags))
+  const mainKey = streetGroups(mains)
   const mainBy = new Map()
-  for (const w of streets) {
-    if (!MAIN.test(w.tags.highway) || isBike(w.tags)) continue
-    const key = w.tags.name ?? w.id
+  for (const w of mains) {
+    const key = mainKey(w)
     const g = mainBy.get(key) ?? { name: w.tags.name ?? null, highway: w.tags.highway, lengthM: 0, ways: [], lines: [] }
     g.lengthM += w.len; g.ways.push(w.id); g.lines.push(...w.lines)
     mainBy.set(key, g)

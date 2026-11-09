@@ -11,6 +11,7 @@ import HowItWorks from './ui/HowItWorks'
 // second request in front of the first paint.
 import Landing from './ui/Landing'
 import { SITE, hasScene } from './site'
+import DistrictPanel from './ui/DistrictPanel'
 import { parseHash, toHash } from './data/route'
 import { LangContext, initialLang, saveLang } from './i18n'
 
@@ -78,7 +79,7 @@ const basemapLabel = (status, city) => ({
 
 // A tab this site does not have (an old #/barcelona link on the Latin America
 // site, say) opens the landing page rather than an empty scene.
-const SCENE_OF = { home: 'barcelona', manhattan: 'manhattan' }
+const SCENE_OF = { home: 'barcelona', manhattan: 'manhattan', santodomingo: 'santo_domingo' }
 const siteTab = (t) => (t === 'landing' || SITE.tabs.includes(t) || hasScene(SCENE_OF[t]) ? t : 'landing')
 const SCENES = SITE.scenes.length > 0
 
@@ -132,7 +133,8 @@ export default function App() {
   // hook below needs it: Manhattan has its own recording, and the scene showing
   // New York while the traffic came from Barcelona is precisely the
   // wrong-city-over-the-wrong-map failure this project has hit before.
-  const sceneCity = tab === 'manhattan' ? 'manhattan' : 'barcelona'
+  // The scene this site opens on behind the landing page is its first one.
+  const sceneCity = SCENE_OF[tab] ?? SITE.scenes[0] ?? 'barcelona'
 
   // On a static host the 3D hero has no socket to draw from. Both recordings
   // are in the identical frame shape, so they drive the same ref and the scene
@@ -177,9 +179,10 @@ export default function App() {
   const isHome = tab === 'home'
   const isLanding = tab === 'landing'
   const isManhattan = tab === 'manhattan'
+  const isSantoDomingo = tab === 'santodomingo'
   // Both tabs are the same 3D scene, anchored in a different city. Everything
   // that reads camera state or twin metrics belongs to either of them.
-  const isScene = isHome || isManhattan
+  const isScene = isHome || isManhattan || isSantoDomingo
   const isCity = tab === 'how'
 
   // The tab title follows what is actually on screen. Try your city used to
@@ -192,13 +195,14 @@ export default function App() {
       isLanding ? `${SITE.name} · ${SITE.tagline[lang] ?? SITE.tagline.en}`
       : isHome ? `${SITE.name} · Barcelona`
       : isManhattan ? `${SITE.name} · Manhattan`
+      : isSantoDomingo ? `${SITE.name} · Santo Domingo`
       : isCity ? `${SITE.name} · How it works`
       : tab === 'yours' ? `${SITE.name} · Your city`
       : tab === 'research' ? `${SITE.name} · Research`
       // Transit and Green set their own titles, with the city in them.
       : tab === 'transit' || tab === 'green' ? document.title
       : `${SITE.name} · Contact`
-  }, [isLanding, isHome, isManhattan, isCity, tab, lang])
+  }, [isLanding, isHome, isManhattan, isSantoDomingo, isCity, tab, lang])
 
   // Picking a district shows it in the pixel view, which lives on this tab. It
   // used to jump to Home, which now belongs to the 3D scene instead.
@@ -215,10 +219,8 @@ export default function App() {
     // destination is indistinguishable from a broken one -- which is how it got
     // reported -- and after panning across a city, "take me back" is the thing
     // people actually want from it.
-    const sceneTab = next === 'home' || next === 'manhattan'
-    if (sceneTab && next === tab && map) {
-      map.easeTo({ ...cityConfig(next === 'manhattan' ? 'manhattan' : 'barcelona').home,
-                   duration: 900 })
+    if (SCENE_OF[next] && next === tab && map) {
+      map.easeTo({ ...cityConfig(SCENE_OF[next]).home, duration: 900 })
     }
     if (next !== tab) {
       window.history.pushState(null, '', toHash(next))
@@ -289,6 +291,7 @@ export default function App() {
               three sentences would be a second explanation of a thing the
               visitor has already been told. */}
           {isHome && <HowItWorks onOpen={() => onTab('how')} />}
+          {isSantoDomingo && <DistrictPanel map={map} />}
           <CameraControls map={map} />
           <Bezel map={map} header={header} />
           {!chrome && (

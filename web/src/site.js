@@ -17,10 +17,11 @@ export const SITE = {
   name: 'MainstreetAi',
   tagline: { en: 'Open data and AI for Latin America’s streets', es: 'Datos abiertos e IA para las calles de América Latina' },
   langs: ['es', 'en'],
-  // The recorded SUMO scenes (Barcelona, Manhattan). Off here: this site is
-  // Latin America only.
-  scenes: [],
-  tabs: ['yours', 'green', 'transit', 'how', 'research', 'contact'],
+  // The recorded SUMO scenes. Here: Santo Domingo's Distrito Nacional, modelled
+  // whole (Barcelona and Manhattan live on the Greenlight site).
+  scenes: ['santo_domingo'],
+  // 'santodomingo' is the Distrito Nacional twin's tab; listing it places it.
+  tabs: ['santodomingo', 'yours', 'green', 'transit', 'how', 'research', 'contact'],
   // Which catalogue cities the site offers.
   cities: (c) => regionOf(c) === 'Latin America',
   // Languages the transit assistant offers example questions in.
