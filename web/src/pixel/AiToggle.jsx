@@ -1,3 +1,4 @@
+import { useT } from '../i18n'
 import { useCallback, useEffect, useState } from 'react'
 
 /**
@@ -24,6 +25,7 @@ const POLL_MS = 2500
 const REPLAY_ONLY = import.meta.env?.VITE_REPLAY_ONLY === '1'
 
 export default function AiToggle({ onFocusChange, compact = false }) {
+  const tr = useT()
   const [focus, setFocus] = useState('ai')
   const [twins, setTwins] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -86,19 +88,19 @@ export default function AiToggle({ onFocusChange, compact = false }) {
   }
 
   const rows = [
-    ['Network speed', pct(a?.avg_speed_kmh, b?.avg_speed_kmh, true),
+    [tr('Network speed', 'Velocidad de la red', 'Shpejtësia e rrjetit'), pct(a?.avg_speed_kmh, b?.avg_speed_kmh, true),
      a?.avg_speed_kmh, b?.avg_speed_kmh, 'km/h'],
-    ['Bus speed', pct(a?.bus_avg_speed_kmh, b?.bus_avg_speed_kmh, true),
+    [tr('Bus speed', 'Velocidad de buses', 'Shpejtësia e autobusëve'), pct(a?.bus_avg_speed_kmh, b?.bus_avg_speed_kmh, true),
      a?.bus_avg_speed_kmh, b?.bus_avg_speed_kmh, 'km/h'],
-    ['Time lost stopped', pct(a?.stopped_veh_hours, b?.stopped_veh_hours, false),
+    [tr('Time lost stopped', 'Tiempo perdido detenido', 'Kohë e humbur në ndalim'), pct(a?.stopped_veh_hours, b?.stopped_veh_hours, false),
      a?.stopped_veh_hours, b?.stopped_veh_hours, 'veh·h'],
-    ['Trips completed', pct(a?.completed, b?.completed, true),
+    [tr('Trips completed', 'Viajes completados', 'Udhëtime të përfunduara'), pct(a?.completed, b?.completed, true),
      a?.completed, b?.completed, ''],
   ]
 
   return (
     <div className={`ai-toggle glass ${compact ? "compact" : ""}`}>
-      <div className="ai-switch" role="group" aria-label="Signal control">
+      <div className="ai-switch" role="group" aria-label={tr('Signal control', 'Control de semáforos', 'Kontrolli i semaforëve')}>
         {['baseline', 'ai'].map((k) => (
           <button
             key={k}
@@ -106,15 +108,19 @@ export default function AiToggle({ onFocusChange, compact = false }) {
             onClick={() => choose(k)}
             disabled={busy}
           >
-            {k === 'ai' ? 'AI-adaptive' : 'Fixed-time'}
+            {k === 'ai' ? tr('AI-adaptive', 'IA adaptativa', 'IA adaptive') : tr('Fixed-time', 'Horario fijo', 'Orar fiks')}
           </button>
         ))}
       </div>
 
       <div className="ai-note">
         {REPLAY_ONLY
-          ? 'Two pre-recorded twins on identical demand. This switches which recording plays; nothing is being decided live.'
-          : 'Both twins run continuously on identical demand. This switches which one the map draws.'}
+          ? tr('Two pre-recorded twins on identical demand. This switches which recording plays; nothing is being decided live.',
+               'Dos gemelos pregrabados con la misma demanda. Esto cambia qué grabación se reproduce; no se decide nada en vivo.',
+               'Dy binjakë të regjistruar me të njëjtën kërkesë. Kjo ndërron cilin regjistrim luan; asgjë nuk vendoset drejtpërdrejt.')
+          : tr('Both twins run continuously on identical demand. This switches which one the map draws.',
+               'Los dos gemelos corren a la vez con la misma demanda. Esto cambia cuál dibuja el mapa.',
+               'Të dy binjakët punojnë njëkohësisht me të njëjtën kërkesë. Kjo ndërron cilin vizaton harta.')}
       </div>
 
       {twins && !compact ? (

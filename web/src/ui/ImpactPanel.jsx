@@ -14,12 +14,15 @@
  * arithmetic so the number can be checked rather than trusted.
  */
 
+import { useT } from '../i18n'
+
 const fmt = (v, digits = 0) =>
   v == null || Number.isNaN(v) ? '–'
     : v.toLocaleString(undefined, { minimumFractionDigits: digits,
                                     maximumFractionDigits: digits })
 
 export default function ImpactPanel({ twins, replayStats }) {
+  const tr = useT()
   const src = replayStats ?? twins
   const a = src?.ai
   const b = src?.baseline
@@ -39,7 +42,7 @@ export default function ImpactPanel({ twins, replayStats }) {
 
   const rows = [
     {
-      label: 'CO₂ avoided',
+      label: tr('CO₂ avoided', 'CO₂ evitado', 'CO₂ i shmangur'),
       value: co2Kg == null ? '–' : `${fmt(co2Kg)} kg`,
       delta: co2Pct,
       good: co2Pct != null && co2Pct < 0,
@@ -48,7 +51,7 @@ export default function ImpactPanel({ twins, replayStats }) {
         `fixed-time ${fmt(b.co2_kg)} kg vs AI ${fmt(a.co2_kg)} kg`,
     },
     {
-      label: 'Driver wait (p95)',
+      label: tr('Driver wait (p95)', 'Espera de conductores (p95)', 'Pritja e shoferëve (p95)'),
       value: has && a.p95_wait_s != null ? `${fmt(a.p95_wait_s)} s` : '–',
       delta: waitPct,
       good: waitPct != null && waitPct < 0,
@@ -56,7 +59,7 @@ export default function ImpactPanel({ twins, replayStats }) {
         `vs AI ${fmt(a.p95_wait_s)} s` : '',
     },
     {
-      label: 'Bus speed',
+      label: tr('Bus speed', 'Velocidad de buses', 'Shpejtësia e autobusëve'),
       value: has && a.bus_avg_speed_kmh != null
         ? `${fmt(a.bus_avg_speed_kmh, 1)} km/h` : '–',
       delta: busPct,
@@ -70,8 +73,8 @@ export default function ImpactPanel({ twins, replayStats }) {
   return (
     <section className="impact glass">
       <div className="impact-head">
-        <h2>Impact</h2>
-        <span className="impact-sub">AI vs fixed-time</span>
+        <h2>{tr('Impact', 'Impacto', 'Ndikimi')}</h2>
+        <span className="impact-sub">{tr('AI vs fixed-time', 'IA vs horario fijo', 'IA kundrejt orarit fiks')}</span>
       </div>
 
       <div
@@ -82,7 +85,7 @@ export default function ImpactPanel({ twins, replayStats }) {
           `${fmt(a.stopped_veh_hours, 1)} veh·h, difference in minutes.`}
       >
         <div className="impact-value">{savedMin == null ? '–' : fmt(savedMin)}</div>
-        <div className="impact-unit">vehicle-minutes saved</div>
+        <div className="impact-unit">{tr('vehicle-minutes saved', 'minutos-vehículo ahorrados', 'minuta-automjet të kursyera')}</div>
       </div>
 
       <div className="impact-rows">
@@ -99,8 +102,9 @@ export default function ImpactPanel({ twins, replayStats }) {
       </div>
 
       <p className="impact-note">
-        Both twins run identical demand on the real network; the only difference
-        is the signal controller. Simulation outcomes, not field measurements.
+        {tr('Both twins run identical demand on the real network; the only difference is the signal controller. Simulation outcomes, not field measurements.',
+            'Los dos gemelos llevan la misma demanda sobre la red real; la única diferencia es el controlador de semáforos. Resultados de simulación, no mediciones de campo.',
+            'Të dy binjakët kanë të njëjtën kërkesë në rrjetin real; i vetmi ndryshim është kontrolluesi i semaforëve. Rezultate simulimi, jo matje në terren.')}
       </p>
     </section>
   )
