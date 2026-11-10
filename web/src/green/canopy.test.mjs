@@ -33,7 +33,11 @@ const whole = districtDeficit(lean.tree + leafy.tree, lean.land + leafy.land, P)
 check('district deficit < sum of cell deficits when leafy cells offset', whole < perCell, `${whole} vs ${perCell}`)
 
 const b = benefits(1000, 10)
-check('1,000 mature trees: 10-38 t CO2 a year', b.co2TYr[0] === 10 && b.co2TYr[1] === 20 && b.co2TYr[2] === 38)
+check('1,000 mature trees: 10-85 t CO2 a year, central 40', b.co2TYr[0] === 10 && b.co2TYr[1] === 40 && b.co2TYr[2] === 85)
+const dense = cellPlan({ tree: 0, shrub: 0, grass: 90, bare: 0, built: 535, water: 0 }, 0, P)
+check('a dense cell (built >= 85%) has no open ground to plant', dense.room === 0, `built ${(dense.builtShare * 100).toFixed(0)}%`)
+const roomy = cellPlan({ tree: 0, shrub: 0, grass: 300, bare: 0, built: 325, water: 0 }, 0, P)
+check('a less built cell keeps some open ground', roomy.room > 0, `${roomy.room} trees`)
 check('+10 canopy points: 0.1-0.6 C, central 0.3', b.coolingC[0] === 0.1 && b.coolingC[1] === 0.3 && b.coolingC[2] === 0.6)
 check('trees standing use the real pixel area', treesFromCanopy(500, P) === Math.round((500 * P) / 50))
 

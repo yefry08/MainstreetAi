@@ -32,12 +32,15 @@
  *
  * BENEFITS, per tree AT MATURITY (10-20 years), as ranges from the literature,
  * not measurements of these trees, and before mortality:
- *   CO2     10-38 kg/yr net, central 20. Low: Medellin, the nearest
- *           neotropical i-Tree study, 177-320 g CO2/m2 of canopy/yr net
- *           (Reynolds et al. 2017, doi:10.3390/su9050785) x 50 m2 = 9-16 kg.
- *           High: US urban average 0.205 kg C/m2/yr net (Nowak et al. 2013,
- *           Environ. Pollut. 178) x 3.67 x 50 m2 = 38 kg. The first version
- *           used 15-40 (central 25), above the tropical evidence.
+ *   CO2     10-85 kg/yr net, central 40. High: MEASURED IN THIS DISTRICT --
+ *           an i-Tree Eco inventory of 206 plots (Melendez-Ackerman et al.
+ *           2022, Front. Sustain. Cities, doi:10.3389/frsc.2021.764073) gives
+ *           6,600 t C/yr net over 14.17 km2 of canopy = 1.71 kg CO2/m2/yr,
+ *           x 50 m2 = 85 kg (a mature, mixed population; year-round growth).
+ *           Low: Medellin, public trees, i-Tree Streets, 177-320 g CO2/m2/yr
+ *           (Reynolds et al. 2017, doi:10.3390/su9050785) = 9-16 kg. For
+ *           reference, the US urban net average (Nowak et al. 2013) is 38 kg.
+ *           Young trees sequester far less in their first years.
  *   water   ~3.8 m3/yr of rain intercepted (i-Tree, a mature street tree);
  *           conservative: ~11% of rain on canopy (i-Tree Streets) x ~1.4 m/yr
  *           in Santo Domingo x 50 m2 would be ~7.7 m3.
@@ -46,8 +49,8 @@
  *           2026 (Nature Communications, 8,919 cities) find smaller
  *           city-wide averages. The first version's 1 C high end was local
  *           and street-level, not a district average.
- * Local calibration to do: the i-Tree inventory of 206 plots in this district
- * (Melendez-Ackerman et al. 2022, Front. Sustain. Cities, 10.3389/frsc.2021.764073).
+ * The same inventory measured 15.4% canopy for the district, against 17.6%
+ * from WorldCover here: an independent check on the canopy measurement.
  */
 
 export const TARGET = 0.30
@@ -55,8 +58,9 @@ export const CROWN_M2 = 50          // ~8 m crown: a mature caoba, roble, almác
 export const SPACING_M = 10
 export const STREET_FEASIBLE = 0.5
 export const OPEN_USABLE = 0.25
+export const DENSE_BUILT = 0.85     // built share at which no open ground is plantable
 export const BENEFIT = {
-  co2KgYr: [10, 20, 38],            // low, central, high
+  co2KgYr: [10, 40, 85],            // low, central, high
   waterM3Yr: 3.8,
   coolingCPer10pts: [0.1, 0.3, 0.6],
 }
@@ -82,11 +86,15 @@ export function cellPlan(px, streetM, pixelM2 = pixelArea(18.5)) {
   const missing = Math.round(deficitM2 / CROWN_M2)
   // A street already under canopy has no room for more: scale by the open share.
   const streetRoom = Math.floor(((streetM * STREET_FEASIBLE) / SPACING_M) * (1 - canopy))
-  const openRoom = Math.floor(((px.grass + px.shrub + px.bare) * pixelM2 * OPEN_USABLE) / CROWN_M2)
+  const builtShare = px.built / land
+  // Open ground shrinks to nothing as a cell fills up: the district's i-Tree
+  // plots found 3.5% plantable ground in the least dense ward and 0% in the
+  // densest (Melendez-Ackerman et al. 2022, Table 4).
+  const openUsable = OPEN_USABLE * Math.max(0, 1 - builtShare / DENSE_BUILT)
+  const openRoom = Math.floor(((px.grass + px.shrub + px.bare) * pixelM2 * openUsable) / CROWN_M2)
   const plant = Math.min(missing, streetRoom + openRoom)
   // Street trees first: they shade people, pavements and bike lanes.
   const onStreets = Math.min(plant, streetRoom)
-  const builtShare = px.built / land
   const canopyAfter = Math.min(1, canopy + (plant * CROWN_M2) / landM2)
   return {
     landM2, canopy, builtShare, deficitM2, missing,
