@@ -155,15 +155,30 @@ NETWORK_CAPACITY = float(_os.environ.get("MAINSTREET_CAPACITY", "0.5"))
 MIN_GREEN_BAND_RATIO = 1.5
 
 
-def demand_factor(sim_time: float, start_hour: float = 7.0,
-                  day: str | int = "Friday") -> float:
-    """Smoothly interpolated demand multiplier for the current simulated clock."""
+# The demand level the controller's own time-of-day rule (max_green) was tuned
+# at. It used to read demand_factor(), i.e. the curve times NETWORK_CAPACITY, so
+# changing MAINSTREET_CAPACITY to load the network more also changed the signal
+# POLICY -- and a saturation sweep measured both at once. The policy now reads
+# the curve's shape times this fixed reference: identical to before at the
+# default capacity (0.5), and unchanged when the capacity is swept.
+POLICY_DEMAND_REF = 0.5
+
+
+def demand_shape(sim_time: float, start_hour: float = 7.0,
+                 day: str | int = "Friday") -> float:
+    """The hourly curve interpolated at the simulated clock, NOT scaled by capacity."""
     curve = demand_curve(day)
     hour = (start_hour + sim_time / 3600.0) % 24.0
     lo = int(math.floor(hour)) % 24
     hi = (lo + 1) % 24
     frac = hour - math.floor(hour)
-    return (curve[lo] * (1 - frac) + curve[hi] * frac) * NETWORK_CAPACITY
+    return curve[lo] * (1 - frac) + curve[hi] * frac
+
+
+def demand_factor(sim_time: float, start_hour: float = 7.0,
+                  day: str | int = "Friday") -> float:
+    """Smoothly interpolated demand multiplier for the current simulated clock."""
+    return demand_shape(sim_time, start_hour, day) * NETWORK_CAPACITY
 
 
 def peaks_for(day: str | int = "Friday") -> dict:
@@ -297,16 +312,34 @@ class AdaptiveController:
 
     Rule 5 is the congestion-reduction lever, rules 2-3 are the mode-shift
     lever: a bus carrying 80 people should not wait behind 6 cars carrying 8.
+
+    A forecast of predicted waves, when one is given, only adds to the queues
+    rule 5 compares; it never overrides rules 1-4. Rules 2-3 (`tsp`) and the
+    forecast can each be switched off, so each one's share of the result can
+    be measured (server/ablation.py).
     """
 
     name = "ai"
     label = "AI-adaptive"
 
     def __init__(self, conn, plans: dict[str, JunctionPlan], *, start_hour: float = 7.0,
-                 forecast: dict | None = None):
+                 forecast: dict | None = None, day: str | int = "Friday",
+                 tsp: bool = True, forecast_start_hour: float = 7.0):
         self.conn = conn
         self.plans = plans
+        # The simulated clock. The worker owns it and pushes every change here
+        # through set_clock(), so the time-of-day rule and the forecast read
+        # the same hour and day the demand is being shaped to.
         self.start_hour = start_hour
+        self.day = day
+        # ABLATION ARMS. Each component can be switched off on its own, so its
+        # contribution can be measured rather than assumed (server/ablation.py):
+        #   tsp       rules 2-3, transit signal priority
+        #   forecast  anticipation of predicted waves (off when none is given)
+        self.tsp = bool(tsp)
+        # The forecast's windows are seconds counted from ITS start hour
+        # (build-events.mjs START_HOUR), which need not be this run's.
+        self.forecast_start_hour = float(forecast_start_hour)
         # Predicted waves per signal (web/scripts/build-events.mjs): which lanes
         # lead TOWARD a school/office/stadium about to fill, or AWAY from one
         # about to empty, and when. See _anticipate.
@@ -343,7 +376,10 @@ class AdaptiveController:
         mostly wasted work.
         """
         conn = self.conn
-        df = demand_factor(sim_time, self.start_hour)
+        # The hour AND the day the worker is simulating (it used to assume
+        # Friday whatever the day), at a fixed reference level rather than the
+        # run's capacity scale -- see POLICY_DEMAND_REF.
+        df = demand_shape(sim_time, self.start_hour, self.day) * POLICY_DEMAND_REF
         # Busier hour -> allow longer greens (fewer, bigger platoons).
         max_green = self.max_green_base * (0.62 + 0.55 * df)
 
@@ -373,7 +409,7 @@ class AdaptiveController:
             # also how real actuated controllers behave -- they poll their loop
             # detectors on an interval, they do not re-derive the world at 1 Hz.
             if (self._green_until.get(tid, -1.0) - sim_time > 2.0
-                    and tid not in bus_requests
+                    and (not self.tsp or tid not in bus_requests)
                     and elapsed < max_green):
                 continue
 
@@ -384,21 +420,8 @@ class AdaptiveController:
             served = sum(q[l] for l in green_lanes if l in q)
             waiting = sum(q.values()) - served
 
-            # Anticipation: cars predicted to reach this junction in the next
-            # minute count as queued already, on the approaches they will use.
-            # A reactive controller sees the colegio's 13:00 wave only once it
-            # has backed up; this one starts favouring those approaches as the
-            # wave begins.
-            if tid in self.forecast:
-                ahead_green, ahead_red, why = self._anticipate(tid, green_lanes, sim_time)
-                served += ahead_green
-                waiting += ahead_red
-                if why and served >= waiting * self.imbalance and elapsed < max_green:
-                    self._hold(tid, plan, sim_time, f"forecast: {why}")
-                    self.stats["anticipations"] = self.stats.get("anticipations", 0) + 1
-                    continue
-
-            req = bus_requests.get(tid)
+            # Transit priority can be switched off as an ablation arm.
+            req = bus_requests.get(tid) if self.tsp else None
             bus_here = bus_wait = False
             if req:
                 for link_idx in req:
@@ -424,9 +447,32 @@ class AdaptiveController:
                 self._release(tid, plan, sim_time, f"max green {max_green:.0f}s reached")
                 continue
 
+            # Anticipation: cars predicted to reach this junction in the next
+            # minute count as queued already, on the approaches they will use.
+            # A reactive controller sees the colegio's 13:00 wave only once it
+            # has backed up; this one starts favouring those approaches as the
+            # wave begins.
+            #
+            # It weighs in HERE, as extra queue for rule 5, and nowhere else.
+            # It used to sit above rules 2-4 and hold the green itself, so a
+            # forecast could keep a bus waiting at red and was the one hold
+            # that never passed through the priority order the class promises.
+            observed_hold = served > 0 and served >= waiting * self.imbalance
+            why = ""
+            if tid in self.forecast:
+                ahead_green, ahead_red, why = self._anticipate(tid, green_lanes, sim_time)
+                served += ahead_green
+                waiting += ahead_red
+
             # ---- rule 5: keep serving the heavier direction ----
             if served > 0 and served >= waiting * self.imbalance:
-                self._hold(tid, plan, sim_time, f"queue {served} vs {waiting}: holding")
+                if why and not observed_hold:
+                    # Only the holds the forecast actually CAUSED are counted:
+                    # the queues on the ground alone would have released.
+                    self._hold(tid, plan, sim_time, f"forecast: {why}")
+                    self.stats["anticipations"] = self.stats.get("anticipations", 0) + 1
+                else:
+                    self._hold(tid, plan, sim_time, f"queue {served} vs {waiting}: holding")
                 continue
 
             # ---- rule 6: nothing left to serve ----
@@ -444,6 +490,24 @@ class AdaptiveController:
     FORECAST_LEAD_S = 600.0
     # Horizon: the cars expected over this many seconds count as queued now.
     FORECAST_HORIZON_S = 60.0
+
+    def set_clock(self, start_hour: float | None = None, day: str | int | None = None) -> None:
+        """Follow the worker's simulated clock when it jumps to another hour or day."""
+        if start_hour is not None:
+            self.start_hour = float(start_hour)
+        if day is not None:
+            self.day = day
+
+    def forecast_seconds(self, sim_time: float) -> float:
+        """
+        The simulated time of day in the forecast's own seconds.
+
+        The forecast counts from its start hour (07:00). Read against raw
+        sim_time, a run started at 08:00, or one whose clock was moved, would
+        anticipate every wave an hour -- or a day -- off. With the default
+        start (07:00) this is sim_time unchanged.
+        """
+        return ((self.start_hour - self.forecast_start_hour) * 3600.0 + sim_time) % 86400.0
 
     def _prepare_forecast(self, raw: dict) -> dict:
         """
@@ -490,14 +554,19 @@ class AdaptiveController:
         g = r = 0.0
         why, best = "", 0.0
         green = set(green_lanes)
+        now = self.forecast_seconds(sim_time)
         for begin, end, vph, lanes, label in self.forecast[tid]:
-            if not (begin - self.FORECAST_LEAD_S <= sim_time <= end):
+            # A window can wrap past midnight, and its lead can reach back
+            # before the forecast's own start: try the day before and after.
+            t = next((now + k for k in (0.0, -86400.0, 86400.0)
+                      if begin - self.FORECAST_LEAD_S <= now + k <= end), None)
+            if t is None:
                 continue
             cars = vph * self.FORECAST_HORIZON_S / 3600.0
             # Ramp in over the lead time, so the controller leans before the
             # wave rather than lurching at its first second.
-            if sim_time < begin:
-                cars *= 1.0 - (begin - sim_time) / self.FORECAST_LEAD_S
+            if t < begin:
+                cars *= 1.0 - (begin - t) / self.FORECAST_LEAD_S
             on_green = len(lanes & green) / max(len(lanes), 1)
             g += cars * on_green
             r += cars * (1.0 - on_green)
@@ -583,6 +652,11 @@ class AdaptiveController:
             "source": self.policy_source,
             "rationale": self.policy_rationale,
         }
+
+    def arms(self) -> dict:
+        """Which components are switched on, so every result says what produced it."""
+        return {"tsp": bool(getattr(self, "tsp", True)),
+                "forecast": bool(getattr(self, "forecast", None))}
 
     def _count_tsp(self, tid: str, plan: JunctionPlan, phase: int) -> None:
         """

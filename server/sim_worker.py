@@ -62,6 +62,47 @@ def data_file(stem: str, ext: str = ".geojson") -> Path:
 # number, so appending is safe and reordering is not.
 KIND_CAR, KIND_BUS, KIND_BIKE, KIND_TRUCK, KIND_MOTO = 0.0, 1.0, 2.0, 3.0, 4.0
 
+# People per vehicle, indexed by kind, for delay per PERSON.
+#
+# *** ASSUMED, NOT MEASURED. *** Placeholders so the metric exists and can be
+# read; replace them with counted occupancies (INTRANT's mobility survey counted
+# occupancy at its 21 points) before quoting person-delay as a result. "bus" is
+# one class here for guaguas, carros públicos and OMSA, whose loads differ by an
+# order of magnitude, so 25 is a blend and the weakest number of the five.
+# Override without editing: MAINSTREET_OCCUPANCY="car=1.4,bus=25,...".
+OCCUPANCY = {"car": 1.4, "bus": 25.0, "bike": 1.0, "truck": 1.2, "moto": 1.2}
+for _pair in os.environ.get("MAINSTREET_OCCUPANCY", "").split(","):
+    _k, _, _v = _pair.partition("=")
+    if _k.strip() in OCCUPANCY:
+        try:
+            OCCUPANCY[_k.strip()] = max(0.0, float(_v))
+        except ValueError:
+            pass
+OCCUPANCY_BY_KIND = np.array(
+    [OCCUPANCY[k] for k in ("car", "bus", "bike", "truck", "moto")], dtype=np.float64)
+
+# Both twins keep a copy of their metrics at every multiple of this many
+# simulated seconds. They are separate processes whose clocks drift apart, so
+# "the latest snapshot of each" compares two different moments; the checkpoint
+# at the same simulated second is like for like.
+CHECKPOINT_S = 300
+
+
+def latest_common_checkpoint(by_mode: dict) -> dict | None:
+    """
+    The newest simulated second for which EVERY twin holds a checkpoint, as
+    {"sim_time": t, "<mode>": metrics, ...}; None when there is none yet.
+    by_mode: {mode: [checkpoint snapshots]}.
+    """
+    if not by_mode or not all(by_mode.values()):
+        return None
+    at = {m: {c["sim_time"]: c for c in cps} for m, cps in by_mode.items()}
+    common = set.intersection(*(set(d) for d in at.values()))
+    if not common:
+        return None
+    t = max(common)
+    return {"sim_time": t, **{m: d[t] for m, d in at.items()}}
+
 
 # ---------------------------------------------------------------------------
 # Projection: SUMO cartesian -> WGS84, vectorised over all vehicles at once.
@@ -145,6 +186,32 @@ class Metrics:
     moto_running: int = 0
 
     teleports: int = 0
+    # Vehicle-seconds spent mid-teleport. SUMO lifts a vehicle that has been
+    # stuck for --time-to-teleport out of the jam; while it is off the road it
+    # has no position, is skipped below, and so stopped adding to the stopped
+    # time at exactly the moment it was most stuck. Counted here instead of
+    # vanishing, so a twin cannot look better by teleporting its jams away.
+    teleporting_veh_seconds: float = 0.0
+
+    # --- demand that never got onto the network ---
+    # A congested twin can hide delay OUTSIDE the network: vehicles queue for
+    # insertion, and past --max-depart-delay SUMO drops them. None of that
+    # shows in stopped time. -1 means this SUMO build does not report it.
+    loaded: int = 0                    # vehicles SUMO has loaded so far
+    insertion_backlog: int = -1        # loaded, waiting to enter, right now
+    insertion_delay_veh_seconds: float = 0.0
+
+    # --- delay per PERSON, not per vehicle ---
+    # A bus stopped for a minute delays its passengers, not one driver. This is
+    # the number transit priority is judged on. See OCCUPANCY.
+    person_stopped_seconds: float = 0.0
+
+    # --- waiting time of COMPLETED trips ---
+    # p95_wait_s below is read off the vehicles in the network this second, so
+    # it leaves out everyone who has already arrived and moves with the moment
+    # it is sampled. These are whole trips, kept as each vehicle arrives.
+    trip_waits: list = field(default_factory=list)
+    _trip_wait_cache: tuple = (0, 0.0, 0.0)
 
     # --- equity / tail metrics ---
     # A policy that speeds up the arterial by abandoning a side street would
@@ -153,7 +220,31 @@ class Metrics:
     p95_wait_s: float = 0.0     # 95th percentile of accumulated waiting time
     stranded: int = 0           # vehicles that have waited more than 5 minutes
 
+    def note_trip(self, waited_s: float) -> None:
+        """Record one completed trip's accumulated waiting time."""
+        self.trip_waits.append(max(0.0, float(waited_s)))
+
+    def trip_wait_percentiles(self) -> tuple[float, float]:
+        """
+        Median and 95th percentile of waiting time over completed trips.
+
+        Recomputed when the sample has grown by 1% (always, below 1,000 trips):
+        this is read every simulated second, and sorting tens of thousands of
+        values each time would cost more than the step it reports on.
+        """
+        n = len(self.trip_waits)
+        if n == 0:
+            return 0.0, 0.0
+        seen = self._trip_wait_cache[0]
+        if n != seen and (n <= 1000 or n - seen >= n // 100):
+            p50, p95 = np.percentile(np.asarray(self.trip_waits, dtype=np.float64), [50, 95])
+            self._trip_wait_cache = (n, float(p50), float(p95))
+        return self._trip_wait_cache[1], self._trip_wait_cache[2]
+
     def snapshot(self) -> dict:
+        trip_p50, trip_p95 = self.trip_wait_percentiles()
+        not_inserted = (max(0, self.loaded - self.departed - self.insertion_backlog)
+                        if self.insertion_backlog >= 0 else -1)
         avg_trip = (self.total_travel_time / self.completed) if self.completed else 0.0
         avg_spd = (self.veh_distance_m / self.veh_seconds) if self.veh_seconds else 0.0
         bus_avg = (self.bus_distance_m / self.bus_seconds) if self.bus_seconds else 0.0
@@ -182,6 +273,22 @@ class Metrics:
             "max_wait_s": round(self.max_wait_s, 1),
             "p95_wait_s": round(self.p95_wait_s, 1),
             "stranded": self.stranded,
+            # The raw integrals behind the two speeds, so a measurement window
+            # (after a warm-up, say) can be taken by subtracting two snapshots.
+            "veh_km": round(self.veh_distance_m / 1000.0, 3),
+            "veh_hours": round(self.veh_seconds / 3600.0, 4),
+            "bus_km": round(self.bus_distance_m / 1000.0, 3),
+            "bus_hours": round(self.bus_seconds / 3600.0, 4),
+            "teleporting_veh_seconds": round(self.teleporting_veh_seconds, 1),
+            "loaded": self.loaded,
+            "insertion_backlog": self.insertion_backlog,
+            "insertion_delay_veh_hours": round(self.insertion_delay_veh_seconds / 3600.0, 3),
+            # Loaded, neither departed nor still waiting: dropped by SUMO.
+            "not_inserted": not_inserted,
+            "person_stopped_hours": round(self.person_stopped_seconds / 3600.0, 3),
+            "trip_wait_p50_s": round(trip_p50, 1),
+            "trip_wait_p95_s": round(trip_p95, 1),
+            "trip_wait_n": len(self.trip_waits),
         }
 
 
@@ -262,16 +369,38 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
     plans = build_plans(ls, tls_ids)
 
     # The forecast of predicted waves per signal, if the district has one.
+    #
+    # ABLATION ARMS. The adaptive twin is three things at once -- queue-based
+    # control, transit priority and the forecast -- and a result that switches
+    # them all on together cannot say what each is worth. cfg["arms"] turns
+    # transit priority and the forecast off independently (server/ablation.py);
+    # MAINSTREET_TSP=0 / MAINSTREET_FORECAST=0 do the same for the live server.
+    arms = {"tsp": os.environ.get("MAINSTREET_TSP", "1") != "0",
+            "forecast": os.environ.get("MAINSTREET_FORECAST", "1") != "0"}
+    arms.update({k: bool(v) for k, v in (cfg.get("arms") or {}).items() if k in arms})
+
     forecast = None
+    forecast_start_hour = 7.0
+    forecast_day = None
+    forecast_error = ""
     fc_path = SIM / "net" / f"forecast_{DISTRICT}.json"
-    if mode == "ai" and fc_path.exists():
+    if mode == "ai" and arms["forecast"] and fc_path.exists():
         try:
-            forecast = json.loads(fc_path.read_text(encoding="utf-8")).get("signals")
-        except Exception:
+            fc = json.loads(fc_path.read_text(encoding="utf-8"))
+            forecast = fc.get("signals")
+            # The forecast's own clock: its windows count from this hour.
+            forecast_start_hour = float(fc.get("startHour", 7.0))
+            forecast_day = fc.get("day")
+        except Exception as exc:
+            # Never silently: a forecast that failed to load is an AI twin
+            # running without anticipation, and the result must say so.
             forecast = None
+            forecast_error = f"{type(exc).__name__}: {exc}"[:200]
 
     controller = (
-        AdaptiveController(ls, plans, start_hour=start_hour, forecast=forecast)
+        AdaptiveController(ls, plans, start_hour=start_hour, forecast=forecast,
+                           day=cfg.get("day", "Friday"), tsp=arms["tsp"],
+                           forecast_start_hour=forecast_start_hour)
         if mode == "ai" else
         FixedTimeController(ls, plans)
     )
@@ -293,7 +422,11 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
         return v
 
     # Ordered edge list for the congestion overlay, matching roads.geojson.
-    import json
+    # (`json` is the module-level import. A second `import json` used to sit on
+    # this line: it made `json` a LOCAL of this whole function, so the forecast
+    # load above -- which runs before it -- raised UnboundLocalError, the
+    # `except Exception` there swallowed it, and the AI twin ran with no
+    # forecast at all, silently, since the forecast was added.)
     roads = json.loads(data_file("roads").read_text(encoding="utf-8"))
     edge_ids = [f["properties"]["id"] for f in roads["features"]]
     edge_vmax = np.array([max(f["properties"]["vmax"], 1.0) for f in roads["features"]],
@@ -474,6 +607,9 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
     watch_id: str | None = None
     day_name = cfg.get("day", "Friday")
     weather_label = ""
+    # vehicle id -> accumulated waiting time last tick, read off as it arrives
+    last_wait_of: dict[str, float] = {}
+    checkpoints: list[dict] = []
 
     # --- demand shaping to the measured curve -----------------------------
     # The route files hold a peak hour of trips. Without shaping, the simulated
@@ -542,6 +678,12 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
                     start_hour = float(c["hour"]) - metrics.sim_time / 3600.0
                 if c.get("day"):
                     day_name = str(c["day"])
+                # The controller keeps its own copy of the clock for its
+                # time-of-day rule and for the forecast. It was never told
+                # about a jump, so after one it went on timing greens, and
+                # anticipating waves, for the hour the run had started at.
+                if isinstance(controller, AdaptiveController):
+                    controller.set_clock(start_hour, day_name)
             elif t == "weather":
                 # Live conditions from Open-Meteo, applied through the same
                 # levers as the manual rain scenario so there is exactly one
@@ -576,6 +718,15 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
         metrics.teleports += ls.simulation.getStartingTeleportNumber()
         overlay_tick += 1
 
+        # --- demand still outside the network ---
+        try:
+            metrics.loaded += ls.simulation.getLoadedNumber()
+            backlog = len(ls.simulation.getPendingVehicles())
+            metrics.insertion_backlog = backlog
+            metrics.insertion_delay_veh_seconds += backlog
+        except Exception:
+            metrics.insertion_backlog = -1      # not reported by this SUMO
+
         # --- track departures / arrivals ---
         for vid in ls.simulation.getDepartedIDList():
             depart_time[vid] = metrics.sim_time
@@ -588,10 +739,13 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
         for vid in ls.simulation.getArrivedIDList():
             d = depart_time.pop(vid, None)
             kind_of.pop(vid, None)
+            waited = last_wait_of.pop(vid, None)
             metrics.arrived += 1
             if d is not None:
                 metrics.total_travel_time += metrics.sim_time - d
                 metrics.completed += 1
+                if waited is not None:
+                    metrics.note_trip(waited)
 
         # --- bulk-read every vehicle in one call ---
         res = ls.vehicle.getAllSubscriptionResults()
@@ -623,6 +777,8 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
                 # enough to make deck.gl drop or misdraw the whole layer, so
                 # these are excluded from the render set entirely.
                 if p[0] < -1e8 or p[1] < -1e8:
+                    # Off the road, not out of the count: see Metrics.
+                    metrics.teleporting_veh_seconds += 1.0
                     continue
                 xy[i, 0] = p[0]
                 xy[i, 1] = p[1]
@@ -657,6 +813,7 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
                 knd[i] = k
                 w = d.get(tc.VAR_ACCUMULATED_WAITING_TIME, 0.0)
                 wait[i] = w if 0.0 <= w < 1e8 else 0.0
+                last_wait_of[vid] = float(wait[i])
                 i += 1
                 # SUMO reports INVALID_DOUBLE_VALUE (-2^30) for a vehicle whose
                 # emissions cannot be evaluated this step -- typically while it
@@ -695,6 +852,8 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
                 live = set(res.keys())
                 for gone in [k for k in prev_ang_of if k not in live]:
                     del prev_ang_of[gone]
+                    # Left without an arrival (removed by SUMO): not a trip.
+                    last_wait_of.pop(gone, None)
 
             # Equity: the tail of the waiting-time distribution, not the mean.
             if len(wait):
@@ -721,6 +880,9 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
             halt_mask = spd < 0.1
             metrics.halting = int(halt_mask.sum())
             metrics.stopped_veh_seconds += float(halt_mask.sum())
+            # The same stopped seconds, weighted by the people on board.
+            metrics.person_stopped_seconds += float(
+                OCCUPANCY_BY_KIND[knd[halt_mask].astype(np.intp)].sum())
             # Same 1 s step the line above assumes: speed in m/s integrated
             # over one second is metres, and each vehicle contributes 1 s.
             metrics.veh_distance_m += float(spd.sum())
@@ -744,7 +906,7 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
         # --- transit priority requests ---
         # Refreshed every other second: a bus covers at most ~30 m in that time
         # and the detection zone is 140 m, so no bus can slip through unseen.
-        if isinstance(controller, AdaptiveController):
+        if isinstance(controller, AdaptiveController) and controller.tsp:
             if overlay_tick % 2 == 0:
                 bus_requests = {}
                 det = controller.bus_detect_m
@@ -900,6 +1062,12 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
             except Exception:
                 watch = None
 
+        # --- checkpoint: metrics at a simulated second both twins will reach ---
+        # The last few are kept, not just one, so a common second still exists
+        # when the twins have drifted more than one interval apart.
+        if metrics.sim_time > 0 and int(round(metrics.sim_time)) % CHECKPOINT_S == 0:
+            checkpoints = (checkpoints + [metrics.snapshot()])[-4:]
+
         # --- emit ---
         snap = {
             "type": "state",
@@ -916,7 +1084,20 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
                 "stats": dict(controller.stats),
                 "policy": (controller.current_policy()
                            if isinstance(controller, AdaptiveController) else None),
+                # What actually ran, so no result has to be taken on trust:
+                # which components were on, and whether a forecast reached
+                # the controller (signals it covers; why it did not load).
+                "arms": (controller.arms()
+                         if isinstance(controller, AdaptiveController) else None),
+                "forecast_signals": (len(controller.forecast)
+                                     if isinstance(controller, AdaptiveController) else 0),
+                "forecast_day": forecast_day,
+                "forecast_error": forecast_error,
             },
+            # This twin's metrics at the last multiples of CHECKPOINT_S: the
+            # like-for-like figures to compare with the other twin's.
+            "checkpoints": checkpoints,
+            "seed": seed,
             "events": event_log[-8:],
             "watch": watch,
             "corridors": corridor_stats,

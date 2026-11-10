@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url'
 import { fromFile } from 'geotiff'
 import { fetchCity } from '../src/city/osm.js'
 import { projector } from '../src/transit/coverage.js'
-import { heightOf, localDate, shadedShare, shadeIndex, shadows, sunPosition } from '../src/green/shade.js'
+import { heightOf, hull, inside, localDate, samples, shadedShare, shadeIndex, shadows, sunPosition } from '../src/green/shade.js'
 
 const WEB = join(dirname(fileURLToPath(import.meta.url)), '..')
 const CACHE = join(WEB, '.cache', 'shade')
@@ -112,7 +112,28 @@ const len = (l) => l.slice(1).reduce((s, q, i) => s + Math.hypot(q[0] - l[i][0],
 // 310 m loop by the Centro Olimpico read 86-100% shaded at every hour.
 const isLoop = (l) => l.length > 3 && Math.hypot(l[0][0] - l.at(-1)[0], l[0][1] - l.at(-1)[1]) < 5
 const bikeAll = green.bike.lines.map(toXY)
-const bikeKeep = bikeAll.map((l) => !isLoop(l))
+// A track INSIDE a venue is not a bike lane either, and the loop test misses
+// it when OSM draws it in pieces. A building's shadow here is the convex hull
+// of its footprint and the offset copy: exact for a convex building, but a
+// ring-shaped one shades its whole interior at every hour. The Velodromo
+// Olimpico is 2,379 m2 of stand around a 9,752 m2 hull, and its track is four
+// pieces (309 m): one was a closed loop, the other three read 86-100% shaded
+// all day, all year. A piece is left out when 80% of its points fall inside
+// the hull of ONE building whose hull is at least twice its footprint.
+const ringArea = (r) => Math.abs(r.reduce((s, q, i) => { const n = r[(i + 1) % r.length]; return s + q[0] * n[1] - n[0] * q[1] }, 0)) / 2
+const hollow = buildings.map((b) => ({ ring: b.ring, hull: hull(b.ring) }))
+  .filter((b) => b.hull.length > 2 && ringArea(b.hull) >= 2 * Math.max(ringArea(b.ring), 1))
+  .map((b) => {
+    const xs = b.hull.map((q) => q[0]), ys = b.hull.map((q) => q[1])
+    return { hull: b.hull, box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] }
+  })
+const inVenue = (l) => {
+  const pts = samples(l)
+  return hollow.some((b) => pts.filter((q) => q[0] >= b.box[0] && q[0] <= b.box[2] && q[1] >= b.box[1] && q[1] <= b.box[3] &&
+    inside(q, b.hull)).length >= 0.8 * pts.length)
+}
+const venueTrack = bikeAll.map(inVenue)
+const bikeKeep = bikeAll.map((l, i) => !isLoop(l) && !venueTrack[i])
 const plant = green.planting.map((g) => g.lines.map(toXY))
 // The year's extremes and middles: equinoxes and solstices, plus mid-July heat.
 const DATES = [[3, 21], [6, 21], [7, 15], [9, 21], [12, 21]]
@@ -141,7 +162,8 @@ for (const [mm, dd] of DATES) {
 const july = dates.find((d) => d.date === '07-15')
 writeFileSync(join(OUT, `${slug}.json`), JSON.stringify({ slug, date: `${Y}-07-15`,
   buildings: buildings.length, heightAssumedShare: Math.round((assumed / Math.max(buildings.length, 1)) * 100) / 100,
-  trees: els.size - buildings.length, canopyPixels: canopyPx, loopsExcluded: bikeKeep.filter((k) => !k).length,
+  trees: els.size - buildings.length, canopyPixels: canopyPx, loopsExcluded: bikeAll.filter(isLoop).length,
+  venueTracksExcluded: venueTrack.filter((v, i) => v && !isLoop(bikeAll[i])).length,
   // `hours` stays mid-July for the existing view; `dates` holds the year.
   hours: july.hours, dates, generated: new Date().toISOString() }))
 console.log(`baked  shade ${slug}`)

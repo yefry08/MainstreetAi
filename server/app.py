@@ -33,7 +33,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from sim_worker import DISTRICT, data_file, run_worker
+from sim_worker import DISTRICT, data_file, latest_common_checkpoint, run_worker
 from validation import (HOUR_RANGE, SCALE_RANGE, SPEED_RANGE, Invalid,
                         boolean, number, one_of)
 
@@ -360,7 +360,34 @@ async def twins():
         out["sim_time_drift_pct"] = round(100.0 * abs(drift) / elapsed, 2)
         out["drift_favours"] = ("baseline" if drift > 0
                                 else "ai" if drift < 0 else "neither")
+
+    # The like-for-like comparison, with no drift to allow for: each twin keeps
+    # its metrics at the last few multiples of sim_worker.CHECKPOINT_S
+    # simulated seconds, and the latest second BOTH hold is offered here. The
+    # latest figures above stay as they were; anything quoting a comparison
+    # should prefer `aligned`, which is absent until both twins have passed a
+    # first checkpoint.
+    out["run"] = run_info()
+    if all(m in engine.latest for m in MODES):
+        aligned = latest_common_checkpoint(
+            {m: (engine.latest[m][0].get("checkpoints") or []) for m in MODES})
+        if aligned:
+            out["aligned"] = aligned
     return out
+
+
+def run_info() -> dict:
+    """What each twin actually ran: components on, forecast reach, seed."""
+    info = {}
+    for m in MODES:
+        item = engine.latest.get(m)
+        if item is None:
+            continue
+        ctl = item[0].get("controller") or {}
+        info[m] = {"arms": ctl.get("arms"), "forecast_signals": ctl.get("forecast_signals"),
+                   "forecast_error": ctl.get("forecast_error"), "stats": ctl.get("stats"),
+                   "seed": item[0].get("seed")}
+    return info
 
 
 @app.get("/api/profile")

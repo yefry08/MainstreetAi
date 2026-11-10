@@ -58,7 +58,7 @@ export function shadowOffset(h, sun) {
   return [-Math.sin(sun.azimuth) * len, -Math.cos(sun.azimuth) * len]
 }
 
-function hull(pts) {
+export function hull(pts) {
   const p = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1])
   const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
   const lo = [], up = []
@@ -67,7 +67,7 @@ function hull(pts) {
   return lo.slice(0, -1).concat(up.slice(0, -1))
 }
 
-function inside([x, y], poly) {
+export function inside([x, y], poly) {
   let c = false
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
     const [xi, yi] = poly[i], [xj, yj] = poly[j]
