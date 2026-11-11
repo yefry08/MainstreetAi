@@ -30,7 +30,9 @@ def collect(mode: str, cmd_q, out_q, until: int, results):
     last = None
     while True:
         try:
-            item = out_q.get(timeout=120)
+            # 600 s, not 120: loading the Distrito Nacional network takes ~110 s
+            # for one twin alone, and both start at once.
+            item = out_q.get(timeout=600)
         except queue.Empty:
             break
         if isinstance(item, dict):
