@@ -253,8 +253,8 @@ export default function IsoScenes() {
     {
       n: 3, Fig: Prediction,
       title: tr('Predicting congestion from places', 'Predecir la congestión por lugares'),
-      text: tr('The AI anticipates as well as reacts. Every school, office, mall, hospital and stadium generates trips at its opening and closing hours, and rain adds more. That forecast feeds the simulation and tells the controller which crossing will fill up before it does.',
-               'La IA no solo reacciona: anticipa. Cada colegio, oficina, mall, hospital y estadio genera viajes a sus horas de entrada y salida, y la lluvia suma más. Esa previsión alimenta la simulación y le dice al controlador qué cruce se va a llenar antes de que pase.'),
+      text: tr('The AI anticipates as well as reacts. Every school, office, mall, hospital and stadium generates trips at its opening and closing hours, and rain adds more. That forecast feeds the simulation and tells the controller which crossing will fill up before it does. Its effect on the result is still being measured.',
+               'La IA no solo reacciona: anticipa. Cada colegio, oficina, mall, hospital y estadio genera viajes a sus horas de entrada y salida, y la lluvia suma más. Esa previsión alimenta la simulación y le dice al controlador qué cruce se va a llenar antes de que pase. Su efecto en el resultado todavía se está midiendo.'),
     },
     {
       n: 4, Fig: ShadeTrees,
