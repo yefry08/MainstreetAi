@@ -30,7 +30,9 @@ def collect(mode: str, cmd_q, out_q, until: int, results):
     last = None
     while True:
         try:
-            item = out_q.get(timeout=120)
+            # 600 s, not 120: loading the Distrito Nacional network takes ~110 s
+            # for one twin alone, and both start at once.
+            item = out_q.get(timeout=600)
         except queue.Empty:
             break
         if isinstance(item, dict):
@@ -130,6 +132,15 @@ def main() -> None:
     row("worst vehicle wait (s)", "max_wait_s")
     row("p95 vehicle wait (s)", "p95_wait_s")
     row("waited over 5 min", "stranded")
+    # The three rows above are the vehicles IN the network at the last second.
+    # These are whole trips, and people rather than vehicles.
+    row("median wait, done trips (s)", "trip_wait_p50_s")
+    row("p95 wait, done trips (s)", "trip_wait_p95_s")
+    row("person-hours stopped (assumed)", "person_stopped_hours")
+    print("- delay the network does not show " + "-" * 38)
+    row("dropped before entering", "not_inserted")
+    row("insertion delay (veh-hours)", "insertion_delay_veh_hours")
+    row("veh-seconds mid-teleport", "teleporting_veh_seconds")
     print("-" * 72)
 
     # Per-corridor flow index: mean (speed / speed limit) over the corridor's
@@ -148,6 +159,12 @@ def main() -> None:
         print("-" * 72)
 
     print("AI controller activity:", a["controller"]["stats"])
+    # What the AI twin actually ran. forecast_signals = 0 means no forecast
+    # reached the controller, whatever the page says about anticipation.
+    print("AI components on:", a["controller"].get("arms"),
+          "| forecast covers", a["controller"].get("forecast_signals"), "signals",
+          ("| FORECAST FAILED TO LOAD: " + a["controller"]["forecast_error"])
+          if a["controller"].get("forecast_error") else "")
     print("\nNote: both runs are the same synthetic demand on the real OSM "
           "network. Percentages are simulation results, not field measurements.")
 

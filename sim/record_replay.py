@@ -180,6 +180,21 @@ async def main() -> None:
 
     import urllib.request
     twins = json.loads(urllib.request.urlopen(f"{API}/twins", timeout=20).read())
+    # The figures the page quotes must compare the twins at the SAME simulated
+    # second. Their latest snapshots do not: the two processes drift, and the
+    # Santo Domingo take was quoted at 1,829 s against 1,846 s. The server
+    # offers `aligned` once both twins have passed a common checkpoint; wait
+    # for it rather than quote a comparison of two different moments.
+    for _ in range(45):
+        if twins.get("aligned"):
+            break
+        await asyncio.sleep(2.0)
+        twins = json.loads(urllib.request.urlopen(f"{API}/twins", timeout=20).read())
+    stats_aligned = bool(twins.get("aligned"))
+    stats_src = twins["aligned"] if stats_aligned else twins
+    if not stats_aligned:
+        print("[warn] no common checkpoint yet: the stats are each twin's latest, "
+              "at different simulated times. manifest.stats_aligned = false")
 
     print(f"recording {args.seconds:.0f}s at {args.hz:.0f} Hz per twin")
     out = {}
@@ -239,11 +254,26 @@ async def main() -> None:
         # quotes them. Leaving them out meant two of its four figures rendered
         # as an em dash on the static build while looking fine locally, where
         # the live API supplies them.
-        "stats": {m: {k: twins[m].get(k) for k in
+        #
+        # Everything a reader needs to judge the four headline figures is
+        # published beside them: what did not get in (not_inserted, the
+        # insertion backlog), what was teleported out of a jam, throughput,
+        # emissions, delay per person, and waiting over COMPLETED trips
+        # (trip_wait_*) next to the in-network snapshot (p95_wait_s).
+        "stats": {m: {k: stats_src[m].get(k) for k in
                       ("avg_speed_kmh", "bus_avg_speed_kmh",
                        "stopped_veh_hours", "completed", "sim_time",
-                       "co2_kg", "p95_wait_s")}
-                  for m in ("ai", "baseline") if m in twins},
+                       "co2_kg", "p95_wait_s",
+                       "departed", "teleports", "teleporting_veh_seconds",
+                       "loaded", "not_inserted", "insertion_backlog",
+                       "insertion_delay_veh_hours", "person_stopped_hours",
+                       "trip_wait_p50_s", "trip_wait_p95_s", "trip_wait_n",
+                       "nox_kg", "fuel_l", "max_wait_s", "stranded")}
+                  for m in ("ai", "baseline") if m in stats_src},
+        # True when both twins' stats are from the same simulated second.
+        "stats_aligned": stats_aligned,
+        # What each twin ran: components on, forecast reach, seed.
+        "run": twins.get("run"),
     }
     (OUT / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
