@@ -112,7 +112,10 @@ def window(start: dict | None, end: dict) -> dict:
     return w
 
 
-def collect(out_q, cmd_q, warmup: float, until: float, timeout: float = 300.0) -> dict | None:
+# 900 s, not 300: two Distrito Nacional twins loading at once on a small machine
+# took just over 300 s to produce a first snapshot, and 16 of 20 runs were
+# thrown away as "quiet" before they had started.
+def collect(out_q, cmd_q, warmup: float, until: float, timeout: float = 900.0) -> dict | None:
     """
     Read one worker's snapshots: keep the one at the end of the warm-up and the
     one at `until`, then stop the worker. None if it failed or went quiet.
