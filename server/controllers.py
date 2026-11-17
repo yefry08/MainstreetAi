@@ -344,6 +344,13 @@ class AdaptiveController:
         # lead TOWARD a school/office/stadium about to fill, or AWAY from one
         # about to empty, and when. See _anticipate.
         self.forecast = self._prepare_forecast(forecast or {})
+        # The learned forecast (server/learned_forecast.py): predicted vehicles
+        # entering each lane over the next minute, refreshed by the worker
+        # every minute. None while it is off or has too little history. It
+        # weighs in exactly where the hand-written forecast does: as extra
+        # queue for rule 5, never above rules 1-4.
+        self.lane_forecast: dict[str, float] | None = None
+        self.learned_weight = 1.0
 
         # --- tunable policy parameters ---
         self.min_green = 8.0          # never truncate below this
@@ -463,6 +470,15 @@ class AdaptiveController:
                 ahead_green, ahead_red, why = self._anticipate(tid, green_lanes, sim_time)
                 served += ahead_green
                 waiting += ahead_red
+            if self.lane_forecast:
+                lf, w = self.lane_forecast, self.learned_weight
+                gs = set(green_lanes)
+                ag = w * sum(lf.get(l, 0.0) for l in green_lanes)
+                ar = w * sum(lf.get(l, 0.0) for l in plan.all_lanes if l not in gs)
+                served += ag
+                waiting += ar
+                if ag > 0.0 and not why:
+                    why = f"learned: {ag:.1f} arriving on green"
 
             # ---- rule 5: keep serving the heavier direction ----
             if served > 0 and served >= waiting * self.imbalance:
@@ -656,7 +672,8 @@ class AdaptiveController:
     def arms(self) -> dict:
         """Which components are switched on, so every result says what produced it."""
         return {"tsp": bool(getattr(self, "tsp", True)),
-                "forecast": bool(getattr(self, "forecast", None))}
+                "forecast": bool(getattr(self, "forecast", None)),
+                "learned": bool(getattr(self, "learned_on", False))}
 
     def _count_tsp(self, tid: str, plan: JunctionPlan, phase: int) -> None:
         """

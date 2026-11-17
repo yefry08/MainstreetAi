@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MainstreetAi Ablación</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f7f8f6; --card: #ffffff; --ink: #16201b; --muted: #5d6a63; --line: #dfe5e1;
+  --good: #1f8a5b; --flat: #9aa6a0; --bad: #c2453b; --accent: #1f6fb2; --zero: #16201b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1412; --card: #171e1b; --ink: #e8eeea; --muted: #9aa8a1; --line: #2a3430;
+    --good: #3cc488; --flat: #6b7872; --bad: #ef6b5f; --accent: #5aa6e8; --zero: #e8eeea;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1412; --card: #171e1b; --ink: #e8eeea; --muted: #9aa8a1; --line: #2a3430;
+  --good: #3cc488; --flat: #6b7872; --bad: #ef6b5f; --accent: #5aa6e8; --zero: #e8eeea;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.55 Inter, system-ui, sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 32px 16px 64px; }
+header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; margin: 0; }
+h1 { font-size: clamp(24px, 4vw, 34px); line-height: 1.15; margin: 6px 0 10px; }
+h2 { font-size: 18px; margin: 0 0 4px; }
+p.lede { color: var(--muted); max-width: 680px; margin: 0; }
+.lang { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.lang button, .tabs button { background: none; border: 0; color: var(--muted); padding: 6px 12px; font: inherit; cursor: pointer; }
+.lang button.on, .tabs button.on { background: var(--ink); color: var(--bg); }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 28px 0; }
+.kpi { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.kpi b { display: block; font-size: 26px; font-weight: 700; color: var(--good); }
+.kpi span { color: var(--muted); font-size: 13px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 18px; }
+.sub { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.tabs button { border: 1px solid var(--line); border-radius: 999px; font-size: 13px; }
+svg text { fill: var(--ink); font: 13px Inter, system-ui, sans-serif; }
+svg .muted { fill: var(--muted); font-size: 12px; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-top: 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 560px; }
+th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--muted); font-weight: 500; font-size: 13px; white-space: normal; vertical-align: bottom; min-width: 84px; }
+td { font-variant-numeric: tabular-nums; }
+.limits { border-left: 3px solid var(--bad); }
+.limits ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); }
+footer { color: var(--muted); font-size: 13px; margin-top: 24px; }
+a { color: var(--accent); }
+@media (max-width: 720px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <p class="eyebrow" data-i="eyebrow"></p>
+      <h1 data-i="title"></h1>
+      <p class="lede" data-i="lede"></p>
+    </div>
+    <div class="lang" role="group" aria-label="Language">
+      <button data-lang="es">ES</button><button data-lang="en">EN</button>
+    </div>
+  </header>
+
+  <section class="kpis" id="kpis"></section>
+
+  <section class="card">
+    <h2 data-i="stepsTitle"></h2>
+    <p class="sub" data-i="stepsSub"></p>
+    <div class="tabs" id="metricTabs"></div>
+    <div id="chart"></div>
+    <div class="legend">
+      <span><i style="background:var(--good)"></i><span data-i="lgGood"></span></span>
+      <span><i style="background:var(--flat)"></i><span data-i="lgFlat"></span></span>
+      <span><i style="background:var(--bad)"></i><span data-i="lgBad"></span></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 data-i="armsTitle"></h2>
+    <p class="sub" data-i="armsSub"></p>
+    <div class="scroll"><table id="arms"></table></div>
+  </section>
+
+  <section class="card">
+    <h2 data-i="seedsTitle"></h2>
+    <p class="sub" data-i="seedsSub"></p>
+    <div class="scroll"><table id="seeds"></table></div>
+  </section>
+
+  <section class="card limits">
+    <h2 data-i="limitsTitle"></h2>
+    <ul id="limits"></ul>
+  </section>
+
+  <footer>
+    <span data-i="foot"></span>
+    <a href="https://yefry08.github.io/MainstreetAi/" target="_blank" rel="noopener">yefry08.github.io/MainstreetAi</a> ·
+    <a href="https://github.com/yefry08/MainstreetAi" target="_blank" rel="noopener">GitHub</a> ·
+    <a href="ablation.json">ablation.json</a>
+  </footer>
+</main>
+
+<script>
+const T = {
+  es: {
+    eyebrow: 'MainstreetAi · Distrito Nacional, Santo Domingo',
+    title: 'Qué aporta cada pieza de la IA',
+    lede: 'Ablación en un gemelo digital SUMO de 185 semáforos: cuatro brazos con la misma demanda, 5 semillas, de 7:15 a 9:00. Cada paso es una diferencia pareada con su intervalo de confianza del 95 %.',
+    stepsTitle: 'Efecto de cada paso',
+    stepsSub: 'Cambio porcentual frente al paso anterior; la última barra compara la IA completa con el horario fijo. Las líneas son el intervalo del 95 %.',
+    lgGood: 'mejora (el intervalo excluye 0)', lgFlat: 'no se distingue de 0', lgBad: 'empeora',
+    armsTitle: 'Valores por brazo', armsSub: 'Media de las 5 semillas en la ventana de 7:15 a 9:00.',
+    seedsTitle: 'Horas-vehículo detenidas por semilla', seedsSub: 'La mejora se repite en cada semilla, no solo en la media.',
+    limitsTitle: 'Límites',
+    limits: [
+      'La demanda es sintética y no está calibrada con conteos; la curva horaria es la de Barcelona.',
+      'La referencia es un plan fijo genérico de 88 s, no los planes reales del INTRANT ni un plan optimizado (Webster), actuado o max-pressure.',
+      'El tráfico está por debajo de la saturación; falta un barrido de demanda.',
+      'El "pronóstico" es un horario de eventos escrito a mano, no un modelo aprendido.',
+      'Son resultados de simulación, no mediciones de campo.',
+    ],
+    foot: 'Simulación con SUMO sobre la red de OpenStreetMap.',
+    steps: { 'queue-based control': 'Control por colas', 'transit priority': '+ Prioridad a buses', 'forecast': '+ Pronóstico de eventos', 'ALL (full AI twin)': 'IA completa vs. fijo' },
+    arms: { fixed: 'Horario fijo', adaptive: 'Adaptativo', 'adaptive+tsp': '+ prioridad a buses', 'adaptive+tsp+forecast': '+ pronóstico' },
+    m: {
+      stopped_veh_hours: 'Horas-vehículo detenidas', person_stopped_hours: 'Horas-persona detenidas',
+      bus_avg_speed_kmh: 'Velocidad de buses', avg_speed_kmh: 'Velocidad de la red', co2_kg: 'CO₂',
+      teleports: 'Bloqueos (teleports)', trip_wait_p50_s: 'Espera mediana (s)', trip_wait_p95_s: 'Espera p95 (s)',
+    },
+    kpi: ['horas-vehículo detenidas', 'horas-persona detenidas', 'velocidad de buses', 'CO₂'],
+    seed: 'Semilla', armCol: 'Brazo',
+  },
+  en: {
+    eyebrow: 'MainstreetAi · Distrito Nacional, Santo Domingo',
+    title: 'What each piece of the AI adds',
+    lede: 'Ablation on a 185-signal SUMO digital twin: four arms on the same demand, 5 seeds, 7:15 to 9:00. Each step is a paired difference with its 95% confidence interval.',
+    stepsTitle: 'Effect of each step',
+    stepsSub: 'Percent change against the previous step; the last bar compares the full AI with fixed time. Lines are the 95% interval.',
+    lgGood: 'better (interval excludes 0)', lgFlat: 'not distinguishable from 0', lgBad: 'worse',
+    armsTitle: 'Values per arm', armsSub: 'Mean of the 5 seeds over the 7:15–9:00 window.',
+    seedsTitle: 'Stopped vehicle-hours per seed', seedsSub: 'The gain repeats in every seed, not just on average.',
+    limitsTitle: 'Limits',
+    limits: [
+      'Demand is synthetic and not calibrated against counts; the hourly curve is Barcelona’s.',
+      'The reference is a generic 88 s fixed plan, not INTRANT’s real timings nor an optimised (Webster), actuated or max-pressure plan.',
+      'Traffic is below saturation; a demand sweep is still to do.',
+      'The "forecast" is a hand-written event schedule, not a learned model.',
+      'These are simulation results, not field measurements.',
+    ],
+    foot: 'Simulated in SUMO on the OpenStreetMap network.',
+    steps: { 'queue-based control': 'Queue-based control', 'transit priority': '+ Bus priority', 'forecast': '+ Event forecast', 'ALL (full AI twin)': 'Full AI vs. fixed' },
+    arms: { fixed: 'Fixed time', adaptive: 'Adaptive', 'adaptive+tsp': '+ bus priority', 'adaptive+tsp+forecast': '+ forecast' },
+    m: {
+      stopped_veh_hours: 'Stopped vehicle-hours', person_stopped_hours: 'Stopped person-hours',
+      bus_avg_speed_kmh: 'Bus speed', avg_speed_kmh: 'Network speed', co2_kg: 'CO₂',
+      teleports: 'Gridlocks (teleports)', trip_wait_p50_s: 'Median wait (s)', trip_wait_p95_s: 'p95 wait (s)',
+    },
+    kpi: ['stopped vehicle-hours', 'stopped person-hours', 'bus speed', 'CO₂'],
+    seed: 'Seed', armCol: 'Arm',
+  },
+}
+const BETTER = { stopped_veh_hours: 'down', person_stopped_hours: 'down', bus_avg_speed_kmh: 'up',
+  avg_speed_kmh: 'up', co2_kg: 'down', teleports: 'down' }
+const STEP_METRICS = Object.keys(BETTER)
+const ARM_COLS = ['stopped_veh_hours', 'person_stopped_hours', 'avg_speed_kmh', 'bus_avg_speed_kmh', 'co2_kg', 'trip_wait_p50_s', 'trip_wait_p95_s']
+
+let lang = 'es', metric = 'stopped_veh_hours', data = null
+try { const s = localStorage.getItem('lang'); if (s === 'en' || s === 'es') lang = s } catch (e) {}
+
+const fmt = (v, d = 1) => v.toLocaleString(lang === 'es' ? 'es-DO' : 'en-US', { minimumFractionDigits: d, maximumFractionDigits: d })
+const sign = (v, d = 1) => (v > 0 ? '+' : v < 0 ? '−' : '') + fmt(Math.abs(v), d)
+const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length
+
+function verdict(s, key) {
+  if (s.ci95 == null || Math.abs(s.mean) <= s.ci95) return 'flat'
+  const good = BETTER[key] === 'down' ? s.mean < 0 : s.mean > 0
+  return good ? 'good' : 'bad'
+}
+
+function render() {
+  const t = T[lang]
+  document.documentElement.lang = lang
+  document.querySelectorAll('[data-i]').forEach((el) => { el.textContent = t[el.dataset.i] })
+  document.querySelectorAll('[data-lang]').forEach((b) => b.classList.toggle('on', b.dataset.lang === lang))
+  document.getElementById('limits').innerHTML = t.limits.map((x) => `<li>${x}</li>`).join('')
+  if (!data) return
+  const S = data.summary, all = S['ALL (full AI twin)']
+
+  const kp = [['stopped_veh_hours', 0], ['person_stopped_hours', 1], ['bus_avg_speed_kmh', 2], ['co2_kg', 3]]
+  document.getElementById('kpis').innerHTML = kp.map(([k, i]) => {
+    const s = all[k]
+    return `<div class="kpi"><b>${sign(s.pct, s.pct < 10 && s.pct > -10 ? 1 : 0)} %</b><span>${t.kpi[i]} · ±${fmt(s.pct_ci95, 1)}</span></div>`
+  }).join('')
+
+  document.getElementById('metricTabs').innerHTML = STEP_METRICS.map((k) =>
+    `<button data-m="${k}" class="${k === metric ? 'on' : ''}">${t.m[k]}</button>`).join('')
+  document.querySelectorAll('[data-m]').forEach((b) => b.onclick = () => { metric = b.dataset.m; render() })
+
+  drawChart(t)
+
+  const runs = data.runs
+  const arms = data.arms
+  document.getElementById('arms').innerHTML =
+    `<tr><th>${t.armCol}</th>${ARM_COLS.map((k) => `<th>${t.m[k]}</th>`).join('')}</tr>` +
+    arms.map((a) => {
+      const rs = runs.filter((r) => r.arm === a).map((r) => r.window)
+      return `<tr><td>${t.arms[a]}</td>${ARM_COLS.map((k) => `<td>${fmt(mean(rs.map((r) => r[k])), k === 'co2_kg' ? 0 : 1)}</td>`).join('')}</tr>`
+    }).join('')
+
+  const seeds = [...new Set(runs.map((r) => r.seed))].sort((a, b) => a - b)
+  const v = (a, s) => runs.find((r) => r.arm === a && r.seed === s).window.stopped_veh_hours
+  document.getElementById('seeds').innerHTML =
+    `<tr><th>${t.seed}</th>${arms.map((a) => `<th>${t.arms[a]}</th>`).join('')}<th>Δ</th></tr>` +
+    seeds.map((s) => {
+      const f = v('fixed', s), last = v(arms[arms.length - 1], s)
+      return `<tr><td>${s}</td>${arms.map((a) => `<td>${fmt(v(a, s))}</td>`).join('')}<td>${sign(100 * (last - f) / f)} %</td></tr>`
+    }).join('')
+}
+
+function drawChart(t) {
+  const S = data.summary
+  const steps = Object.keys(S)
+  const rows = steps.map((k) => ({ label: t.steps[k], s: S[k][metric] }))
+  const lo = Math.min(0, ...rows.map((r) => r.s.pct - (r.s.pct_ci95 || 0)))
+  const hi = Math.max(0, ...rows.map((r) => r.s.pct + (r.s.pct_ci95 || 0)))
+  const W = 900, L = 200, R = 130, rowH = 46, H = rows.length * rowH + 30
+  const x = (v) => L + (v - lo) / (hi - lo || 1) * (W - L - R)
+  const color = { good: 'var(--good)', flat: 'var(--flat)', bad: 'var(--bad)' }
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${t.m[metric]}">`
+  svg += `<line x1="${x(0)}" x2="${x(0)}" y1="4" y2="${H - 22}" stroke="var(--zero)" stroke-opacity=".5"/>`
+  svg += `<text class="muted" x="${x(0)}" y="${H - 6}" text-anchor="middle">0 %</text>`
+  rows.forEach((r, i) => {
+    const y = 10 + i * rowH, c = color[verdict(r.s, metric)]
+    const x0 = Math.min(x(0), x(r.s.pct)), w = Math.abs(x(r.s.pct) - x(0))
+    if (i === rows.length - 1) svg += `<line x1="8" x2="${W - 8}" y1="${y - 6}" y2="${y - 6}" stroke="var(--line)"/>`
+    svg += `<text x="8" y="${y + 19}"${i === rows.length - 1 ? ' font-weight="600"' : ''}>${r.label}</text>`
+    svg += `<rect x="${x0}" y="${y + 4}" width="${Math.max(w, 1.5)}" height="22" rx="3" fill="${c}"/>`
+    if (r.s.pct_ci95 != null) {
+      const a = x(r.s.pct - r.s.pct_ci95), b = x(r.s.pct + r.s.pct_ci95), m = y + 15
+      svg += `<line x1="${a}" x2="${b}" y1="${m}" y2="${m}" stroke="var(--ink)" stroke-width="1.5"/>`
+      svg += `<line x1="${a}" x2="${a}" y1="${m - 6}" y2="${m + 6}" stroke="var(--ink)" stroke-width="1.5"/>`
+      svg += `<line x1="${b}" x2="${b}" y1="${m - 6}" y2="${m + 6}" stroke="var(--ink)" stroke-width="1.5"/>`
+    }
+    // The value sits right of the zero line (or of the interval), never over
+    // the row label: long negative bars reach all the way to it.
+    const tx = Math.max(x(r.s.pct + (r.s.pct_ci95 || 0)), x(0)) + 8
+    const ci = r.s.pct_ci95 != null ? ` ±${fmt(r.s.pct_ci95)}` : ''
+    svg += `<text x="${tx}" y="${y + 19}" font-weight="600">${sign(r.s.pct)} %<tspan class="muted" font-weight="400">${ci}</tspan></text>`
+  })
+  document.getElementById('chart').innerHTML = svg + '</svg>'
+}
+
+document.querySelectorAll('[data-lang]').forEach((b) => b.onclick = () => {
+  lang = b.dataset.lang
+  try { localStorage.setItem('lang', lang) } catch (e) {}
+  render()
+})
+render()
+fetch('ablation.json').then((r) => r.json()).then((d) => { data = d; render() })
+  .catch(() => { document.getElementById('chart').textContent = 'ablation.json no se pudo cargar.' })
+</script>
+</body>
+</html>
