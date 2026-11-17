@@ -375,8 +375,12 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
     # them all on together cannot say what each is worth. cfg["arms"] turns
     # transit priority and the forecast off independently (server/ablation.py);
     # MAINSTREET_TSP=0 / MAINSTREET_FORECAST=0 do the same for the live server.
+    # "learned" is the trained arrivals model (server/learned_forecast.py); it
+    # is off unless asked for, so every published result keeps meaning what
+    # it meant until that model has been measured in an ablation.
     arms = {"tsp": os.environ.get("MAINSTREET_TSP", "1") != "0",
-            "forecast": os.environ.get("MAINSTREET_FORECAST", "1") != "0"}
+            "forecast": os.environ.get("MAINSTREET_FORECAST", "1") != "0",
+            "learned": os.environ.get("MAINSTREET_LEARNED", "0") == "1"}
     arms.update({k: bool(v) for k, v in (cfg.get("arms") or {}).items() if k in arms})
 
     forecast = None
@@ -410,6 +414,23 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
     # controlled lanes measured 3x more expensive for data we mostly discard.
     ctrl_lanes = sorted({l for p in plans.values() for l in p.all_lanes})
     _halt_cache: dict[str, int] = {}
+
+    # Arrivals per controlled lane per minute: recorded as training data
+    # (cfg["record_arrivals"], see record_arrivals.py) and read by the learned
+    # forecast. One counter serves both, so what the model is trained on and
+    # what it is fed at run time are counted the same way.
+    from learned_forecast import ArrivalCounter, Predictor
+    record_path = cfg.get("record_arrivals")
+    learned = None
+    learned_error = ""
+    if mode == "ai" and arms["learned"]:
+        try:
+            learned = Predictor(SIM / "net" / f"arrivals_model_{DISTRICT}", ctrl_lanes)
+        except Exception as exc:
+            learned_error = f"{type(exc).__name__}: {exc}"[:200]
+    counter = ArrivalCounter(ctrl_lanes) if (record_path or learned) else None
+    if learned is not None:
+        controller.learned_on = True
 
     def halt_fn(lane: str) -> int:
         v = _halt_cache.get(lane, -1)
@@ -489,6 +510,10 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
                 # busiest arm; the honest question is whether it does that by
                 # abandoning somebody on a side street. This is how we check.
                 tc.VAR_ACCUMULATED_WAITING_TIME]
+    if counter is not None:
+        # The lane each vehicle is on, for the arrivals counter. Only
+        # subscribed when something counts arrivals.
+        VEH_VARS.append(tc.VAR_LANE_ID)
 
     metrics = Metrics()
     depart_time: dict[str, float] = {}
@@ -740,6 +765,8 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
             d = depart_time.pop(vid, None)
             kind_of.pop(vid, None)
             waited = last_wait_of.pop(vid, None)
+            if counter is not None:
+                counter.forget(vid)
             metrics.arrived += 1
             if d is not None:
                 metrics.total_travel_time += metrics.sim_time - d
@@ -770,6 +797,8 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
 
             i = 0
             for vid, d in res.items():
+                if counter is not None:
+                    counter.see(vid, d.get(tc.VAR_LANE_ID))
                 p = d.get(tc.VAR_POSITION, (0.0, 0.0))
                 # A vehicle that is mid-teleport (or loaded but not yet placed)
                 # reports INVALID_DOUBLE_VALUE as its POSITION. Projecting that
@@ -920,6 +949,13 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
                     for tls_id, link_idx, dist, _state in nxt[:1]:
                         if dist <= det:
                             bus_requests.setdefault(tls_id, []).append(link_idx)
+
+        # --- close the minute's arrival counts; refresh the learned forecast ---
+        if counter is not None and counter.tick(metrics.sim_time) and learned is not None:
+            pred = learned.predict(counter)
+            controller.lane_forecast = (
+                {l: float(v) for l, v in zip(ctrl_lanes, pred) if v > 0.05}
+                if pred is not None else None)
 
         # --- run the control policy ---
         _halt_cache.clear()
@@ -1093,6 +1129,11 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
                                      if isinstance(controller, AdaptiveController) else 0),
                 "forecast_day": forecast_day,
                 "forecast_error": forecast_error,
+                # The learned arrivals model: which one, how much of this
+                # network's lanes it was trained on, or why it did not load.
+                "learned": ({"kind": learned.kind, "lane_coverage": round(learned.coverage, 3)}
+                            if learned is not None else None),
+                "learned_error": learned_error,
             },
             # This twin's metrics at the last multiples of CHECKPOINT_S: the
             # like-for-like figures to compare with the other twin's.
@@ -1132,6 +1173,14 @@ def _run(mode: str, cmd_q, out_q, cfg: dict) -> None:
         if metrics.sim_time >= step_budget and ls.simulation.getMinExpectedNumber() <= 0:
             out_q.put({"type": "finished", "mode": mode, "metrics": metrics.snapshot()})
             break
+
+    if record_path and counter is not None:
+        try:
+            counter.save(Path(record_path), {
+                "mode": mode, "seed": seed, "start_hour": start_hour, "day": day_name,
+                "arms": arms, "district": DISTRICT, "bin_s": 60})
+        except Exception as exc:
+            print(f"[{mode}] could not save arrivals: {exc}", flush=True)
 
     try:
         ls.close()

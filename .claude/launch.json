@@ -18,6 +18,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "../greenlight/web", "run", "dev", "--", "--port", "5174", "--mode", "pages"],
       "port": 5174
+    },
+    {
+      "name": "hf-space",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5180", "--directory", "hf_space"],
+      "port": 5180
     }
   ]
 }

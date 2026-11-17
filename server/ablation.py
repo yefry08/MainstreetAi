@@ -52,6 +52,10 @@ ARMS = [
     ("adaptive", "ai", {"tsp": False, "forecast": False}),
     ("adaptive+tsp", "ai", {"tsp": True, "forecast": False}),
     ("adaptive+tsp+forecast", "ai", {"tsp": True, "forecast": True}),
+    # The trained arrivals model (learned_forecast.py) in place of the
+    # hand-written schedule. Run it alone with --arms and --merge an earlier
+    # ablation to compare it with the arms above on the same seeds.
+    ("adaptive+tsp+learned", "ai", {"tsp": True, "forecast": False, "learned": True}),
 ]
 # Each step isolates one component: (what it measures, arm, the arm before it).
 STEPS = [
@@ -59,6 +63,9 @@ STEPS = [
     ("transit priority", "adaptive+tsp", "adaptive"),
     ("forecast", "adaptive+tsp+forecast", "adaptive+tsp"),
     ("ALL (full AI twin)", "adaptive+tsp+forecast", "fixed"),
+    ("learned forecast", "adaptive+tsp+learned", "adaptive+tsp"),
+    ("learned vs hand-written", "adaptive+tsp+learned", "adaptive+tsp+forecast"),
+    ("ALL with learned forecast", "adaptive+tsp+learned", "fixed"),
 ]
 
 # Totals that accrue with time: a window is the difference of two snapshots.
@@ -231,6 +238,10 @@ def main() -> None:
     ap.add_argument("--demand-tag", dest="demand_tag", default=None)
     ap.add_argument("--parallel", type=int, default=2)
     ap.add_argument("--out", default="ablation.json")
+    ap.add_argument("--arms", default=None,
+                    help="comma-separated arm labels to run (default: the first four)")
+    ap.add_argument("--merge", default=None,
+                    help="an earlier ablation JSON whose runs join the summary")
     args = ap.parse_args()
     if args.demand_tag is None:
         from sim_worker import DEMAND_TAG
@@ -239,8 +250,19 @@ def main() -> None:
         sys.exit("--warmup must be before --until")
     seeds = [int(s) for s in args.seeds.split(",") if s.strip()]
 
-    jobs = [(label, mode, arms, seed) for seed in seeds for label, mode, arms in ARMS]
+    wanted = (args.arms.split(",") if args.arms else [a[0] for a in ARMS[:4]])
+    unknown = set(wanted) - {a[0] for a in ARMS}
+    if unknown:
+        sys.exit(f"unknown arms: {sorted(unknown)}")
+    jobs = [(label, mode, arms, seed) for seed in seeds
+            for label, mode, arms in ARMS if label in wanted]
     runs: list[dict] = []
+    if args.merge:
+        # Earlier runs on the same seeds: same network, routes and RNG seed,
+        # so a step between a merged arm and a new one is still paired.
+        prior = json.loads(Path(args.merge).read_text(encoding="utf-8"))
+        runs = [r for r in prior["runs"] if "window" in r and r["arm"] not in wanted]
+    n_prior = len(runs)
     lock = threading.Lock()
     todo = iter(jobs)
     t0 = time.perf_counter()
@@ -255,7 +277,7 @@ def main() -> None:
             with lock:
                 runs.append(r)
                 state = "ok" if "window" in r else "FAILED"
-                print(f"[{len(runs)}/{len(jobs)}] seed {r['seed']} {r['arm']:<24}{state}"
+                print(f"[{len(runs) - n_prior}/{len(jobs)}] seed {r['seed']} {r['arm']:<24}{state}"
                       f"  ({time.perf_counter() - t0:.0f} s)", flush=True)
                 # Written after every run: a long sweep that dies keeps what it had.
                 Path(args.out).write_text(json.dumps(

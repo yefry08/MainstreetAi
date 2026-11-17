@@ -1,0 +1,38 @@
+{
+ "kind": "profile",
+ "features": [
+  "lag1",
+  "lag2",
+  "lag3",
+  "lag4",
+  "lag5",
+  "lag6",
+  "lag7",
+  "lag8",
+  "lag9",
+  "lag10",
+  "mean3",
+  "mean10",
+  "typical",
+  "typical_next",
+  "minute",
+  "lane_mean"
+ ],
+ "bin_s": 60,
+ "target": "vehicles entering the lane next minute",
+ "trained_on_seeds": [
+  101,
+  102,
+  103,
+  104,
+  105,
+  106
+ ],
+ "district": "santo_domingo",
+ "recorded_with": {
+  "tsp": true,
+  "forecast": false,
+  "learned": false
+ },
+ "start_hour": 7.0
+}

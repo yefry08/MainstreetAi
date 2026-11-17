@@ -1,0 +1,86 @@
+{
+ "validation_seeds": [
+  105,
+  106
+ ],
+ "train_seeds": [
+  101,
+  102,
+  103,
+  104
+ ],
+ "lanes": 1366,
+ "busy_lane_threshold": 0.8973958492279053,
+ "results": {
+  "persistence": {
+   "mae": 0.5846723318099976,
+   "rmse": 1.1876461505889893,
+   "bias": 0.010821414180099964,
+   "mae_busy_lanes": 1.3157894611358643,
+   "mean_count": 0.6118713021278381,
+   "n": 319644,
+   "mae_approach": 1.0592293804996906,
+   "mean_approach_count": 1.2345882412352132
+  },
+  "mean3": {
+   "mae": 0.5520923137664795,
+   "rmse": 1.0616965293884277,
+   "bias": 0.02021312154829502,
+   "mae_busy_lanes": 1.1920702457427979,
+   "mean_count": 0.6118713021278381,
+   "n": 319644,
+   "mae_approach": 0.9898938277739386,
+   "mean_approach_count": 1.2345882412352132
+  },
+  "profile": {
+   "mae": 0.46104103326797485,
+   "rmse": 0.8485881686210632,
+   "bias": 0.002258762950077653,
+   "mae_busy_lanes": 1.0315889120101929,
+   "mean_count": 0.6118713021278381,
+   "n": 319644,
+   "mae_approach": 0.8068874749081544,
+   "mean_approach_count": 1.2345882412352132
+  },
+  "lightgbm": {
+   "mae": 0.4923194769314456,
+   "rmse": 0.8312053761991414,
+   "bias": 0.003808772672848645,
+   "mae_busy_lanes": 1.0074106805011735,
+   "mean_count": 0.6118713021278381,
+   "n": 319644,
+   "mae_approach": 0.8394898559138465,
+   "mean_approach_count": 1.2345882412352132,
+   "trees": 79,
+   "train_seconds": 56.8
+  },
+  "amazon/chronos-bolt-tiny": {
+   "mae": 0.5080153942108154,
+   "rmse": 1.0435460805892944,
+   "bias": -0.13849802315235138,
+   "mae_busy_lanes": 1.1411561965942383,
+   "mean_count": 0.6013742685317993,
+   "n": 60104,
+   "mae_approach": 0.9262165577914732,
+   "mean_approach_count": 1.213408083792131,
+   "seconds_per_forecast": 4.981149147727675,
+   "scored_every_minutes": 5
+  },
+  "amazon/chronos-bolt-small": {
+   "mae": 0.49889007210731506,
+   "rmse": 1.0398149490356445,
+   "bias": -0.162557914853096,
+   "mae_busy_lanes": 1.1340361833572388,
+   "mean_count": 0.6013742685317993,
+   "n": 60104,
+   "mae_approach": 0.9175009221601655,
+   "mean_approach_count": 1.213408083792131,
+   "seconds_per_forecast": 12.007621025001175,
+   "scored_every_minutes": 5
+  }
+ },
+ "deployed": "profile",
+ "best_overall": "profile",
+ "selection_metric": "mae_approach",
+ "selection_note": "The first evaluation selected on per-lane MAE and picked the profile; the metric was changed to approach-level MAE after seeing that result, because the controller sums lanes per approach. Both are reported."
+}

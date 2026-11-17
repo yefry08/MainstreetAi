@@ -148,12 +148,14 @@ ctl, c = controller(None, tsp=False)
 act, why = decide(ctl, c, {"ns_0": 5, "ew_0": 1}, buses={"J": [1]})
 check("tsp off: a waiting bus does not release the green", act == "hold" and why.startswith("queue"), why)
 check("tsp off: no priority grants counted", ctl.stats["tsp_grants"] == 0)
-check("arms() reports what is on", ctl.arms() == {"tsp": False, "forecast": False}, ctl.arms())
+check("arms() reports what is on",
+      ctl.arms() == {"tsp": False, "forecast": False, "learned": False}, ctl.arms())
 ctl, c = controller(None)
 act, why = decide(ctl, c, {"ns_0": 5, "ew_0": 1}, buses={"J": [1]})
 check("tsp on (default): the same bus does", act == "release" and "transit priority" in why, why)
 ctl, c = controller(FC)
-check("full twin reports both on", ctl.arms() == {"tsp": True, "forecast": True}, ctl.arms())
+check("full twin reports both on (learned forecast off unless asked for)",
+      ctl.arms() == {"tsp": True, "forecast": True, "learned": False}, ctl.arms())
 
 print("\nthe forecast follows the simulated clock")
 late = {"J": [wave(begin=3600.0, end=7200.0)]}             # 08:00-09:00 on the forecast's clock
@@ -287,8 +289,9 @@ check("and as a share of the reference", abs(p["pct"] + 39.333) < 0.01, p["pct"]
 one = paired(runs[:2], "adaptive", "fixed", "stopped_veh_hours")
 check("one seed gives a difference and NO interval", one["n"] == 1 and one["ci95"] is None, one)
 check("an arm that was not run gives nothing", paired(runs, "adaptive+tsp", "adaptive", "stopped_veh_hours") is None)
-check("a summary covers every step", set(summarise([])) == {"queue-based control", "transit priority",
-                                                            "forecast", "ALL (full AI twin)"})
+check("a summary covers every step", set(summarise([])) == {
+    "queue-based control", "transit priority", "forecast", "ALL (full AI twin)",
+    "learned forecast", "learned vs hand-written", "ALL with learned forecast"})
 
 print("\n" + ("all passed" if not failures else f"{failures} FAILED"))
 sys.exit(1 if failures else 0)
